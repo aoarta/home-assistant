@@ -1,0 +1,137 @@
+# Grundkonfiguration
+default_config:
+frontend:
+  themes: !include_dir_merge_named themes
+
+homeassistant:
+  packages: !include_dir_named packages
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+shell_command:
+  optimize_cpu: 'bash -c "echo schedutil > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor && echo 10000 > /sys/devices/system/cpu/cpufreq/schedutil/rate_limit_us"'
+
+recorder:
+  # Behalte 7 Tage im schnellen Zugriff (ideal für RPi4)
+  purge_keep_days: 8
+  # Schreibt Daten gesammelt alle 30 Sek. (schont die SD-Karte/SSD)
+  commit_interval: 60
+  # Die Verbindungs-URL (Passwort anpassen!)
+  db_url: mysql://homeassistant:homeassistant@core-mariadb/homeassistant?charset=utf8mb4
+  exclude:
+    # Spezifische Entitäten ausschließen (Beispiele)
+    #entities:
+    #  - sun.sun # Die Sonnenposition ändert sich ständig
+    #  - sensor.last_boot
+
+    # Wildcards für deine Venus-Sensoren (Besonders wichtig!)
+    entity_globs:
+      - sensor.marstek_venus_*_spannung # Wenn du nur die Leistung, nicht die Spannung brauchst
+      - sensor.marstek_venus_*_strom # Stromstärke-Änderungen im Milliamper-Bereich
+      - sensor.*ssid*
+      - sensor.*highest_peak_time*
+      - sensor.*wifi_connect_count
+      - automation.sende_batterie_targets
+      #  - sensor.weather_* # Wetterdaten ändern sich oft, ohne Mehrwert im Log
+
+logger:
+  default: warning # Nur Warnungen und Fehler global zeigen
+  logs:
+    homeassistant.components.modbus: error # Modbus ist sehr gesprächig
+    custom_components.marstek_modbus: error
+
+template:
+  - sensor:
+      - name: "Solar Zeit-Logik"
+        unique_id: solar_zeit_logik
+        state: >
+          {% set solar = states('sensor.emhass_pv_forecast_weighted') | float(0) %}
+          {% set load = states('sensor.estimated_remaining_consumption') | float(0) %}
+          {{ 'sonnig' if solar > load else 'bewoelkt' }}
+        attributes:
+          now_ts: "{{ as_timestamp(now()) }}"
+          sun_rise: "{{ as_timestamp(state_attr('sun.sun', 'next_rising')) - 86400 if as_timestamp(state_attr('sun.sun', 'next_rising')) > as_timestamp(now()) else as_timestamp(state_attr('sun.sun', 'next_rising')) }}"
+          sun_set: "{{ as_timestamp(state_attr('sun.sun', 'next_setting')) - 86400 if as_timestamp(state_attr('sun.sun', 'next_setting')) > as_timestamp(now().replace(hour=23, minute=59)) else as_timestamp(state_attr('sun.sun', 'next_setting')) }}"
+          t1130: "{{ as_timestamp(now().replace(hour=11, minute=30, second=0, microsecond=0)) }}"
+          b_set: >
+            {% set ss = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
+            {{ (ss - 86400 if ss > as_timestamp(now().replace(hour=23, minute=59)) else ss) - 12600 }}
+
+      - name: "Override SOC"
+        unique_id: override_soc
+        state: >
+          {% set wochentag = now().weekday() %}
+          {# 0=Montag; 3 ist Donnerstag, 5 ist Samstag, #}
+          {% if wochentag == 2 %}
+            1
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          beschreibung: "Erzwingt 100% SOC für Balancing"
+
+      - name: "Dynamic SOC Grenzen"
+        unique_id: dynamic_soc_grenzen
+        unit_of_measurement: "%"
+        state: "{{ states('sensor.battery_soc_total') | float(0) }}"
+        attributes:
+          min: >
+            {% if states('input_number.manuelle_ladeleistung') | float(0) > 0 %} {{ 100.1 }}
+            {% else %} 20 {% endif %}
+          # Wenn manuelle Ladeleistung > 0, dann 100, sonst alte Logik
+          low: >
+            {% if states('input_number.manuelle_ladeleistung') | float(0) > 0 %} {{ 100.1 }}
+            {% else %} {{ 100.1 if states('sensor.override_soc') | float(0) != 0 else 60 }} {% endif %}
+
+          mid: >
+            {% if states('input_number.manuelle_ladeleistung') | float(0) > 0 %} {{ 100.1 }}
+            {% else %} {{ 100.1 if states('sensor.override_soc') | float(0) != 0 else 80 }} {% endif %}
+
+          max: "100.1"
+
+          high: >
+            {% if states('input_number.manuelle_ladeleistung') | float(0) > 0 or states('sensor.override_soc') | float(0) != 0 %}
+              100.1
+            {% else %}
+              {% set morgen = states('sensor.emhass_pv_forecast_weighted_morgen') | float(0) %}
+              {% if morgen > 30 %}
+                85
+              {% else %}
+                100.1
+              {% endif %}
+            {% endif %}
+
+      # --- 3. DYNAMISCHER SOC & LADELEISTUNG ---
+      - name: "Dynamic SOC"
+        unique_id: dynamic_soc
+        unit_of_measurement: "%"
+        state: >
+          {% set solar_today = states('sensor.emhass_pv_forecast_weighted') | float(-1) %}
+          {% set load_today = states('sensor.estimated_remaining_consumption') | float(-1) %}
+
+          {% if solar_today > load_today or solar_today == -1 %}
+            {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
+            {% set s_logic = state_attr('sensor.solar_zeit_logik', 'sun_rise') %}
+            {% if ts < s_logic %} 
+              {{ state_attr('sensor.dynamic_soc_grenzen', 'min')  | float(20) }}
+            {% elif ts < state_attr('sensor.solar_zeit_logik', 't1130') %} 
+              {{ state_attr('sensor.dynamic_soc_grenzen', 'low') | float(60) }}
+            {% elif ts < state_attr('sensor.solar_zeit_logik', 'b_set') %} 
+              {{ state_attr('sensor.dynamic_soc_grenzen', 'mid') | float(80) }}
+            {% elif ts < state_attr('sensor.solar_zeit_logik', 'sun_set') %} 
+              {{ state_attr('sensor.dynamic_soc_grenzen', 'high') | float(100) }}
+            {% else %} 
+              {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
+            {% endif %}
+          {% else %}
+            100.
+          {% endif %}
+        attributes:
+          maximale_ladeleistung_venus_1: >
+            {% from 'soc_macros.jinja' import berechne_ladeleistung %}
+            {{ berechne_ladeleistung(states('sensor.venus_1_custom_soc')) }}
+          maximale_ladeleistung_venus_2: >
+            {% from 'soc_macros.jinja' import berechne_ladeleistung %}
+            {{ berechne_ladeleistung(states('sensor.venus_2_custom_soc')) }}

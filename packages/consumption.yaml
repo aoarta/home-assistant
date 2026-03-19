@@ -1,0 +1,130 @@
+utility_meter:
+  daily_pv_production_total:
+    source: sensor.pv_energy_total_realtime
+    name: "PV Ertrag Heute"
+    cycle: daily
+
+sensor:
+  - platform: filter
+    name: "Average consumption last 1h"
+    unique_id: average_consumption_last_1h
+    entity_id: sensor.hausverbrauch_netto_watt
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "01:00" # Durchschnitt der letzten 60 Minuten
+        precision: 0
+
+  - platform: integration
+    source: sensor.solarnet_pv_leistung_lts
+    name: "Solarnet Energie Gesamt"
+    method: left
+    unit_prefix: k
+    round: 2
+  - platform: integration
+    source: sensor.balkon_inverter_1_leistung_lts
+    name: "Balkon 1 Energie Gesamt"
+    method: left
+    unit_prefix: k
+    round: 2
+  - platform: integration
+    source: sensor.balkon_inverter_2_leistung_lts
+    name: "Balkon 2 Energie Gesamt"
+    method: left
+    unit_prefix: k
+    round: 2
+  - platform: integration
+    source: sensor.garage_inverter_leistung_lts
+    name: "Garage Energie Gesamt"
+    method: left
+    unit_prefix: k
+    round: 2
+
+template:
+  - sensor:
+      - name: "Solarnet PV Leistung LTS"
+        unique_id: solarnet_pv_lts
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: "{{ states('sensor.solarnet_pv_leistung') | float(0) }}"
+
+      - name: "Balkon Inverter 1 Leistung LTS"
+        unique_id: balkon_inv1_lts
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: "{{ states('sensor.balkon_inverter_energy_power') | float(0) }}"
+
+      - name: "Balkon Inverter 2 Leistung LTS"
+        unique_id: balkon_inv2_lts
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: "{{ states('sensor.balkon_inverter2_energy_power') | float(0) }}"
+
+      - name: "Garage Inverter Leistung LTS"
+        unique_id: garage_inv_lts
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: "{{ states('sensor.garage_inverter_energy_power') | float(0) }}"
+
+  - sensor:
+      - name: "PV Energy Total Realtime"
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >
+          {{ (states('sensor.solarnet_energie_gesamt') | float(0) + 
+              states('sensor.balkon_1_energie_gesamt') | float(0) + 
+              states('sensor.balkon_2_energie_gesamt') | float(0) + 
+              states('sensor.garage_energie_gesamt') | float(0)) | round(2) }}
+
+      - name: "PV Power Total Realtime"
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {{ (states('sensor.solarnet_pv_leistung') | float(0) + 
+              states('sensor.balkon_inverter_energy_power') | float(0) + 
+              states('sensor.balkon_inverter2_energy_power') | float(0) + 
+              states('sensor.garage_inverter_energy_power') | float(0)) | round(0) }}
+
+      - name: "Hausverbrauch Netto Watt"
+        unique_id: hausverbrauch_netto_watt
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {# 1. Netz-Differenz berechnen (Schneller als Smart Meter) #}
+          {% set netz = states('sensor.solarnet_leistung_netzbezug') | float(0) - states('sensor.solarnet_leistung_netzeinspeisung') | float(0) %}
+          {% set batterie_gesamt = states('sensor.batterieleistung_watt') | float(0) %}
+          {{ (netz + batterie_gesamt) | round(0) }}
+        attributes:
+          # Hier wird die PV-Leistung für die Attribut-Berechnung geholt
+          hausverbrauch_watt: >
+            {% set pv = states('sensor.pv_power_total_realtime') | float(0) %}
+            {# Wir nutzen hier direkt die lokale Logik für Netto #}
+            {% set netz = states('sensor.solarnet_leistung_netzbezug') | float(0) - states('sensor.solarnet_leistung_netzeinspeisung') | float(0) %}
+            {% set batterie_gesamt = states('sensor.batterieleistung_watt') | float(0) %}
+            {% set haus_netto = netz + batterie_gesamt %}
+            {{ (pv + haus_netto) | round(0) }}
+
+      - name: "Estimated remaining consumption"
+        unique_id: estimated_remaining_consumption
+        unit_of_measurement: "kWh"
+        state: >
+          {% set sun_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
+          {% set now_ts = as_timestamp(now()) %}
+          {% set hausverbrauch_watt = states('sensor.average_consumption_last_1h') | float(0) %}
+
+          {# Nur berechnen, wenn die Sonne noch nicht untergegangen ist #}
+          {% if sun_set > now_ts %}
+            {% set verbleibende_stunden = (sun_set - now_ts) / 3600 %}
+            {# Formel: (Watt * Stunden) / 1000 = kWh #}
+            {{ (hausverbrauch_watt * verbleibende_stunden / 1000) | round(2) }}
+          {% else %}
+            0.0
+          {% endif %}
+        attributes:
+          verbleibende_zeit_h: >
+            {% set sun_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
+            {{ ((sun_set - as_timestamp(now())) / 3600) | round(2) if sun_set > as_timestamp(now()) else 0 }}

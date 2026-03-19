@@ -1,0 +1,150 @@
+################################################################################
+# BMS DATEN-EXTRAKTION (CURL & REGEX)
+################################################################################
+command_line:
+  - sensor:
+      name: "BMS Raw Data"
+      unique_id: bms_raw_data
+      command: "curl -s http://battery-bms.lan/show | grep -E 'Power:|SOC:|highest Cell|lowest Cell'"
+      scan_interval: 15
+      value_template: "{{ value }}"
+
+################################################################################
+# TEMPLATE SENSOREN
+################################################################################
+template:
+  - sensor:
+      - name: "BMS SOC"
+        unique_id: bms_soc
+        unit_of_measurement: "%"
+        device_class: battery
+        state: >
+          {% set val = states('sensor.bms_raw_data') | regex_findall('SOC:\s*(\d+)') %}
+          {% if val | count > 0 %}
+            {{ val[0] }}
+          {% else %}
+            {{ states('sensor.bms_soc') if is_number(states('sensor.bms_soc')) else 0 }}
+          {% endif %}
+
+      - name: "BMS Power"
+        unique_id: bms_power
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% set val = states('sensor.bms_raw_data') | regex_findall('Power:\s*(-?\d+)') %}
+          {% if val | count > 0 %}
+            {{ val[0] }}
+          {% else %}
+            {{ states('sensor.bms_power') if is_number(states('sensor.bms_power')) else 0 }}
+          {% endif %}
+
+      - name: "BMS Lowest Cell"
+        unique_id: bms_lowest_cell
+        unit_of_measurement: "V"
+        device_class: voltage
+        state: >
+          {% set val = states('sensor.bms_raw_data') | regex_findall('lowest Cell\s*\[\s*\d+\]:\s*(\d+\.\d+)') %}
+          {% if val | count > 0 %}
+            {{ val[0] }}
+          {% else %}
+            {{ states('sensor.bms_lowest_cell') if is_number(states('sensor.bms_lowest_cell')) else 3.0 }}
+          {% endif %}
+
+      - name: "BMS Highest Cell"
+        unique_id: bms_highest_cell
+        unit_of_measurement: "V"
+        device_class: voltage
+        state: >
+          {% set val = states('sensor.bms_raw_data') | regex_findall('highest Cell\s*\[\s*\d+\]:\s*(\d+\.\d+)') %}
+          {% if val | count > 0 %}
+            {{ val[0] }}
+          {% else %}
+            {{ states('sensor.bms_highest_cell') if is_number(states('sensor.bms_highest_cell')) else 3.6 }}
+          {% endif %}
+
+      - name: "Battery total charge power"
+        unique_id: battery_total_charge_power
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% set p1 = states('sensor.battery_charger_energy_power') | float(0) %}
+          {% set p2 = states('sensor.battery_charger2_energy_power') | float(0) %}
+          {{ (p1 + p2) | round(1) }}
+
+      - name: "Netto Batterie Leistung"
+        unique_id: net_battery_power
+        unit_of_measurement: "W"
+        device_class: power
+        state: >
+          {% set charging = states('sensor.battery_total_charge_power') | float(0) %}
+          {% set discharging = states('sensor.battery_inverter_energy_power') | float(0) %}
+          {{ (discharging - charging) | round(1) }}
+
+################################################################################
+# AUTOMATION: GROBREGELUNG
+################################################################################
+automation:
+  - alias: "UPS Grobregelung Laden & Entladen"
+    id: ups_grob_control_full
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id:
+          - sensor.target_discharge_distribution
+          - sensor.target_charge_distribution
+          - sensor.bms_soc
+          - sensor.bms_lowest_cell
+          - sensor.bms_highest_cell
+      - platform: state
+        entity_id: sensor.bms_raw_data # Sofort-Reaktion nach BMS-Update
+    action:
+      - choose:
+          # --- ENTLADEN STARTEN ---
+          - conditions:
+              - condition: template
+                value_template: >
+                  {% set target = states('sensor.target_discharge_distribution') | float(0) %}
+                  {% set soc = states('sensor.bms_soc') | float(0) %}
+                  {% set low_cell = states('sensor.bms_lowest_cell') | float(3.3) %}
+                  {{ target > 180 and soc > 25 and low_cell > 3.1 and is_state('switch.battery_inverter_tasmota', 'off') }}
+            sequence:
+              - action: switch.turn_on
+                target: { entity_id: switch.battery_inverter_tasmota }
+
+          # --- ENTLADEN STOPPEN (Inkl. Schutzabschaltung) ---
+          - conditions:
+              - condition: template
+                value_template: >
+                  {% set target = states('sensor.target_discharge_distribution') | float(0) %}
+                  {% set soc = states('sensor.bms_soc') | float(0) %}
+                  {% set low_cell = states('sensor.bms_lowest_cell') | float(2.8) %}
+                  {{ (target < 20 or soc <= 20 or low_cell < 3.0) and is_state('switch.battery_inverter_tasmota', 'on') }}
+            sequence:
+              - action: switch.turn_off
+                target: { entity_id: switch.battery_inverter_tasmota }
+
+          # --- LADEN STARTEN ---
+          - conditions:
+              - condition: template
+                value_template: >
+                  {% set target = states('sensor.target_charge_distribution') | float(0) %}
+                  {% set soc = states('sensor.bms_soc') | float(100) %}
+                  {{ target > 850 and soc < 99 and is_state('switch.battery_charger', 'off') }}
+            sequence:
+              - action: switch.turn_on
+                target: { entity_id: switch.battery_charger }
+
+          # --- LADEN STOPPEN (Hysterese gegen Relais-Flattern) ---
+          - conditions:
+              - condition: template
+                value_template: >
+                  {% set target = states('sensor.target_charge_distribution') | float(0) %}
+                  {% set soc = states('sensor.bms_soc') | float(100) %}
+                  {% set high_cell = states('sensor.bms_highest_cell') | float(3.65) %}
+                  {{ (target < 100 or soc >= 100 or high_cell > 3.6) and is_state('switch.battery_charger', 'on') }}
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id:
+                    - switch.battery_charger
+                    - switch.battery_charger2

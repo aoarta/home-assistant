@@ -1,0 +1,22 @@
+{% macro berechne_ladeleistung(current_soc) %}
+  {% set solar_today = states('sensor.emhass_pv_forecast_weighted') | float(-1) %}
+  {% set load_today = states('sensor.estimated_remaining_consumption') | float(-1) %}
+  {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
+  {% set b_set = state_attr('sensor.solar_zeit_logik', 'b_set') | float(0) %}
+  {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
+
+  {# Haupt-Logik: Prüfen ob Solar-Überschuss und im Zeitfenster #}
+  {% if (solar_today > load_today or solar_today == -1) and (ts >= t1130 and ts < b_set) %}
+      {% set sm = state_attr('sensor.dynamic_soc_grenzen', 'mid') | float(80) %}
+      {% set diff = [sm - (current_soc | float(20)), 100] | min %}
+      {% set dauer = (b_set - ts) / 3600 %}
+      
+      {# Division durch 0 verhindern #}
+      {% set korrigierte_dauer = dauer if dauer > 0.01 else 0.01 %}
+      {{ [ (5120 * diff / 100 / korrigierte_dauer * 1.2) | round(0), 2500 ] | min }}
+  {% else %}
+      2500
+  {% endif %}
+{% endmacro %}
+
+
