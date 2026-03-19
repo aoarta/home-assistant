@@ -110,6 +110,11 @@ automation:
             sequence:
               - action: switch.turn_on
                 target: { entity_id: switch.battery_inverter_tasmota }
+              - action: switch.turn_off
+                target:
+                  entity_id:
+                    - switch.battery_charger
+                    - switch.battery_charger2
 
           # --- ENTLADEN STOPPEN (Inkl. Schutzabschaltung) ---
           - conditions:
@@ -133,6 +138,8 @@ automation:
             sequence:
               - action: switch.turn_on
                 target: { entity_id: switch.battery_charger }
+              - action: switch.turn_off
+                target: { entity_id: switch.battery_inverter_tasmota }
 
           # --- LADEN STOPPEN (Hysterese gegen Relais-Flattern) ---
           - conditions:
@@ -148,3 +155,29 @@ automation:
                   entity_id:
                     - switch.battery_charger
                     - switch.battery_charger2
+
+  - alias: "Sicherheitsabschaltung: Charger und Inverter gleichzeitig"
+    description: "Schaltet alles aus, wenn Inverter und mindestens ein Charger aktiv sind"
+    trigger:
+      - platform: state
+        entity_id:
+          - switch.battery_inverter_tasmota
+          - switch.battery_charger
+          - switch.battery_charger2
+        to: "on"
+    condition:
+      - condition: template
+        value_template: >
+          {% set inverter = is_state('switch.battery_inverter_tasmota', 'on') %}
+          {% set charger1 = is_state('switch.battery_charger', 'on') %}
+          {% set charger2 = is_state('switch.battery_charger2', 'on') %}
+          {# Bedingung: Inverter ist an UND (Charger 1 oder Charger 2 ist an) #}
+          {{ inverter and (charger1 or charger2) }}
+    action:
+      - action: switch.turn_off
+        target:
+          entity_id:
+            - switch.battery_inverter_tasmota
+            - switch.battery_charger
+            - switch.battery_charger2
+    mode: restart

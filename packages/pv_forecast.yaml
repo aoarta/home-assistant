@@ -183,8 +183,8 @@ template:
             {{ ns.hourly[current_hour:] | sum | round(2) }}
           {% else %} 0.0 {% endif %}
 
-      - name: "PV Forecast Weighted"
-        unique_id: pv_forecast_weighted
+      - name: "PV Forecast Weighted without BIAS"
+        unique_id: pv_forecast_weighted_without_bias
         unit_of_measurement: "kWh"
         state: >
           {# 1. Daten abrufen #}
@@ -201,12 +201,18 @@ template:
           {% set total_weight = sc_w + sp_w + fs_w + om_w %}
 
           {% if total_weight > 0 %}
-            {% set raw = (sc_w * sc + sp_w * sp + fs_w * fs + om_w * om) / total_weight %}
-            {% set adaptive_bias = states('sensor.pv_forecast_bias_korrekturfaktor') | float(0.85) %}
-            {{ (raw * adaptive_bias) | round(2) }}
+            {{ (sc_w * sc + sp_w * sp + fs_w * fs + om_w * om) / total_weight }}
           {% else %}
             0.0
           {% endif %}
+
+      - name: "PV Forecast Weighted"
+        unique_id: pv_forecast_weighted
+        unit_of_measurement: "kWh"
+        state: >
+          {% set raw_val = states('sensor.pv_forecast_weighted_without_bias') | float(0) %}
+          {% set adaptive_bias = states('sensor.pv_forecast_bias_korrekturfaktor') | float(0.85) %}
+          {{ (raw_val * adaptive_bias) | round(2) }}
 
       # --- MORGEN PROGNOSE ---
 
@@ -288,19 +294,24 @@ template:
             0.0
           {% endif %}
 
+  - trigger:
+      - platform: state
+        entity_id: input_number.pv_reale_ernte_von_gestern
+    sensor:
       - name: "PV Forecast Bias Korrekturfaktor"
         unique_id: pv_forecast_bias_korrekturfaktor
         unit_of_measurement: "ratio"
         state: >
-          {% set real = states('input_number.pv_reale_ernte_von_gestern') | float(0) %}
-          {% set forecast = states('input_number.pv_prognose_von_gestern') | float(0) %}
+          {% set real_yesterday = states('input_number.pv_reale_ernte_von_gestern') | float(0) %}
+          {% set forecast_raw_yesterday = states('input_number.pv_prognose_von_gestern') | float(0) %}
+          {% set current_bias = states('sensor.pv_forecast_bias_korrekturfaktor') | float(0.85) %}
 
-          {% if forecast > 2 and real > 0 %}
-            {# Wir berechnen das Verhältnis, begrenzen es aber auf 0.6 bis 1.1 #}
-            {# Damit das System bei einem totalen Ausreißer nicht durchdreht #}
-            {{ [[0.6, (real / forecast)] | max, 1.1] | min | round(2) }}
+          {% if forecast_raw_yesterday > 2 and real_yesterday > 0 %}
+            {% set instant_ratio = real_yesterday / forecast_raw_yesterday %}
+            {% set new_bias = (current_bias * 0.8) + (instant_ratio * 0.2) %}
+            {{ [[0.6, new_bias] | max, 1.1] | min | round(3) }}
           {% else %}
-            0.85 {# Standard-Sicherheitswert #}
+            {{ current_bias }}
           {% endif %}
 
 automation:
