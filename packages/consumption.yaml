@@ -79,6 +79,12 @@ template:
               states('sensor.balkon_1_energie_gesamt') | float(0) + 
               states('sensor.balkon_2_energie_gesamt') | float(0) + 
               states('sensor.garage_energie_gesamt') | float(0)) | round(2) }}
+        # Verhindert das Springen auf 0, wenn ein Sensor offline geht:
+        availability: >
+          {{ states('sensor.solarnet_energie_gesamt') | is_number and
+             states('sensor.balkon_1_energie_gesamt') | is_number and
+             states('sensor.balkon_2_energie_gesamt') | is_number and
+             states('sensor.garage_energie_gesamt') | is_number }}
 
       - name: "PV Power Total Realtime"
         unit_of_measurement: "W"

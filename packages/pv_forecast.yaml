@@ -322,7 +322,7 @@ automation:
         at: "23:55:00"
     action:
       # 1. Speichere die Prognose, die HEUTE früh für HEUTE galt
-      # (Hier nehmen wir den gewichteten Wert minus den Bias von heute)
+      # (Hier nehmen wir den gewichteten Wert ohne den Bias von heute)
       - action: input_number.set_value
         target:
           entity_id: input_number.pv_prognose_von_gestern
