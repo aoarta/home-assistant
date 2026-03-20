@@ -15,12 +15,6 @@ sensor:
         precision: 0
 
   - platform: integration
-    source: sensor.solarnet_pv_leistung_lts
-    name: "Solarnet Energie Gesamt"
-    method: left
-    unit_prefix: k
-    round: 2
-  - platform: integration
     source: sensor.balkon_inverter_1_leistung_lts
     name: "Balkon 1 Energie Gesamt"
     method: left
@@ -41,13 +35,6 @@ sensor:
 
 template:
   - sensor:
-      - name: "Solarnet PV Leistung LTS"
-        unique_id: solarnet_pv_lts
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        state: "{{ states('sensor.solarnet_pv_leistung') | float(0) }}"
-
       - name: "Balkon Inverter 1 Leistung LTS"
         unique_id: balkon_inv1_lts
         unit_of_measurement: "W"
@@ -69,23 +56,24 @@ template:
         state_class: measurement
         state: "{{ states('sensor.garage_inverter_energy_power') | float(0) }}"
 
-  - sensor:
       - name: "PV Energy Total Realtime"
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
         state: >
-          {{ (states('sensor.solarnet_energie_gesamt') | float(0) + 
-              states('sensor.balkon_1_energie_gesamt') | float(0) + 
-              states('sensor.balkon_2_energie_gesamt') | float(0) + 
-              states('sensor.garage_energie_gesamt') | float(0)) | round(2) }}
-        # Verhindert das Springen auf 0, wenn ein Sensor offline geht:
-        availability: >
-          {{ states('sensor.solarnet_energie_gesamt') | is_number and
-             states('sensor.balkon_1_energie_gesamt') | is_number and
-             states('sensor.balkon_2_energie_gesamt') | is_number and
-             states('sensor.garage_energie_gesamt') | is_number }}
+          {# Wir nutzen 0.0 als Fallback für jeden einzelnen Sensor #}
+          {% set s1 = states('sensor.solarnet_energie_gesamt') | float(0) %}
+          {% set s2 = states('sensor.balkon_1_energie_gesamt') | float(0) %}
+          {% set s3 = states('sensor.balkon_2_energie_gesamt') | float(0) %}
+          {% set s4 = states('sensor.garage_energie_gesamt') | float(0) %}
 
+          {# Berechnung nur durchführen, wenn der Hauptwert verfügbar ist #}
+          {% if has_value('sensor.solarnet_energie_gesamt') %}
+            {{ (s1 + s2 + s3 + s4) | round(2) }}
+          {% else %}
+            {# Behält den letzten bekannten Zustand bei, um Sprünge zu vermeiden #}
+            {{ states('sensor.pv_energy_total_realtime') | float(0) }}
+          {% endif %}
       - name: "PV Power Total Realtime"
         unit_of_measurement: "W"
         device_class: power

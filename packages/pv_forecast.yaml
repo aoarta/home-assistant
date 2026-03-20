@@ -17,6 +17,14 @@ input_number:
     unit_of_measurement: "kWh"
     icon: mdi:solar-power
 
+  pv_prognose_festwert_heute:
+    name: "PV Prognose Fixwert (Morgens)"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "kWh"
+    icon: mdi:lock-clock
+
 sensor:
   # --- REST-SENSOREN (ROHDATEN) ---
   - platform: rest
@@ -315,6 +323,19 @@ template:
           {% endif %}
 
 automation:
+  - alias: "PV: Tagesprognose morgens fixieren"
+    id: pv_fix_daily_forecast_morning
+    trigger:
+      - platform: sun
+        event: sunrise
+        offset: "01:00:00"
+    action:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.pv_prognose_festwert_heute
+        data:
+          value: "{{ states('sensor.pv_forecast_weighted') | float(0) }}"
+
   - alias: "PV: Täglicher Prognose-Vergleich speichern"
     id: pv_daily_comparison_storage
     trigger:
@@ -327,7 +348,7 @@ automation:
         target:
           entity_id: input_number.pv_prognose_von_gestern
         data:
-          value: "{{ states('sensor.pv_forecast_weighted') | float(0) }}"
+          value: "{{ states('input_number.pv_prognose_festwert_heute') | float(0) }}"
 
       # 2. Speichere die reale Ernte von heute
       # Nutze hier deinen summierten Tages-Ertragssensor
