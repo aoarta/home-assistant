@@ -80,6 +80,25 @@ template:
           {% set discharging = states('sensor.battery_inverter_energy_power') | float(0) %}
           {{ (discharging - charging) | round(1) }}
 
+      - name: "BMS free Capacity kWh"
+        unique_id: bms_free_capacity_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state: >
+          {# Trage hier die Gesamtkapazität deiner Batterie in kWh ein #}
+          {% set total_kwh = 2.0 %} 
+
+          {% set soc = states('sensor.bms_soc') | float(-1) %}
+
+          {% if soc >= 0 %}
+            {% set free_kwh = total_kwh * (1 - (soc / 100)) %}
+            {{ free_kwh | round(2) }}
+          {% else %}
+            {{ states('sensor.bms_free_capacity_kwh') if is_number(states('sensor.bms_free_capacity_kwh')) else 0 }}
+          {% endif %}
+        availability: >
+          {{ is_number(states('sensor.bms_soc')) }}
+
 ################################################################################
 # AUTOMATION: GROBREGELUNG
 ################################################################################

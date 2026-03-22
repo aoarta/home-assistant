@@ -47,9 +47,15 @@ template:
       - name: "Solar Zeit-Logik"
         unique_id: solar_zeit_logik
         state: >
-          {% set solar = states('sensor.emhass_pv_forecast_weighted') | float(0) %}
-          {% set load = states('sensor.estimated_remaining_consumption') | float(0) %}
-          {{ 'sonnig' if solar > load else 'bewoelkt' }}
+          {% set ts = as_timestamp(now()) %}
+          {% set ss = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
+          {% set sr = as_timestamp(state_attr('sun.sun', 'next_rising')) %}
+
+          {# Berechnung der heutigen Sonnenzeiten für den Status-Vergleich #}
+          {% set today_sr = sr - 86400 if sr > ts else sr %}
+          {% set today_ss = ss - 86400 if ss > as_timestamp(now().replace(hour=23, minute=59)) else ss %}
+
+          {{ 'Tag' if today_sr <= ts <= today_ss else 'Nacht' }}
         attributes:
           now_ts: "{{ as_timestamp(now()) }}"
           sun_rise: "{{ as_timestamp(state_attr('sun.sun', 'next_rising')) - 86400 if as_timestamp(state_attr('sun.sun', 'next_rising')) > as_timestamp(now()) else as_timestamp(state_attr('sun.sun', 'next_rising')) }}"
@@ -95,7 +101,7 @@ template:
             {% if states('input_number.manuelle_ladeleistung') | float(0) > 0 or states('sensor.override_soc') | float(0) != 0 %}
               100.1
             {% else %}
-              {% set morgen = states('sensor.emhass_pv_forecast_weighted_morgen') | float(0) %}
+              {% set morgen = states('sensor.hpv_forecast_weighted_morgen') | float(0) %}
               {% if morgen > 30 %}
                 85
               {% else %}
@@ -108,10 +114,13 @@ template:
         unique_id: dynamic_soc
         unit_of_measurement: "%"
         state: >
-          {% set solar_today = states('sensor.emhass_pv_forecast_weighted') | float(-1) %}
-          {% set load_today = states('sensor.estimated_remaining_consumption') | float(-1) %}
+          {% set solar_today = states('sensor.pv_forecast_weighted') | float(-1) %}
+          {% set free_capacity_marstek = states('sensor.battery_free_capacity_kwh') | float(0) %}
+          {% set free_capacity_ups = states('sensor.bms_free_capacity_kwh') | float(0) %}
+          {% set load_today_raw = states('sensor.estimated_remaining_consumption') | float(0) %}
+          {% set load_today = [ -load_today_raw, 0] | max %}
 
-          {% if solar_today > load_today or solar_today == -1 %}
+          {% if 0.9 * solar_today  > load_today + free_capacity_marstek + free_capacity_ups  or solar_today == -1 %}
             {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
             {% set s_logic = state_attr('sensor.solar_zeit_logik', 'sun_rise') %}
             {% if ts < s_logic %} 
@@ -126,7 +135,7 @@ template:
               {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
             {% endif %}
           {% else %}
-            100.
+            100.2
           {% endif %}
         attributes:
           maximale_ladeleistung_venus_1: >

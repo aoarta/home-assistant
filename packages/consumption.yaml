@@ -1,5 +1,5 @@
 utility_meter:
-  daily_pv_production_total:
+  pv_ertrag_heute:
     source: sensor.pv_energy_total_realtime
     name: "PV Ertrag Heute"
     cycle: daily
@@ -57,23 +57,26 @@ template:
         state: "{{ states('sensor.garage_inverter_energy_power') | float(0) }}"
 
       - name: "PV Energy Total Realtime"
+        unique_id: pv_energy_total_realtime
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
         state: >
-          {# Wir nutzen 0.0 als Fallback für jeden einzelnen Sensor #}
-          {% set s1 = states('sensor.solarnet_energie_gesamt') | float(0) %}
-          {% set s2 = states('sensor.balkon_1_energie_gesamt') | float(0) %}
-          {% set s3 = states('sensor.balkon_2_energie_gesamt') | float(0) %}
-          {% set s4 = states('sensor.garage_energie_gesamt') | float(0) %}
+          {% set s1 = states('sensor.solarnet_energie_gesamt') | float(none) %}
 
-          {# Berechnung nur durchführen, wenn der Hauptwert verfügbar ist #}
-          {% if has_value('sensor.solarnet_energie_gesamt') %}
-            {{ (s1 + s2 + s3 + s4) | round(2) }}
+          {% set s2 = states('sensor.balkon_1_energie_gesamt') | float(none) %}
+          {% set s3 = states('sensor.balkon_2_energie_gesamt') | float(none) %}
+          {% set s4 = states('sensor.garage_energie_gesamt') | float(none) %}
+
+          {% if s1 is not none %}
+            {% set current_total = (s1 / 1000 + (s2|default(0)) + (s3|default(0)) + (s4|default(0))) | round(2) %}
+            {% set last_total = states('sensor.pv_energy_total_realtime') | float(0) %}
+            
+            {{ [current_total, last_total] | max }}
           {% else %}
-            {# Behält den letzten bekannten Zustand bei, um Sprünge zu vermeiden #}
-            {{ states('sensor.pv_energy_total_realtime') | float(0) }}
+            {{ states('sensor.pv_energy_total_realtime') }}
           {% endif %}
+
       - name: "PV Power Total Realtime"
         unit_of_measurement: "W"
         device_class: power

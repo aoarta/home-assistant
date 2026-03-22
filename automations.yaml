@@ -1,27 +1,47 @@
 - alias: "System: PV Prognose nach Neustart aktualisieren"
-  description: Triggert die REST-API und Forecast-Sensoren nach Systemstart
+  id: 66ae09f531f4465db31701ff010fe186
+  description: Triggert die REST-API und Forecast-Sensoren mit Versatz nach Systemstart
   trigger:
     - platform: homeassistant
       event: start
   action:
-    - delay: 00:00:05
+    - delay: 00:00:15 # Etwas mehr Zeit geben, bis alle Integrationen geladen sind
+
+    # --- Solarprognose (REST) ---
     - action: homeassistant.update_entity
       target:
         entity_id:
-          - sensor.solarprognose_api_raw_dach
-          - sensor.solarprognose_api_raw_fassade
-          - sensor.forecastsolar_api_raw_dach
-          - sensor.forecastsolar_api_raw_fassade
+          - sensor.solarprognose_api_source_dach
+          - sensor.solarprognose_api_source_fassade
+
+    - delay: 00:00:10 # Pause vor dem nächsten Anbieter
+
+    # --- ForecastSolar (REST) ---
+    - action: homeassistant.update_entity
+      target:
+        entity_id: sensor.forecastsolar_api_source_dach
+    - delay: 00:00:30 # WICHTIG: 30s Pause für ForecastSolar Rate-Limit
+    - action: homeassistant.update_entity
+      target:
+        entity_id: sensor.forecastsolar_api_source_fassade
+
+    - delay: 00:00:05
+
+    # --- Berechnete Sensoren aktualisieren (wenn Rohdaten da sind) ---
+    - action: homeassistant.update_entity
+      target:
+        entity_id:
           - sensor.pv_forecast_openmeteo_combined
           - sensor.pv_forecast_forecastsolar_combined
+
     - action: system_log.write
       data:
         level: info
-        message: PV Forecasts wurden nach Neustart manuell aktualisiert.
-  id: 66ae09f531f4465db31701ff010fe186
+        message: PV Forecasts wurden sequenziell nach Neustart aktualisiert.
 
 - alias: Solarprognose Update Kontrolle
-  description: Aktualisiert die Wetterdaten bei Sonnenaufgang, 10 Uhr und 14 Uhr
+  id: 3f207ea11452424abda5470c01cf4df7
+  description: Aktualisiert die Wetterdaten sequenziell (Anti-Blocking)
   trigger:
     - platform: sun
       event: sunrise
@@ -33,19 +53,31 @@
     - platform: time
       at: "14:00:00"
   action:
-    # 1. Rest Sensoren
+    # 1. Solarprognose (meist unkritisch)
     - action: homeassistant.update_entity
       target:
         entity_id:
-          - sensor.solarprognose_api_raw_dach
-          - sensor.solarprognose_api_raw_fassade
-          - sensor.forecastsolar_api_raw_dach
-          - sensor.forecastsolar_api_raw_fassade
-    # 2. Update für Solcast (Dienst-basiert)
+          - sensor.solarprognose_api_source_dach
+          - sensor.solarprognose_api_source_fassade
+
+    - delay: 00:00:10
+
+    # 2. Solcast (Cloud-Dienst)
     - action: solcast_solar.update_forecasts
       data: {}
-  mode: single
-  id: 3f207ea11452424abda5470c01cf4df7
+
+    - delay: 00:00:20 # Genug Puffer vor ForecastSolar
+
+    # 3. ForecastSolar (Kritisch bzgl. Rate-Limit)
+    - action: homeassistant.update_entity
+      target:
+        entity_id: sensor.forecastsolar_api_source_dach
+    - delay: 00:00:45 # Großzügige Pause zwischen Dach und Fassade
+    - action: homeassistant.update_entity
+      target:
+        entity_id: sensor.forecastsolar_api_source_fassade
+
+  mode: restart # Restart ist besser, falls ein Trigger während eines Delays erneut feuert
 
 - alias: "Venus Steuermodus einschalten (30 Min nach Sonnenaufgang)"
   description: "Schaltet die Marstek Venus Switches 30 Minuten nach Sonnenaufgang ein."
