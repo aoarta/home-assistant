@@ -1,5 +1,5 @@
 {% macro berechne_ladeleistung(current_soc) %}
-  {% set solar_today = states('sensor.emhass_pv_forecast_weighted') | float(-1) %}
+  {% set solar_today = states('sensor.pv_forecast_weighted') | float(-1) %}
   {% set load_today = states('sensor.estimated_remaining_consumption') | float(-1) %}
   {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
   {% set b_set = state_attr('sensor.solar_zeit_logik', 'b_set') | float(0) %}

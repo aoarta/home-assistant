@@ -104,7 +104,7 @@ template:
         attributes:
           data: >
             {% set new = state_attr('sensor.solarprognose_api_source_dach', 'data') %}
-            {{ new if new is mapping else state_attr('this.entity_id', 'data') }}
+            {{ new if new is mapping else state_attr(this.entity_id, 'data') | default({}, true) }}
 
       - name: "Solarprognose Api Raw Fassade"
         unique_id: solarprognose_api_raw_fassade_stable
@@ -112,23 +112,33 @@ template:
         attributes:
           data: >
             {% set new = state_attr('sensor.solarprognose_api_source_fassade', 'data') %}
-            {{ new if new is mapping else state_attr('this.entity_id', 'data') }}
+            {{ new if new is mapping else state_attr(this.entity_id, 'data') | default({}, true) }}
 
       - name: "ForecastSolar API Raw Dach"
         unique_id: forecastsolar_api_raw_dach_stable
         state: "OK"
         attributes:
           result: >
-            {% set new = state_attr('sensor.forecastsolar_api_source_dach', 'result') %}
-            {{ new if new is mapping else state_attr('this.entity_id', 'result') }}
+            {% set source = state_attr('sensor.forecastsolar_api_source_dach', 'result') %}
+            {% set current = state_attr(this.entity_id, 'result') %}
+            {% if source is mapping and source.items() | count > 0 %}
+              {{ source }}
+            {% else %}
+              {{ current if current is mapping else {} }}
+            {% endif %}
 
       - name: "ForecastSolar API Raw Fassade"
         unique_id: forecastsolar_api_raw_fassade_stable
         state: "OK"
         attributes:
           result: >
-            {% set new = state_attr('sensor.forecastsolar_api_source_fassade', 'result') %}
-            {{ new if new is mapping else state_attr('this.entity_id', 'result') }}
+            {% set source = state_attr('sensor.forecastsolar_api_source_fassade', 'result') %}
+            {% set current = state_attr(this.entity_id, 'result') %}
+            {% if source is mapping and source.items() | count > 0 %}
+              {{ source }}
+            {% else %}
+              {{ current if current is mapping else {} }}
+            {% endif %}
 
       # --- KOMBINIERTE SENSOREN (Nutzen die stabilen Rohdaten) ---
       - name: "PV Forecast Solcast combined"
@@ -136,7 +146,7 @@ template:
         unit_of_measurement: "kWh"
         state: >
           {% set val = states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute') %}
-          {{ val if is_number(val) else states('this.entity_id') | float(0) }}
+          {{ val if is_number(val) else states(this.entity_id) | float(0) }}
 
       - name: "PV Forecast Solarprognose Combined"
         unique_id: pv_forecast_solarprognose_combined
@@ -154,7 +164,7 @@ template:
               {% set ns.total = ns.total + (d + (f * 3)) %}
             {% endfor %}
             {{ ns.total | round(2) }}
-          {% else %} {{ states('this.entity_id') | float(0) }} {% endif %}
+          {% else %} {{ states(this.entity_id) | float(0) }} {% endif %}
 
       - name: "PV Forecast ForecastSolar Combined"
         unique_id: pv_forecast_forecastsolar_combined
@@ -163,18 +173,26 @@ template:
           {% set today = now().strftime('%Y-%m-%d') %}
           {% set dach = state_attr('sensor.forecastsolar_api_raw_dach', 'result') %}
           {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade', 'result') %}
-          {% if dach is mapping and fassade is mapping %}
+
+          {% if dach is mapping and fassade is mapping and dach.items() | count > 0 %}
             {% set ns = namespace(d_max=0, f_max=0, d_now=0, f_now=0) %}
+            {% set ts_now = now().strftime('%Y-%m-%d %H:%M:%S') %}
+            
             {% for ts, val in dach.items() if ts.startswith(today) %}
               {% if val > ns.d_max %}{% set ns.d_max = val %}{% endif %}
-              {% if ts <= now().strftime('%Y-%m-%d %H:%M:%S') %}{% set ns.d_now = val %}{% endif %}
+              {% if ts <= ts_now %}{% set ns.d_now = val %}{% endif %}
             {% endfor %}
+            
             {% for ts, val in fassade.items() if ts.startswith(today) %}
               {% if val > ns.f_max %}{% set ns.f_max = val %}{% endif %}
-              {% if ts <= now().strftime('%Y-%m-%d %H:%M:%S') %}{% set ns.f_now = val %}{% endif %}
+              {% if ts <= ts_now %}{% set ns.f_now = val %}{% endif %}
             {% endfor %}
+            
+            {# Berechnung: (Rest Dach + 3x Rest Fassade) / 1000 #}
             {{ ([0, ( (ns.d_max - ns.d_now) + 3 * (ns.f_max - ns.f_now) ) / 1000] | max) | round(2) }}
-          {% else %} {{ states('this.entity_id') | float(0) }} {% endif %}
+          {% else %}
+            {{ states(this.entity_id) | float(0) }}
+          {% endif %}
 
       - name: "PV Forecast openmeteo Combined"
         unique_id: pv_forecast_openmeteo_combined
@@ -192,7 +210,7 @@ template:
               {% set ns.total = ns.total + (d + 3*f) / 1000 %}
             {% endfor %}
             {{ ns.total | round(2) }}
-          {% else %} {{ states('this.entity_id') | float(0) }} {% endif %}
+          {% else %} {{ states(this.entity_id) | float(0) }} {% endif %}
 
       # --- GEWICHTUNG & BIAS ---
       - name: "PV Forecast Weighted without BIAS"
@@ -210,7 +228,7 @@ template:
           {% set total_weight = sc_w + sp_w + fs_w + om_w %}
           {% if total_weight > 0 %}
             {{ (sc_w * sc + sp_w * sp + fs_w * fs + om_w * om) / total_weight }}
-          {% else %} {{ states('this.entity_id') | float(0) }} {% endif %}
+          {% else %} {{ states(this.entity_id) | float(0) }} {% endif %}
 
       - name: "PV Forecast Weighted"
         unique_id: pv_forecast_weighted
@@ -227,7 +245,7 @@ template:
         unit_of_measurement: "kWh"
         state: >
           {% set val = states('sensor.solcast_pv_forecast_prognose_morgen') %}
-          {{ val if is_number(val) else states('sensor.PV_forecast_solcast_morgen') }}
+          {{ val if is_number(val) else states('sensor.pv_forecast_solcast_morgen') }}
 
       - name: "PV Forecast Solarprognose Morgen"
         unique_id: pv_forecast_solarprognose_morgen

@@ -122,7 +122,7 @@ automation:
           - conditions:
               - condition: template
                 value_template: >
-                  {% set target = states('sensor.target_discharge_distribution') | float(0) %}
+                  {% set target = state_attr('sensor.target_discharge_distribution', 'raw') | float(0) %}
                   {% set soc = states('sensor.bms_soc') | float(0) %}
                   {% set low_cell = states('sensor.bms_lowest_cell') | float(3.3) %}
                   {{ target > 180 and soc > 25 and low_cell > 3.1 and is_state('switch.battery_inverter_tasmota', 'off') }}
@@ -139,7 +139,7 @@ automation:
           - conditions:
               - condition: template
                 value_template: >
-                  {% set target = states('sensor.target_discharge_distribution') | float(0) %}
+                  {% set target = state_attr('sensor.target_discharge_distribution', 'raw') | float(0) %}
                   {% set soc = states('sensor.bms_soc') | float(0) %}
                   {% set low_cell = states('sensor.bms_lowest_cell') | float(2.8) %}
                   {{ (target < 20 or soc <= 20 or low_cell < 3.0) and is_state('switch.battery_inverter_tasmota', 'on') }}

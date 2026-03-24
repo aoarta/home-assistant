@@ -118,7 +118,7 @@ template:
           {% set free_capacity_marstek = states('sensor.battery_free_capacity_kwh') | float(0) %}
           {% set free_capacity_ups = states('sensor.bms_free_capacity_kwh') | float(0) %}
           {% set load_today_raw = states('sensor.estimated_remaining_consumption') | float(0) %}
-          {% set load_today = [ -load_today_raw, 0] | max %}
+          {% set load_today = [ load_today_raw, 0] | max %}
 
           {% if 0.9 * solar_today  > load_today + free_capacity_marstek + free_capacity_ups  or solar_today == -1 %}
             {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
@@ -137,10 +137,3 @@ template:
           {% else %}
             100.2
           {% endif %}
-        attributes:
-          maximale_ladeleistung_venus_1: >
-            {% from 'soc_macros.jinja' import berechne_ladeleistung %}
-            {{ berechne_ladeleistung(states('sensor.venus_1_custom_soc')) }}
-          maximale_ladeleistung_venus_2: >
-            {% from 'soc_macros.jinja' import berechne_ladeleistung %}
-            {{ berechne_ladeleistung(states('sensor.venus_2_custom_soc')) }}
