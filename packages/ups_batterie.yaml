@@ -6,62 +6,41 @@ command_line:
       name: "BMS Raw Data"
       unique_id: bms_raw_data
       command: "curl -s http://battery-bms.lan/show | grep -E 'Power:|SOC:|highest Cell|lowest Cell'"
-      scan_interval: 15
+      scan_interval: 20
       value_template: "{{ value }}"
 
 ################################################################################
 # TEMPLATE SENSOREN
 ################################################################################
 template:
-  - sensor:
+  - trigger:
+      - platform: state
+        entity_id: sensor.bms_raw_data
+    sensor:
       - name: "BMS SOC"
         unique_id: bms_soc
         unit_of_measurement: "%"
         device_class: battery
         state: >
-          {% set val = states('sensor.bms_raw_data') | regex_findall('SOC:\s*(\d+)') %}
-          {% if val | count > 0 %}
-            {{ val[0] }}
-          {% else %}
-            {{ states('sensor.bms_soc') if is_number(states('sensor.bms_soc')) else 0 }}
-          {% endif %}
+          {% set val = trigger.to_state.state | regex_findall('SOC:\\s*(\\d+)') %}
+          {{ val[0] if val | count > 0 else states('sensor.bms_soc') }}
 
       - name: "BMS Power"
         unique_id: bms_power
         unit_of_measurement: "W"
         device_class: power
         state: >
-          {% set val = states('sensor.bms_raw_data') | regex_findall('Power:\s*(-?\d+)') %}
-          {% if val | count > 0 %}
-            {{ val[0] }}
-          {% else %}
-            {{ states('sensor.bms_power') if is_number(states('sensor.bms_power')) else 0 }}
-          {% endif %}
-
-      - name: "BMS Lowest Cell"
-        unique_id: bms_lowest_cell
-        unit_of_measurement: "V"
-        device_class: voltage
-        state: >
-          {% set val = states('sensor.bms_raw_data') | regex_findall('lowest Cell\s*\[\s*\d+\]:\s*(\d+\.\d+)') %}
-          {% if val | count > 0 %}
-            {{ val[0] }}
-          {% else %}
-            {{ states('sensor.bms_lowest_cell') if is_number(states('sensor.bms_lowest_cell')) else 3.0 }}
-          {% endif %}
+          {% set val = trigger.to_state.state | regex_findall('Power:\\s*(-?\\d+)') %}
+          {{ val[0] if val | count > 0 else states('sensor.bms_power') }}
 
       - name: "BMS Highest Cell"
         unique_id: bms_highest_cell
         unit_of_measurement: "V"
-        device_class: voltage
         state: >
-          {% set val = states('sensor.bms_raw_data') | regex_findall('highest Cell\s*\[\s*\d+\]:\s*(\d+\.\d+)') %}
-          {% if val | count > 0 %}
-            {{ val[0] }}
-          {% else %}
-            {{ states('sensor.bms_highest_cell') if is_number(states('sensor.bms_highest_cell')) else 3.6 }}
-          {% endif %}
+          {% set val = trigger.to_state.state | regex_findall('highest Cell:\\s*([0-9.]+)') %}
+          {{ val[0] if val | count > 0 else states('sensor.bms_highest_cell') }}
 
+  - sensor:
       - name: "Battery total charge power"
         unique_id: battery_total_charge_power
         unit_of_measurement: "W"

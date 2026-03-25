@@ -43,50 +43,68 @@ template:
           {{ val if is_number(val) else states('sensor.venus_2_soc_reset_punkt') }}
 
   - trigger:
-      - platform: time_pattern
-        seconds: "/10"
+      - platform: state
+        entity_id: sensor.venus_1_energiefluss_wh
       - platform: homeassistant
         event: start
     sensor:
       - name: "Venus 1 Custom SOC"
-        unique_id: venus_1_custom_soc_v2
+        unique_id: venus_1_custom_soc
         unit_of_measurement: "%"
         device_class: battery
         state: >
           {% set hw_soc = states('sensor.marstek_venus_1_batterie_ladezustand') | float(0) %}
-          {% if hw_soc >= 100 %}
-            100
+          {% set alt = this.attributes.get('last_wh', 0) | float %}
+          {% set neu = states('sensor.venus_1_energiefluss_wh') | float(0) %}
+
+          {% if (neu - alt) | abs > 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
+            {% if hw_soc >= 100 %}
+              100
+            {% else %}
+              {% set total_wh = neu %}
+              {% set reset_wh = states('sensor.venus_1_soc_reset_punkt') | float(0) %}
+              {% set cap_wh = (states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12)) * 1000 %}
+              {% set diff_wh = total_wh - reset_wh %}
+              {% set calc_soc = 100 + (diff_wh / cap_wh * 100) %}
+              {{ [ [calc_soc, 100] | min, 0 ] | max }}
+            {% endif %}
           {% else %}
-            {% set total_wh = states('sensor.venus_1_energiefluss_wh') | float(0) %}
-            {% set reset_wh = states('sensor.venus_1_soc_reset_punkt') | float(0) %}
-            {% set cap_wh = (states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12))* 1000 %}
-            {% set diff_wh = total_wh - reset_wh %}
-            {% set calc_soc = 100 + (diff_wh / cap_wh * 100) %}
-            {{ [ [calc_soc, 100] | min, 0 ] | max }}
+            {{ states('sensor.venus_1_custom_soc') }}
           {% endif %}
+        attributes:
+          last_wh: "{{ states('sensor.venus_1_energiefluss_wh') | float(0) }}"
 
   - trigger:
-      - platform: time_pattern
-        seconds: "/10"
+      - platform: state
+        entity_id: sensor.venus_2_energiefluss_wh
       - platform: homeassistant
         event: start
     sensor:
       - name: "Venus 2 Custom SOC"
-        unique_id: venus_2_custom_soc_v2
+        unique_id: venus_2_custom_soc
         unit_of_measurement: "%"
         device_class: battery
         state: >
           {% set hw_soc = states('sensor.marstek_venus_2_batterie_ladezustand') | float(0) %}
-          {% if hw_soc >= 100 %}
-            100
+          {% set alt = float(this.attributes.last_wh | default(0)) %}
+          {% set neu = states('sensor.venus_2_energiefluss_wh') | float(0) %}
+
+          {% if (neu - alt) | abs > 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
+            {% if hw_soc >= 100 %}
+              100
+            {% else %}
+              {% set total_wh = neu %}
+              {% set reset_wh = states('sensor.venus_2_soc_reset_punkt') | float(0) %}
+              {% set cap_wh = (states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.12)) * 1000 %}
+              {% set diff_wh = total_wh - reset_wh %}
+              {% set calc_soc = 100 + (diff_wh / cap_wh * 100) %}
+              {{ [ [calc_soc, 100] | min, 0 ] | max }}
+            {% endif %}
           {% else %}
-            {% set total_wh = states('sensor.venus_2_energiefluss_wh') | float(0) %}
-            {% set reset_wh = states('sensor.venus_2_soc_reset_punkt') | float(0) %}
-            {% set cap_wh = (states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.12)) * 1000 %}
-            {% set diff_wh = total_wh - reset_wh %}
-            {% set calc_soc = 100 + (diff_wh / cap_wh * 100) %}
-            {{ [ [calc_soc, 100] | min, 0 ] | max }}
+            {{ states('sensor.venus_2_custom_soc') }}
           {% endif %}
+        attributes:
+          last_wh: "{{ states('sensor.venus_2_energiefluss_wh') | float(0) }}"
 
   - sensor:
       - name: "Batterieleistung Watt"
@@ -140,8 +158,7 @@ template:
           charge: >
             {% set manual = states('input_number.manuelle_ladeleistung') | float(0) %} 
             {% if manual > 0 %}
-              {# Hier wird ein echtes Objekt zurückgegeben #}
-              {{ {'v1': manual, 'v2': manual} }}            
+              {{ {'v1': manual, 'v2': manual} }}
             {% else %}
               {% set total = states('sensor.target_charge_distribution') | float(0) %}
               {% set dyn_soc = states('sensor.dynamic_soc') | float(50) %}

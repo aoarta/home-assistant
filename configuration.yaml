@@ -34,7 +34,8 @@ recorder:
       - sensor.*highest_peak_time*
       - sensor.*wifi_connect_count
       - automation.sende_batterie_targets
-      #  - sensor.weather_* # Wetterdaten ändern sich oft, ohne Mehrwert im Log
+      - sensor.*raw*
+      - sensor.*api*
 
 logger:
   default: warning # Nur Warnungen und Fehler global zeigen
@@ -109,7 +110,12 @@ template:
               {% endif %}
             {% endif %}
 
-      # --- 3. DYNAMISCHER SOC & LADELEISTUNG ---
+  - trigger:
+      - platform: time_pattern
+        minutes: "/1"
+      - platform: state
+        entity_id: input_number.manuelle_ladeleistung # Sofort-Update bei manueller Änderung
+    sensor:
       - name: "Dynamic SOC"
         unique_id: dynamic_soc
         unit_of_measurement: "%"

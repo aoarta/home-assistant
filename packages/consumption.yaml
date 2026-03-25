@@ -63,13 +63,12 @@ template:
         state_class: total_increasing
         state: >
           {% set s1 = states('sensor.solarnet_energie_gesamt') | float(none) %}
-
-          {% set s2 = states('sensor.balkon_1_energie_gesamt') | float(none) %}
-          {% set s3 = states('sensor.balkon_2_energie_gesamt') | float(none) %}
-          {% set s4 = states('sensor.garage_energie_gesamt') | float(none) %}
+          {% set s2 = states('sensor.balkon_1_energie_gesamt') | float(0) %}
+          {% set s3 = states('sensor.balkon_2_energie_gesamt') | float(0) %}
+          {% set s4 = states('sensor.garage_energie_gesamt') | float(0) %}
 
           {% if s1 is not none %}
-            {% set current_total = (s1 / 1000 + (s2|default(0)) + (s3|default(0)) + (s4|default(0))) | round(2) %}
+            {% set current_total = (s1 / 1000 + s2 + s3 + s4) | round(2) %}
             {% set last_total = states('sensor.pv_energy_total_realtime') | float(0) %}
             
             {{ [current_total, last_total] | max }}
@@ -105,6 +104,12 @@ template:
             {% set haus_netto = netz + batterie_gesamt %}
             {{ (pv + haus_netto) | round(0) }}
 
+  - trigger:
+      - platform: state
+        entity_id: sensor.average_consumption_last_1h
+      - platform: time_pattern
+        minutes: "/1" # Nur alle 1 min. neu berechnen, statt bei jedem Watt
+    sensor:
       - name: "Estimated remaining consumption"
         unique_id: estimated_remaining_consumption
         unit_of_measurement: "kWh"
