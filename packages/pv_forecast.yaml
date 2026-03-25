@@ -320,6 +320,27 @@ template:
             0.0
           {% endif %}
 
+      - name: "PV Prognose Vergleich Tabelle"
+        unique_id: pv_prognose_vergleich_tabelle
+        state: "Analyse"
+        attributes:
+          markdown: >
+            {% set real = states('input_number.pv_reale_ernte_von_gestern') | float(0) %}
+            {% set v_sc = states('input_number.pv_save_solcast_morgens') | float(0) %}
+            {% set v_sp = states('input_number.pv_save_solarprognose_morgens') | float(0) %}
+            {% set v_fs = states('input_number.pv_save_forecastsolar_morgens') | float(0) %}
+            {% set v_om = states('input_number.pv_save_openmeteo_morgens') | float(0) %}
+
+            | Anbieter | Prognose | Abweichung | Fehler % |
+            | :--- | :---: | :---: | :---: |
+            | **Real (Gestern)** | **{{ real }}** | - | - |
+            | Solcast | {{ v_sc }} | {{ (v_sc - real) | round(2) }} | {{ ((v_sc - real) / real * 100) | round(1) if real > 0 else 0 }}% |
+            | Solarprognose | {{ v_sp }} | {{ (v_sp - real) | round(2) }} | {{ ((v_sp - real) / real * 100) | round(1) if real > 0 else 0 }}% |
+            | Forecast.Solar | {{ v_fs }} | {{ (v_fs - real) | round(2) }} | {{ ((v_fs - real) / real * 100) | round(1) if real > 0 else 0 }}% |
+            | OpenMeteo | {{ v_om }} | {{ (v_om - real) | round(2) }} | {{ ((v_om - real) / real * 100) | round(1) if real > 0 else 0 }}% |
+
+            *Gewichtungs-Faktor aktuell (Bias): {{ states('sensor.pv_forecast_bias_korrekturfaktor') }}*
+
   - trigger:
       - platform: state
         entity_id: input_number.pv_reale_ernte_von_gestern

@@ -167,11 +167,17 @@ template:
               {% else %}
                 {% set target1 = (w1 / sum_w * total) %}
                 {% set target2 = total - target1 %}
-                {% set overflow1 = [0, target1 - lim1] | max %}
-                {% set overflow2 = [0, target2 - lim2] | max %}
-                {% set v1 = [target1 - overflow1 + overflow2, lim1] | min | round(0) %}
-                {% set v2 = [target2 - overflow2 + overflow1, lim2] | min | round(0) %}
-                {{ {'v1': v1, 'v2': v2} }}
+                {% if target1 > lim1 and target2 < lim2 %}
+                  {% set v2 = [lim2, target2 + target1 - lim1] | min | round(0) %}
+                  {{ {'v1': lim1, 'v2': v2} }}
+                {% elif target1 < lim1 and target2 > lim2 %}
+                  {% set v1 = [lim1, target1 + target2 - lim2] | min | round(0) %}
+                  {{ {'v1': v1, 'v2': lim2} }}
+                {% elif target1 > lim1 and target2 > lim2 %}
+                  {{ {'v1': lim1, 'v2': lim2} }}
+                {% else %}
+                  {{ {'v1': target1, 'v2': target2} }}
+                {% endif %}
               {% endif %}
             {% endif %}
           max_charge: >
@@ -186,6 +192,7 @@ template:
                 {% set current_soc1 = states('sensor.venus_1_custom_soc') | float(20) %}
                 {% set current_soc2 = states('sensor.venus_2_custom_soc') | float(20) %}
                 {% set ziel_soc = states('sensor.dynamic_soc') | float(80) %}
+                {% if ziel_soc < 100 %}
                 {% set diff1 = [[ziel_soc - current_soc1, 0] | max, 100] | min %}
                 {% set diff2 = [[ziel_soc - current_soc2, 0] | max, 100] | min %}
                 {% set dauer = (b_set - ts) / 3600 %}
@@ -193,6 +200,9 @@ template:
                 {% set max_ladeleistung1 = [ (5120 * diff1 / 100 / korrigierte_dauer * reserve) | round(0), 2500 ] | min %}
                 {% set max_ladeleistung2 = [ (5120 * diff2 / 100 / korrigierte_dauer * reserve) | round(0), 2500 ] | min %}
                 {{ {'v1': max_ladeleistung1, 'v2': max_ladeleistung2} }}
+              {% else %}
+                {{ {'v1': 2500, 'v2': 2500} }}
+              {% endif %}              
             {% else %}
                 {{ {'v1': 2500, 'v2': 2500} }}
             {% endif %}
