@@ -1,14 +1,36 @@
 # packages/pv_batteries.yaml
 
 sensor:
+  - platform: filter
+    name: "Marstek Venus 1 Batterieleistung glatt"
+    unique_id: marstek_venus_1_batterieleistung_glatt
+    entity_id: sensor.marstek_venus_1_batterieleistung
+    filters:
+      - filter: lowpass
+        time_constant: 5 # Glättet über ca. 5 Messwerte (ca. 5-10 Sek. Trägheit)
+        precision: 1 # Rundet auf eine Nachkommastelle
+      - filter: time_throttle
+        window_size: "00:00:30" # Schreibt nur alle 30 Sekunden einen Wert in die DB
+
+  - platform: filter
+    name: "Marstek Venus 2 Batterieleistung glatt"
+    unique_id: marstek_venus_2_batterieleistung_glatt
+    entity_id: sensor.marstek_venus_2_batterieleistung
+    filters:
+      - filter: lowpass
+        time_constant: 5 # Glättet über ca. 5 Messwerte (ca. 5-10 Sek. Trägheit)
+        precision: 1 # Rundet auf eine Nachkommastelle
+      - filter: time_throttle
+        window_size: "00:00:30" # Schreibt nur alle 30 Sekunden einen Wert in die DB
+
   - platform: integration
-    source: sensor.marstek_venus_1_batterieleistung # positiv ist laden
+    source: sensor.marstek_venus_1_batterieleistung_glatt # positiv ist laden
     name: "Venus 1 Energiefluss Wh"
     round: 1
     method: left
 
   - platform: integration
-    source: sensor.marstek_venus_2_batterieleistung # positiv ist laden
+    source: sensor.marstek_venus_2_batterieleistung_glatt # positiv ist laden
     name: "Venus 2 Energiefluss Wh"
     round: 1
     method: left
@@ -24,23 +46,25 @@ template:
       - platform: state
         entity_id: sensor.marstek_venus_1_batterie_ladezustand
         to: "100"
+        for: "00:01:00" # Muss 1 Minute stabil auf 100 sein
     sensor:
       - name: "Venus 1 SOC Reset Punkt"
         unit_of_measurement: "Wh"
         state: >
           {% set val = states('sensor.venus_1_energiefluss_wh') %}
-          {{ val if is_number(val) else states('sensor.venus_1_soc_reset_punkt') }}
+          {{ val if is_number(val) else states('sensor.venus_1_soc_reset_punkt') | float(0) }}
 
   - trigger:
       - platform: state
         entity_id: sensor.marstek_venus_2_batterie_ladezustand
         to: "100"
+        for: "00:01:00" # Muss 1 Minute stabil auf 100 sein
     sensor:
       - name: "Venus 2 SOC Reset Punkt"
         unit_of_measurement: "Wh"
         state: >
           {% set val = states('sensor.venus_2_energiefluss_wh') %}
-          {{ val if is_number(val) else states('sensor.venus_2_soc_reset_punkt') }}
+          {{ val if is_number(val) else states('sensor.venus_2_soc_reset_punkt') | float(0) }}
 
   - trigger:
       - platform: state
@@ -53,26 +77,43 @@ template:
         unit_of_measurement: "%"
         device_class: battery
         state: >
-          {% set hw_soc = states('sensor.marstek_venus_1_batterie_ladezustand') | float(0) %}
-          {% set alt = this.attributes.get('last_wh', 0) | float %}
-          {% set neu = states('sensor.venus_1_energiefluss_wh') | float(0) %}
+          {% set hw_soc = states('sensor.marstek_venus_1_batterie_ladezustand') | float(-1) %}
+          {% set neu_wh = states('sensor.venus_1_energiefluss_wh') | float('unknown') %}
+          {% set reset_wh = states('sensor.venus_1_soc_reset_punkt') | float('unknown') %}
 
-          {% if (neu - alt) | abs > 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
-            {% if hw_soc >= 100 %}
-              100
-            {% else %}
-              {% set total_wh = neu %}
-              {% set reset_wh = states('sensor.venus_1_soc_reset_punkt') | float(0) %}
-              {% set cap_wh = (states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12)) * 1000 %}
-              {% set diff_wh = total_wh - reset_wh %}
-              {% set calc_soc = 100 + (diff_wh / cap_wh * 100) %}
-              {{ [ [calc_soc, 100] | min, 0 ] | max }}
-            {% endif %}
+          {# Wenn Hardware offline oder Sensoren nicht bereit -> alten Zustand beibehalten #}
+          {% if hw_soc == -1 or neu_wh == 'unknown' or reset_wh == 'unknown' %}
+            {{ this.state if this.state is defined else 'unknown' }}
           {% else %}
-            {{ states('sensor.venus_1_custom_soc') }}
+            {% set alt_wh = this.attributes.get('last_wh', 0) | float(0) %}
+            
+            {% if (neu_wh - alt_wh) | abs > 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
+              {% if hw_soc >= 100 %}
+                100
+              {% else %}
+                {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12) * 1000 %}
+                {% set calc_soc = 100 + ((neu_wh - reset_wh) / cap_wh * 100) %}
+                
+                {# Begrenzt den Wert sauber zwischen 0 und 100 und rundet #}
+                {{ calc_soc | round(1) | clamp(0, 100) }}
+              {% endif %}
+            {% else %}
+              {{ this.state if this.state is defined else 'unknown' }}
+            {% endif %}
           {% endif %}
         attributes:
-          last_wh: "{{ states('sensor.venus_1_energiefluss_wh') | float(0) }}"
+          last_wh: >
+            {% set hw_soc = states('sensor.marstek_venus_1_batterie_ladezustand') | float(-1) %}
+            {% set neu_wh = states('sensor.venus_1_energiefluss_wh') | float('unknown') %}
+            {% set alt_wh = this.attributes.get('last_wh', neu_wh) | float(0) %}
+
+            {% if neu_wh == 'unknown' or hw_soc == -1 %}
+              {{ this.attributes.get('last_wh', 0) }}
+            {% elif (neu_wh - alt_wh) | abs >= 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
+              {{ neu_wh }}
+            {% else %}
+              {{ alt_wh }}
+            {% endif %}
 
   - trigger:
       - platform: state
@@ -85,47 +126,52 @@ template:
         unit_of_measurement: "%"
         device_class: battery
         state: >
-          {% set hw_soc = states('sensor.marstek_venus_2_batterie_ladezustand') | float(0) %}
-          {% set alt = float(this.attributes.last_wh | default(0)) %}
-          {% set neu = states('sensor.venus_2_energiefluss_wh') | float(0) %}
+          {% set hw_soc = states('sensor.marstek_venus_2_batterie_ladezustand') | float(-1) %}
+          {% set neu_wh = states('sensor.venus_2_energiefluss_wh') | float('unknown') %}
+          {% set reset_wh = states('sensor.venus_2_soc_reset_punkt') | float('unknown') %}
 
-          {% if (neu - alt) | abs > 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
-            {% if hw_soc >= 100 %}
-              100
-            {% else %}
-              {% set total_wh = neu %}
-              {% set reset_wh = states('sensor.venus_2_soc_reset_punkt') | float(0) %}
-              {% set cap_wh = (states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.12)) * 1000 %}
-              {% set diff_wh = total_wh - reset_wh %}
-              {% set calc_soc = 100 + (diff_wh / cap_wh * 100) %}
-              {{ [ [calc_soc, 100] | min, 0 ] | max }}
-            {% endif %}
+          {# Wenn Hardware offline oder Sensoren nicht bereit -> alten Zustand beibehalten #}
+          {% if hw_soc == -1 or neu_wh == 'unknown' or reset_wh == 'unknown' %}
+            {{ this.state if this.state is defined else 'unknown' }}
           {% else %}
-            {{ states('sensor.venus_2_custom_soc') }}
+            {% set alt_wh = this.attributes.get('last_wh', 0) | float(0) %}
+            
+            {% if (neu_wh - alt_wh) | abs > 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
+              {% if hw_soc >= 100 %}
+                100
+              {% else %}
+                {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.12) * 1000 %}
+                {% set calc_soc = 100 + ((neu_wh - reset_wh) / cap_wh * 100) %}
+                
+                {# Begrenzt den Wert sauber zwischen 0 und 100 und rundet #}
+                {{ calc_soc | round(1) | clamp(0, 100) }}
+              {% endif %}
+            {% else %}
+              {{ this.state if this.state is defined else 'unknown' }}
+            {% endif %}
           {% endif %}
         attributes:
-          last_wh: "{{ states('sensor.venus_2_energiefluss_wh') | float(0) }}"
+          last_wh: >
+            {% set hw_soc = states('sensor.marstek_venus_2_batterie_ladezustand') | float(-1) %}
+            {% set neu_wh = states('sensor.venus_2_energiefluss_wh') | float('unknown') %}
+            {% set alt_wh = this.attributes.get('last_wh', neu_wh) | float(0) %}
+
+            {% if neu_wh == 'unknown' or hw_soc == -1 %}
+              {{ this.attributes.get('last_wh', 0) }}
+            {% elif (neu_wh - alt_wh) | abs >= 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
+              {{ neu_wh }}
+            {% else %}
+              {{ alt_wh }}
+            {% endif %}
 
   - sensor:
-      - name: "Batterieleistung Watt"
-        unit_of_measurement: "W"
-        device_class: power
-        state: >
-          {% set b1 = states('sensor.marstek_venus_1_ac_leistung') | float(0) %} 
-          {% set b2 = states('sensor.marstek_venus_2_ac_leistung') | float(0) %}
-          {{ (b1 + b2) | round(0) }}
-
       - name: "Battery SOC Total"
         unique_id: battery_soc_total
         unit_of_measurement: "%"
         device_class: battery
         state: >
-          {% set s1 = states('sensor.venus_1_custom_soc') %}
-          {% set s2 = states('sensor.venus_2_custom_soc') %}
-
-          {# Sicherstellen, dass wir Zahlen haben #}
-          {% set soc1 = s1 | float(-1) if is_number(s1) else -1 %}
-          {% set soc2 = s2 | float(-1) if is_number(s2) else -1 %}
+          {% set soc1 = states('sensor.venus_1_custom_soc') | float(-1) %}
+          {% set soc2 = states('sensor.venus_2_custom_soc') | float(-1) %}
 
           {% if soc1 >= 0 and soc2 >= 0 %}
             {{ ((soc1 + soc2) / 2) | round(0) }}
@@ -210,8 +256,8 @@ template:
                 {% set current_soc2 = states('sensor.venus_2_custom_soc') | float(20) %}
                 {% set ziel_soc = states('sensor.dynamic_soc') | float(80) %}
                 {% if ziel_soc < 100 %}
-                {% set diff1 = [[ziel_soc - current_soc1, 0] | max, 100] | min %}
-                {% set diff2 = [[ziel_soc - current_soc2, 0] | max, 100] | min %}
+                {% set diff1 = (ziel_soc - current_soc1) | clamp(0, 100) %}
+                {% set diff2 = (ziel_soc - current_soc2) | clamp(0, 100) %}
                 {% set dauer = (b_set - ts) / 3600 %}
                 {% set korrigierte_dauer = dauer if dauer > 0.01 else 0.01 %}
                 {% set max_ladeleistung1 = [ (5120 * diff1 / 100 / korrigierte_dauer * reserve) | round(0), 2500 ] | min %}
@@ -224,11 +270,6 @@ template:
                 {{ {'v1': 2500, 'v2': 2500} }}
             {% endif %}
 
-      - name: "Venus Maximale Ladeverteilung"
-        unit_of_measurement: "%"
-        state: >
-          {{ 1 }}
-
       - name: "Target Discharge Distribution"
         unit_of_measurement: "W"
         device_class: power
@@ -236,21 +277,14 @@ template:
           {% set current_soc = states('sensor.battery_soc_total') | float(0) %}
           {% set min_soc = state_attr('sensor.dynamic_soc_grenzen','min') | float(20) %}
 
-          {% if current_soc <= min_soc %}
-            0
-          {% else %}
-            {% set hausverbrauch = [states('sensor.hausverbrauch_netto_watt') | float(0), 0] | max %}
+          {% set hausverbrauch = [states('sensor.hausverbrauch_netto_watt') | float(0), 0] | max %}
 
-            {# Wir nutzen 'this.state', um den aktuellen Wert des Sensors sicher zu lesen #}
-            {% set last = this.state | float(0) %}
-            {# Hysterese von 15W #}
-            {{ hausverbrauch | round(0) if (hausverbrauch - last) | abs > 15 else last }}
-          {% endif %}
+          {# Wir nutzen 'this.state', um den aktuellen Wert des Sensors sicher zu lesen #}
+          {% set last = this.state | float(0) %}
+          {# Hysterese von 15W #}
+          {{ hausverbrauch | round(0) if (hausverbrauch - last) | abs > 15 else last }}
         attributes:
-          raw: >
-            {{ states('sensor.hausverbrauch_netto_watt') | float(0) }}
           discharge: >
-            {# Auch hier 'this.state' statt states('sensor.target_discharge_distribution') #}
             {% set total_discharge_power = this.state | float(0) %}
 
             {% if total_discharge_power <= 0 %}
@@ -268,8 +302,8 @@ template:
               {% if sum_w == 0 %}
                 {{ {'v1': 0, 'v2': 0} }}
               {% else %}
-                {% set v1 = (w1 * total_discharge_power / sum_w) | round(0) %}
-                {% set v2 = (total_discharge_power - v1) | round(0) %}
+                {% set v1 = [(w1 * total_discharge_power / sum_w) | round(0), 0] | max %}
+                {% set v2 = [(total_discharge_power - v1) | round(0), 0] | max %}
                 {{ {'v1': v1, 'v2': v2} }}
               {% endif %}
             {% endif %}

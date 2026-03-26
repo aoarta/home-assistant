@@ -1,5 +1,6 @@
 # Grundkonfiguration
 default_config:
+
 frontend:
   themes: !include_dir_merge_named themes
 
@@ -14,36 +15,41 @@ shell_command:
   optimize_cpu: 'bash -c "echo schedutil > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor && echo 10000 > /sys/devices/system/cpu/cpufreq/schedutil/rate_limit_us"'
 
 recorder:
-  # Behalte 7 Tage im schnellen Zugriff (ideal für RPi4)
   purge_keep_days: 8
-  # Schreibt Daten gesammelt alle 30 Sek. (schont die SD-Karte/SSD)
   commit_interval: 60
-  # Die Verbindungs-URL (Passwort anpassen!)
   db_url: mysql://homeassistant:homeassistant@core-mariadb/homeassistant?charset=utf8mb4
   exclude:
-    # Spezifische Entitäten ausschließen (Beispiele)
-    #entities:
-    #  - sun.sun # Die Sonnenposition ändert sich ständig
-    #  - sensor.last_boot
-
-    # Wildcards für deine Venus-Sensoren (Besonders wichtig!)
+    entities:
+      - automation.ups_grobregelung_laden_entladen
+      - automation.sende_lade_und_entladebefehle_an_hardware_2
+      - automation.sende_batterie_targets
+      - sensor.hausverbrauch_netto_watt
+      # Doppelte Einträge entfernt
     entity_globs:
-      - sensor.marstek_venus_*_spannung # Wenn du nur die Leistung, nicht die Spannung brauchst
-      - sensor.marstek_venus_*_strom # Stromstärke-Änderungen im Milliamper-Bereich
+      - sensor.marstek_venus_*_spannung
+      - sensor.marstek_venus_*_strom
       - sensor.*ssid*
       - sensor.*highest_peak_time*
-      - sensor.*wifi_connect_count
-      - automation.sende_batterie_targets
+      - sensor.*wifi_connect_count*
       - sensor.*raw*
       - sensor.*api*
+      - sensor.*fast*
+      - sensor.*apparentpower*
+      - sensor.*reactivepower*
+      - sensor.*umwandlungseffizienz*
+      - sensor.*ac_frequenz*
+      - sensor.*batteriestrom*
+      - sensor.*autarkiegrad*
+      - sensor.*batterieleistung*
 
 logger:
-  default: warning # Nur Warnungen und Fehler global zeigen
+  default: warning
   logs:
-    homeassistant.components.modbus: error # Modbus ist sehr gesprächig
+    homeassistant.components.modbus: error
     custom_components.marstek_modbus: error
 
 template:
+  # 1. Normale Sensoren (Zustandsbasiert)
   - sensor:
       - name: "Solar Zeit-Logik"
         unique_id: solar_zeit_logik
@@ -51,11 +57,8 @@ template:
           {% set ts = as_timestamp(now()) %}
           {% set ss = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
           {% set sr = as_timestamp(state_attr('sun.sun', 'next_rising')) %}
-
-          {# Berechnung der heutigen Sonnenzeiten für den Status-Vergleich #}
           {% set today_sr = sr - 86400 if sr > ts else sr %}
           {% set today_ss = ss - 86400 if ss > as_timestamp(now().replace(hour=23, minute=59)) else ss %}
-
           {{ 'Tag' if today_sr <= ts <= today_ss else 'Nacht' }}
         attributes:
           now_ts: "{{ as_timestamp(now()) }}"
@@ -69,13 +72,7 @@ template:
       - name: "Override SOC"
         unique_id: override_soc
         state: >
-          {% set wochentag = now().weekday() %}
-          {# 0=Montag; 3 ist Donnerstag, 5 ist Samstag, #}
-          {% if wochentag == 2 %}
-            1
-          {% else %}
-            0
-          {% endif %}
+          {{ 1 if now().weekday() == 2 else 0 }}
         attributes:
           beschreibung: "Erzwingt 100% SOC für Balancing"
 
@@ -84,62 +81,56 @@ template:
         unit_of_measurement: "%"
         state: "{{ states('sensor.battery_soc_total') | float(0) }}"
         attributes:
-          min: >
-            {% if states('input_number.manuelle_ladeleistung') | float(0) > 0 %} {{ 100.1 }}
-            {% else %} 20 {% endif %}
-          # Wenn manuelle Ladeleistung > 0, dann 100, sonst alte Logik
-          low: >
-            {% if states('input_number.manuelle_ladeleistung') | float(0) > 0 %} {{ 100.1 }}
-            {% else %} {{ 100.1 if states('sensor.override_soc') | float(0) != 0 else 60 }} {% endif %}
-
-          mid: >
-            {% if states('input_number.manuelle_ladeleistung') | float(0) > 0 %} {{ 100.1 }}
-            {% else %} {{ 100.1 if states('sensor.override_soc') | float(0) != 0 else 80 }} {% endif %}
-
+          min: "5"
+          low: "{{ 100.1 if states('sensor.override_soc') | float(0) != 0 else 60 }}"
+          mid: "{{ 100.1 if states('sensor.override_soc') | float(0) != 0 else 80 }}"
           max: "100.1"
-
           high: >
-            {% if states('input_number.manuelle_ladeleistung') | float(0) > 0 or states('sensor.override_soc') | float(0) != 0 %}
+            {% if states('sensor.override_soc') | float(0) != 0 %}
               100.1
             {% else %}
-              {% set morgen = states('sensor.hpv_forecast_weighted_morgen') | float(0) %}
-              {% if morgen > 30 %}
-                85
-              {% else %}
-                100.1
-              {% endif %}
+              {% set morgen = states('sensor.hp_forecast_weighted_morgen') | float(0) %}
+              {{ 85 if morgen > 30 else 100.1 }}
             {% endif %}
 
+  # 2. Trigger-basierte Sensoren
   - trigger:
       - platform: time_pattern
-        minutes: "/1"
+        seconds: "/10"
       - platform: state
-        entity_id: input_number.manuelle_ladeleistung # Sofort-Update bei manueller Änderung
+        entity_id: input_number.manuelle_ladeleistung
     sensor:
       - name: "Dynamic SOC"
         unique_id: dynamic_soc
         unit_of_measurement: "%"
         state: >
-          {% set solar_today = states('sensor.pv_forecast_weighted') | float(-1) %}
-          {% set free_capacity_marstek = states('sensor.battery_free_capacity_kwh') | float(0) %}
-          {% set free_capacity_ups = states('sensor.bms_free_capacity_kwh') | float(0) %}
-          {% set load_today_raw = states('sensor.estimated_remaining_consumption') | float(0) %}
-          {% set load_today = [ load_today_raw, 0] | max %}
-
-          {% if 0.9 * solar_today  > load_today + free_capacity_marstek + free_capacity_ups  or solar_today == -1 %}
-            {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
-            {% set s_logic = state_attr('sensor.solar_zeit_logik', 'sun_rise') %}
-            {% if ts < s_logic %} 
-              {{ state_attr('sensor.dynamic_soc_grenzen', 'min')  | float(20) }}
-            {% elif ts < state_attr('sensor.solar_zeit_logik', 't1130') %} 
-              {{ state_attr('sensor.dynamic_soc_grenzen', 'low') | float(60) }}
-            {% elif ts < state_attr('sensor.solar_zeit_logik', 'b_set') %} 
-              {{ state_attr('sensor.dynamic_soc_grenzen', 'mid') | float(80) }}
-            {% elif ts < state_attr('sensor.solar_zeit_logik', 'sun_set') %} 
-              {{ state_attr('sensor.dynamic_soc_grenzen', 'high') | float(100) }}
-            {% else %} 
-              {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
-            {% endif %}
+          {% if states('input_number.manuelle_ladeleistung') | float(0) > 0 %}
+            100.1
           {% else %}
-            100.2
+            {% set solar_today = states('sensor.pv_forecast_weighted') | float(-1) %}
+            {% set free_marstek = states('sensor.battery_free_capacity_kwh') | float(0) %}
+            {% set free_ups = states('sensor.bms_free_capacity_kwh') | float(0) %}
+            {% set load_today = max(0, states('sensor.estimated_remaining_consumption') | float(0)) %}
+
+            {% if (0.9 * solar_today) > (load_today + free_marstek + free_ups) or solar_today == -1 %}
+              {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
+              {% set s_rise = state_attr('sensor.solar_zeit_logik', 'sun_rise') | float(0) %}
+              {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
+              {% set b_set = state_attr('sensor.solar_zeit_logik', 'b_set') | float(0) %}
+              {% set s_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
+
+              {% if ts < s_rise %}
+                {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
+              {% elif ts < t1130 %}
+                {{ state_attr('sensor.dynamic_soc_grenzen', 'low') | float(60) }}
+              {% elif ts < b_set %}
+                {{ state_attr('sensor.dynamic_soc_grenzen', 'mid') | float(80) }}
+              {% elif ts < s_set %}
+                {{ state_attr('sensor.dynamic_soc_grenzen', 'high') | float(100) }}
+              {% else %}
+                {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
+              {% endif %}
+            {% else %}
+              100.2
+            {% endif %}
           {% endif %}
