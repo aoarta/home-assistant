@@ -179,7 +179,7 @@ template:
         state: >
           {% set charging = states('sensor.battery_total_charge_power') | float(0) %}
           {% set discharging = states('sensor.battery_inverter_energy_power') | float(0) %}
-          {{ (discharging - charging) | round(1) }}
+          {{ (charging - discharging) | round(1) }}
 
       - name: "BMS free Capacity kWh"
         unique_id: bms_free_capacity_kwh

@@ -6,6 +6,16 @@ utility_meter:
     cycle: daily
 
 sensor:
+  # für die datenbank
+  - platform: filter
+    name: "Hausverbrauch 5 Min Durchschnitt fast"
+    unique_id: hausverbrauch_5min_avg_fast
+    entity_id: sensor.hausverbrauch_netto_watt_fast
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "00:05:00"
+        precision: 0
+
   - platform: filter
     name: "Hausverbrauch Netto Watt"
     unique_id: hausverbrauch_netto_watt
@@ -60,8 +70,8 @@ template:
              is_number(states('sensor.balkon_inverter2_energy_total')) or 
              is_number(states('sensor.garage_inverter_energy_total')) }}
 
-      - name: "PV Produktion_watt"
-        unique_id: pv_produktion_watt
+      - name: "PV Produktion Watt fast"
+        unique_id: pv_produktion_watt_fast
         unit_of_measurement: "kW"
         device_class: power
         state: >
@@ -74,7 +84,7 @@ template:
           {# 2. Aktuelle Summe bilden #}
           {% set current_total = (s1 + s2 + s3 + s4) | round(2) %}
 
-          {{ current_total / 1000 }}
+          {{ (current_total / 1000) | round(3) }}
 
       - name: "Hausverbrauch Netto Watt fast"
         unique_id: hausverbrauch_netto_watt_fast
@@ -112,3 +122,32 @@ template:
           verbleibende_zeit_h: >
             {% set sun_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
             {{ ((sun_set - as_timestamp(now())) / 3600) | round(2) if sun_set > as_timestamp(now()) else 0 }}
+
+  - trigger:
+      - platform: time_pattern
+        minutes: "/5"
+    sensor:
+      - name: "Hausverbrauch 5 Min Statistik"
+        unique_id: hausverbrauch_5min_stats
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        # Erklärt: Wir nehmen den gleitenden Durchschnitt (Filter-Sensor)
+        # und runden ihn auf 0 Stellen (ganze Watt).
+        state: >
+          {% set val = states('sensor.hausverbrauch_5_min_durchschnitt_fast') %}
+          {{ val | round(0) if is_number(val) else 'unavailable' }}
+
+  - trigger:
+      - platform: time_pattern
+        seconds: "/30"
+    sensor:
+      - name: "PV Produktion Watt"
+        unique_id: pv_produktion_watt
+        unit_of_measurement: "kW"
+        device_class: power
+        state_class: measurement
+        state: >
+          {# Wir holen den aktuellen Wert des schnellen Sensors #}
+          {% set val = states('sensor.pv_produktion_watt_fast') | float(0) %}
+          {{ val | round(3) }}

@@ -20,11 +20,13 @@ recorder:
   db_url: mysql://homeassistant:homeassistant@core-mariadb/homeassistant?charset=utf8mb4
   exclude:
     entities:
+      - sensor.hausverbrauch_netto_watt_fast
+      - sensor.hausverbrauch_netto_watt
       - automation.ups_grobregelung_laden_entladen
-      - automation.sende_lade_und_entladebefehle_an_hardware_2
+      - automation.sende_lade_und_entladebefehle_an_hardware
       - automation.sende_batterie_targets
       - sensor.hausverbrauch_netto_watt
-      # Doppelte Einträge entfernt
+
     entity_globs:
       - sensor.marstek_venus_*_spannung
       - sensor.marstek_venus_*_strom
@@ -41,6 +43,7 @@ recorder:
       - sensor.*batteriestrom*
       - sensor.*autarkiegrad*
       - sensor.*batterieleistung*
+      - sensor.*energy_current
 
 logger:
   default: warning
@@ -92,6 +95,25 @@ template:
               {% set morgen = states('sensor.hp_forecast_weighted_morgen') | float(0) %}
               {{ 85 if morgen > 30 else 100.1 }}
             {% endif %}
+
+  - sensor:
+      - name: "Batterieleistung Gesamt"
+        unique_id: batterieleistung_gesamt
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {# Rohwerte einlesen und sicherheitshalber auf 0 setzen, falls ein Sensor offline ist #}
+          {% set bms = states('sensor.bms_batterieleistung_glatt') | float(0) %}
+          {% set venus1 = states('sensor.marstek_venus_1_batterieleistung_glatt') | float(0) %}
+          {% set venus2 = states('sensor.marstek_venus_2_batterieleistung_glatt') | float(0) %}
+
+          {{ (bms + venus1 + venus2) | round(1) }}
+        availability: >
+          {# Der Sensor ist nur verfügbar, wenn mindestens einer der Quellsensoren einen gültigen Wert liefert #}
+          {{ is_number(states('sensor.bms_batterieleistung_glatt')) or 
+             is_number(states('sensor.marstek_venus_1_batterieleistung_glatt')) or 
+             is_number(states('sensor.marstek_venus_2_batterieleistung_glatt')) }}
 
   # 2. Trigger-basierte Sensoren
   - trigger:
