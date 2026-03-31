@@ -141,15 +141,15 @@ template:
             {% endif %}
 
       # --- KOMBINIERTE SENSOREN (Nutzen die stabilen Rohdaten) ---
-      - name: "PV Forecast Solcast combined"
-        unique_id: pv_forecast_solcast_combined
+      - name: "PV Forecast Solcast alles"
+        unique_id: pv_forecast_solcast_alles
         unit_of_measurement: "kWh"
         state: >
           {% set val = states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute') %}
           {{ val if is_number(val) else states(this.entity_id) | float(0) }}
 
-      - name: "PV Forecast Solarprognose Combined"
-        unique_id: pv_forecast_solarprognose_combined
+      - name: "PV Forecast Solarprognose alles"
+        unique_id: pv_forecast_solarprognose_alles
         unit_of_measurement: "kWh"
         state: >
           {% set dach = state_attr('sensor.solarprognose_api_raw_dach', 'data') %}
@@ -166,8 +166,8 @@ template:
             {{ ns.total | round(2) }}
           {% else %} {{ states(this.entity_id) | float(0) }} {% endif %}
 
-      - name: "PV Forecast ForecastSolar Combined"
-        unique_id: pv_forecast_forecastsolar_combined
+      - name: "PV Forecast ForecastSolar alles"
+        unique_id: pv_forecast_forecastsolar_alles
         unit_of_measurement: "kWh"
         state: >
           {% set today = now().strftime('%Y-%m-%d') %}
@@ -179,13 +179,15 @@ template:
             {% set ts_now = now().strftime('%Y-%m-%d %H:%M:%S') %}
             
             {% for ts, val in dach.items() if ts.startswith(today) %}
-              {% if val > ns.d_max %}{% set ns.d_max = val %}{% endif %}
-              {% if ts <= ts_now %}{% set ns.d_now = val %}{% endif %}
+              {% set val_num = val | float(0) %}
+              {% if val_num > ns.d_max %}{% set ns.d_max = val_num %}{% endif %}
+              {% if ts <= ts_now %}{% set ns.d_now = val_num %}{% endif %}
             {% endfor %}
             
             {% for ts, val in fassade.items() if ts.startswith(today) %}
-              {% if val > ns.f_max %}{% set ns.f_max = val %}{% endif %}
-              {% if ts <= ts_now %}{% set ns.f_now = val %}{% endif %}
+              {% set val_num = val | float(0) %}
+              {% if val_num > ns.f_max %}{% set ns.f_max = val_num %}{% endif %}
+              {% if ts <= ts_now %}{% set ns.f_now = val_num %}{% endif %}
             {% endfor %}
             
             {# Berechnung: (Rest Dach + 3x Rest Fassade) / 1000 #}
@@ -194,8 +196,8 @@ template:
             {{ states(this.entity_id) | float(0) }}
           {% endif %}
 
-      - name: "PV Forecast openmeteo Combined"
-        unique_id: pv_forecast_openmeteo_combined
+      - name: "PV Forecast openmeteo alles"
+        unique_id: pv_forecast_openmeteo_alles
         unit_of_measurement: "kWh"
         state: >
           {% set dach = state_attr('sensor.home_energy_pv_dach_production_today', 'wh_period') %}
@@ -217,10 +219,10 @@ template:
         unique_id: pv_forecast_weighted_without_bias
         unit_of_measurement: "kWh"
         state: >
-          {% set sc = states('sensor.pv_forecast_solcast_combined') | float(0) %}
-          {% set sp = states('sensor.pv_forecast_solarprognose_combined') | float(0) %}
-          {% set fs = states('sensor.pv_forecast_forecastsolar_combined') | float(0) %}
-          {% set om = states('sensor.pv_forecast_openmeteo_combined') | float(0) %}
+          {% set sc = states('sensor.pv_forecast_solcast_alles') | float(0) %}
+          {% set sp = states('sensor.pv_forecast_solarprognose_alles') | float(0) %}
+          {% set fs = states('sensor.pv_forecast_forecastsolar_alles') | float(0) %}
+          {% set om = states('sensor.pv_forecast_openmeteo_alles') | float(0) %}
           {% set sc_w = states('input_number.weight_solcast') | float(0.4) if sc > 0 else 0 %}
           {% set sp_w = states('input_number.weight_solarprognose') | float(0.3) if sp > 0 else 0 %}
           {% set fs_w = states('input_number.weight_forecastsolar') | float(0.2) if fs > 0 else 0 %}
@@ -384,7 +386,7 @@ automation:
               target:
                 entity_id: "input_number.pv_save_{{ repeat.item }}_morgens"
               data:
-                value: "{{ states('sensor.pv_forecast_' ~ repeat.item ~ '_combined') | float(0) }}"
+                value: "{{ states('sensor.pv_forecast_' ~ repeat.item ~ '_alles') | float(0) }}"
 
   - alias: "PV: Gewichte und Vergleich am Ende des Tages"
     id: pv_daily_comparison_and_weighting
@@ -458,5 +460,5 @@ automation:
                             }
                           data:
                             {
-                              value: "{{ ((states('input_number.weight_' ~ repeat.item.id) | float * (1-alpha)) + ((repeat.item.score | float / total_score) * alpha)) | round(3) }}",
+                              value: "{{ ((states('input_number.weight_' ~ repeat.item.id) | float(0) * (1-alpha)) + ((repeat.item.score | float(0) / total_score) * alpha)) | round(3) }}",
                             }

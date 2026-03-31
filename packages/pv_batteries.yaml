@@ -1,39 +1,65 @@
 # packages/pv_batteries.yaml
 
 sensor:
+  # 666
   - platform: filter
-    name: "Marstek Venus 1 Batterieleistung glatt"
-    unique_id: marstek_venus_1_batterieleistung_glatt
-    entity_id: sensor.marstek_venus_1_batterieleistung
+    name: "Marstek Venus 1 AC Leistung glatt"
+    unique_id: marstek_venus_1_ac_leistung_glatt
+    entity_id: sensor.marstek_venus_1_ac_leistung
     filters:
       - filter: lowpass
         time_constant: 5 # Glättet über ca. 5 Messwerte (ca. 5-10 Sek. Trägheit)
-        precision: 1 # Rundet auf eine Nachkommastelle
+        precision: 0 # Rundet auf eine Nachkommastelle
       - filter: time_throttle
         window_size: "00:00:30" # Schreibt nur alle 30 Sekunden einen Wert in die DB
 
+  #666
   - platform: filter
-    name: "Marstek Venus 2 Batterieleistung glatt"
-    unique_id: marstek_venus_2_batterieleistung_glatt
-    entity_id: sensor.marstek_venus_2_batterieleistung
+    name: "Marstek Venus 2 AC Leistung glatt"
+    unique_id: marstek_venus_2_ac_leistung_glatt
+    entity_id: sensor.marstek_venus_2_ac_leistung
     filters:
       - filter: lowpass
         time_constant: 5 # Glättet über ca. 5 Messwerte (ca. 5-10 Sek. Trägheit)
-        precision: 1 # Rundet auf eine Nachkommastelle
+        precision: 0 # Rundet auf eine Nachkommastelle
       - filter: time_throttle
         window_size: "00:00:30" # Schreibt nur alle 30 Sekunden einen Wert in die DB
 
+  #666
   - platform: integration
-    source: sensor.marstek_venus_1_batterieleistung_glatt # positiv ist laden
+    source: sensor.marstek_venus_1_ac_leistung # positiv ist laden
     name: "Venus 1 Energiefluss Wh"
-    round: 1
+    unique_id: marstek_venus_1_energiefluss_wh
+    round: 0
     method: left
 
+  # 666
   - platform: integration
-    source: sensor.marstek_venus_2_batterieleistung_glatt # positiv ist laden
+    source: sensor.marstek_venus_2_ac_leistung # positiv ist laden
     name: "Venus 2 Energiefluss Wh"
-    round: 1
+    unique_id: marstek_venus_2_energiefluss_wh
+    round: 0
     method: left
+
+  - platform: filter
+    name: "Target Charge Distribution"
+    unique_id: target_charge_distribution
+    entity_id: sensor.target_charge_distribution_fast
+    scan_interval: 300
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "00:05:00"
+        precision: 1
+
+  - platform: filter
+    name: "Target Discharge Distribution"
+    unique_id: target_discharge_distribution
+    entity_id: sensor.target_discharge_distribution_fast
+    scan_interval: 300
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "00:05:00"
+        precision: 1
 
 ################################################################################
 ################################################################################
@@ -71,6 +97,9 @@ template:
         entity_id: sensor.venus_1_energiefluss_wh
       - platform: homeassistant
         event: start
+      - platform: time_pattern
+        # Löst alle 5 Minuten aus (z. B. 08:00, 08:05, 08:10...)
+        minutes: "/5"
     sensor:
       - name: "Venus 1 Custom SOC"
         unique_id: venus_1_custom_soc
@@ -92,13 +121,13 @@ template:
                 100
               {% else %}
                 {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12) * 1000 %}
-                {% set calc_soc = 100 + ((neu_wh - reset_wh) / cap_wh * 100) %}
+                {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
                 
                 {# Begrenzt den Wert sauber zwischen 0 und 100 und rundet #}
                 {{ calc_soc | round(1) | clamp(0, 100) }}
               {% endif %}
             {% else %}
-              {{ this.state if this.state is defined else 'unknown' }}
+              {{ this.state if this.state is defined else hw_soc }}
             {% endif %}
           {% endif %}
         attributes:
@@ -120,6 +149,9 @@ template:
         entity_id: sensor.venus_2_energiefluss_wh
       - platform: homeassistant
         event: start
+      - platform: time_pattern
+        # Löst alle 5 Minuten aus (z. B. 08:00, 08:05, 08:10...)
+        minutes: "/5"
     sensor:
       - name: "Venus 2 Custom SOC"
         unique_id: venus_2_custom_soc
@@ -141,13 +173,13 @@ template:
                 100
               {% else %}
                 {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.12) * 1000 %}
-                {% set calc_soc = 100 + ((neu_wh - reset_wh) / cap_wh * 100) %}
+                {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
                 
                 {# Begrenzt den Wert sauber zwischen 0 und 100 und rundet #}
                 {{ calc_soc | round(1) | clamp(0, 100) }}
               {% endif %}
             {% else %}
-              {{ this.state if this.state is defined else 'unknown' }}
+              {{ this.state if this.state is defined else hw_soc }}
             {% endif %}
           {% endif %}
         attributes:
@@ -163,6 +195,26 @@ template:
             {% else %}
               {{ alt_wh }}
             {% endif %}
+
+  - trigger:
+      - platform: time_pattern
+        minutes: "/5"
+    sensor:
+      - name: "Marstek Free capacity kWh"
+        unique_id: marstek_free_capacity_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state: >
+          {% set cap1 = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12) %}
+          {% set soc1 = states('sensor.venus_1_custom_soc') | float(0) %}
+
+          {% set cap2 = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.12) %}
+          {% set soc2 = states('sensor.venus_2_custom_soc') | float(0) %}
+
+          {% set free1 = cap1 * (1 - (soc1 / 100)) %}
+          {% set free2 = cap2 * (1 - (soc2 / 100)) %}
+
+          {{ (free1 + free2) | round(2) }}
 
   - sensor:
       - name: "Battery SOC Total"
@@ -191,11 +243,30 @@ template:
               is_number(states('sensor.venus_2_custom_soc')) or
               is_number(states('sensor.marstek_venus_1_batterie_ladezustand')) }}
 
-      - name: "Target Charge Distribution"
+      - name: "Marstek Batterieleistung Gesamt"
+        unique_id: marstek_batterieleistung_gesamt
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {# Rohwerte einlesen und sicherheitshalber auf 0 setzen, falls ein Sensor offline ist #}
+          {% set venus1 = states('sensor.marstek_venus_1_ac_leistung') | float(0) %}
+          {% set venus2 = states('sensor.marstek_venus_2_ac_leistung') | float(0) %}
+
+          {{ (venus1 + venus2) | round(0) }}
+        availability: >
+          {# Der Sensor ist nur verfügbar, wenn mindestens einer der Quellsensoren einen gültigen Wert liefert #}
+          {{ is_number(states('sensor.marstek_venus_1_ac_leistung')) or 
+             is_number(states('sensor.marstek_venus_2_ac_leistung')) }}
+
+      - name: "Target Charge Distribution fast"
         unit_of_measurement: "W"
         device_class: power
         state: >
-          {% set raw_target = [0, -(states('sensor.hausverbrauch_netto_watt') | float(0))] | max %}
+          {% set hausverbrauch = [0, -(states('sensor.hausverbrauch_netto_watt') | float(0))] | max %}
+          {% set raw_einspeisung = states('sensor.solarnet_leistung_netzeinspeisung') | float(0) %}
+          {#{% set raw_target = hausverbrauch + raw_einspeisung %}#}
+          {% set raw_target = hausverbrauch %}
           {% set last = this.state | float(0) %}
           {{ raw_target | round(0) if (raw_target - last) | abs > 15 else last }}
 
@@ -206,7 +277,7 @@ template:
             {% if manual > 0 %}
               {{ {'v1': manual, 'v2': manual} }}
             {% else %}
-              {% set total = states('sensor.target_charge_distribution') | float(0) %}
+              {% set total = states('sensor.target_charge_distribution_fast') | float(0) %}
               {% set dyn_soc = states('sensor.dynamic_soc') | float(50) %}
 
               {#{% set s1_raw = states('sensor.marstek_venus_1_batterie_ladezustand') | float(100) %}#}
@@ -218,7 +289,6 @@ template:
               {% set s2 = 100 if not is_state('switch.marstek_venus2_modbus_rs485_steuermodus', 'on') else s2_raw %}              
 
               {% set limits = this.attributes.get('max_charge') %}
-              {#{% set limits = state_attr('sensor.target_charge_distribution', 'max_charge') %}#}
               {% set lim1 = limits.v1 | int(0) if limits is not none else 2500 %}
               {% set lim2 = limits.v2 | int(0) if limits is not none else 2500 %}
 
@@ -228,8 +298,8 @@ template:
               {% if sum_w == 0 %}
                 {{ {'v1': 0, 'v2': 0} }}
               {% else %}
-                {% set target1 = (w1 / sum_w * total) %}
-                {% set target2 = total - target1 %}
+                {% set target1 = (w1 / sum_w * total) | round(0) %}
+                {% set target2 = (total - target1) | round(0) %}
                 {% if target1 > lim1 and target2 < lim2 %}
                   {% set v2 = [lim2, target2 + target1 - lim1] | min | round(0) %}
                   {{ {'v1': lim1, 'v2': v2} }}
@@ -270,18 +340,15 @@ template:
                 {{ {'v1': 2500, 'v2': 2500} }}
             {% endif %}
 
-      - name: "Target Discharge Distribution"
+      - name: "Target Discharge Distribution fast"
         unit_of_measurement: "W"
         device_class: power
         state: >
           {% set current_soc = states('sensor.battery_soc_total') | float(0) %}
           {% set min_soc = state_attr('sensor.dynamic_soc_grenzen','min') | float(20) %}
-
           {% set hausverbrauch = [states('sensor.hausverbrauch_netto_watt') | float(0), 0] | max %}
 
-          {# Wir nutzen 'this.state', um den aktuellen Wert des Sensors sicher zu lesen #}
           {% set last = this.state | float(0) %}
-          {# Hysterese von 15W #}
           {{ hausverbrauch | round(0) if (hausverbrauch - last) | abs > 15 else last }}
         attributes:
           discharge: >
@@ -308,35 +375,15 @@ template:
               {% endif %}
             {% endif %}
 
-      - name: "Battery Free capacity kWh"
-        unique_id: battery_free_capacity_kwh
-        unit_of_measurement: "kWh"
-        device_class: energy
-        state: >
-          {# Gesamtkapazität der Venus 1 (Standard 5.12 kWh) #}
-          {% set cap1 = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12) %}
-          {% set soc1 = states('sensor.venus_1_custom_soc') | float(0) %}
-
-          {# Gesamtkapazität der Venus 2 (Standard 5.12 kWh) #}
-          {% set cap2 = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.12) %}
-          {% set soc2 = states('sensor.venus_2_custom_soc') | float(0) %}
-
-          {# Berechnung der freien kWh pro Batterie #}
-          {% set free1 = cap1 * (1 - (soc1 / 100)) %}
-          {% set free2 = cap2 * (1 - (soc2 / 100)) %}
-
-          {# Summe bilden und auf 2 Nachkommastellen runden #}
-          {{ (free1 + free2) | round(2) }}
-
 automation:
   - alias: "Sende Lade und Entladebefehle an Hardware (Optimiert)"
     id: "sende_batterie_targets_v2"
-    mode: restart # Bricht laufende Delays ab, wenn ein neuer Wert kommt
+    mode: restart
     trigger:
       - platform: state
         entity_id:
-          - sensor.target_charge_distribution
-          - sensor.target_discharge_distribution
+          - sensor.target_charge_distribution_fast
+          - sensor.target_discharge_distribution_fast
         for:
           seconds: 5 # Beruhigungszeit, um Hardware-Stress zu reduzieren
     condition:
@@ -346,20 +393,20 @@ automation:
       - variables:
           # --- Werte für Venus 1 ---
           v1_c_target: >
-            {% set v = state_attr('sensor.target_charge_distribution', 'charge') %}
+            {% set v = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
             {{ v.v1 | int(0) if v is not none else 0 }}
           v1_d_target: >
-            {% set v = state_attr('sensor.target_discharge_distribution', 'discharge') %}
+            {% set v = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
             {{ v.v1 | int(0) if v is not none else 0 }}
           v1_laden: "{{ [v1_c_target, 2500] | min if v1_c_target >= 20 else 0 }}"
           v1_entladen: "{{ [v1_d_target, 2500] | min if v1_d_target >= 20 else 0 }}"
 
           # --- Werte für Venus 2 ---
           v2_c_target: >
-            {% set v = state_attr('sensor.target_charge_distribution', 'charge') %}
+            {% set v = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
             {{ v.v2 | int(0) if v is not none else 0 }}
           v2_d_target: >
-            {% set v = state_attr('sensor.target_discharge_distribution', 'discharge') %}
+            {% set v = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
             {{ v.v2 | int(0) if v is not none else 0 }}
           v2_laden: "{{ [v2_c_target, 2500] | min if v2_c_target >= 20 else 0 }}"
           v2_entladen: "{{ [v2_d_target, 2500] | min if v2_d_target >= 20 else 0 }}"
