@@ -26,6 +26,12 @@ recorder:
       - automation.sende_lade_und_entladebefehle_an_hardware
       - automation.sende_batterie_targets
       - sensor.hausverbrauch_netto_watt
+      - sensor.garage_inverter_energy_power
+      - sensor.balkon_inverter2_energy_power
+      - sensor.balkon_inverter_energy_power
+      - sensor.garage_inverter_5min_average
+      - sensor.balkon_inverter_5min_average
+      - sensor.balkon_inverter2_5min_average
 
     entity_globs:
       - sensor.marstek_venus_*_spannung
@@ -43,7 +49,7 @@ recorder:
       - sensor.*batteriestrom*
       - sensor.*autarkiegrad*
       - sensor.*batterieleistung*
-      - sensor.*energy_current
+      - sensor.*energy_current*
 
 logger:
   default: warning
@@ -104,16 +110,16 @@ template:
         state_class: measurement
         state: >
           {# Rohwerte einlesen und sicherheitshalber auf 0 setzen, falls ein Sensor offline ist #}
-          {% set bms = states('sensor.bms_batterieleistung_glatt') | float(0) %}
-          {% set venus1 = states('sensor.marstek_venus_1_batterieleistung_glatt') | float(0) %}
-          {% set venus2 = states('sensor.marstek_venus_2_batterieleistung_glatt') | float(0) %}
+          {% set bms = states('sensor.bms_batterieleistung') | float(0) %}
+          {% set venus1 = states('sensor.marstek_venus_1_ac_leistung') | float(0) %}
+          {% set venus2 = states('sensor.marstek_venus_2_ac_leistung') | float(0) %}
 
-          {{ (bms + venus1 + venus2) | round(1) }}
+          {{ (-bms - venus1 - venus2) | round(0) }}
         availability: >
           {# Der Sensor ist nur verfügbar, wenn mindestens einer der Quellsensoren einen gültigen Wert liefert #}
-          {{ is_number(states('sensor.bms_batterieleistung_glatt')) or 
-             is_number(states('sensor.marstek_venus_1_batterieleistung_glatt')) or 
-             is_number(states('sensor.marstek_venus_2_batterieleistung_glatt')) }}
+          {{ is_number(states('sensor.bms_batterieleistung')) or 
+             is_number(states('sensor.marstek_venus_1_ac_leistung')) or 
+             is_number(states('sensor.marstek_venus_2_ac_leistung')) }}
 
   # 2. Trigger-basierte Sensoren
   - trigger:

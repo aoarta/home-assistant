@@ -16,7 +16,7 @@ sensor:
   - platform: filter
     name: "BMS Batterieleistung glatt"
     unique_id: bms_batterieleistung_glatt
-    entity_id: sensor.netto_batterie_leistung
+    entity_id: sensor.bms_batterieleistung
     filters:
       - filter: lowpass
         time_constant: 5
@@ -172,8 +172,8 @@ template:
           {% set p2 = states('sensor.battery_charger2_energy_power') | float(0) %}
           {{ (p1 + p2) | round(1) }}
 
-      - name: "Netto Batterie Leistung"
-        unique_id: netto_batterie_leistung
+      - name: "BMS Batterieleistung"
+        unique_id: bms_batterieleistung
         unit_of_measurement: "W"
         device_class: power
         state: >
