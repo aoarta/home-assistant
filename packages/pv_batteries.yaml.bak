@@ -16,7 +16,7 @@ sensor:
   #666
   - platform: filter
     name: "Marstek Venus 2 AC Leistung glatt"
-    unique_id: marstek_venus_2_ac_leistung_glatt
+    unique_id: marstek_venus_2_AC Leistung_glatt
     entity_id: sensor.marstek_venus_2_ac_leistung
     filters:
       - filter: lowpass
@@ -29,7 +29,6 @@ sensor:
   - platform: integration
     source: sensor.marstek_venus_1_ac_leistung_glatt # positiv ist laden
     name: "Venus 1 Energiefluss Wh"
-    unique_id: marstek_venus_1_energiefluss_wh
     round: 1
     method: left
 
@@ -37,29 +36,8 @@ sensor:
   - platform: integration
     source: sensor.marstek_venus_2_ac_leistung_glatt # positiv ist laden
     name: "Venus 2 Energiefluss Wh"
-    unique_id: marstek_venus_2_energiefluss_wh
     round: 1
     method: left
-
-  - platform: filter
-    name: "Target Charge Distribution"
-    unique_id: target_charge_distribution
-    entity_id: sensor.target_charge_distribution_fast
-    scan_interval: 300
-    filters:
-      - filter: time_simple_moving_average
-        window_size: "00:05:00"
-        precision: 1
-
-  - platform: filter
-    name: "Target Discharge Distribution"
-    unique_id: target_discharge_distribution
-    entity_id: sensor.target_discharge_distribution_fast
-    scan_interval: 300
-    filters:
-      - filter: time_simple_moving_average
-        window_size: "00:05:00"
-        precision: 1
 
 ################################################################################
 ################################################################################
@@ -239,14 +217,13 @@ template:
           {{ is_number(states('sensor.marstek_venus_1_ac_leistung')) or 
              is_number(states('sensor.marstek_venus_2_ac_leistung')) }}
 
-      - name: "Target Charge Distribution fast"
+      - name: "Target Charge Distribution"
         unit_of_measurement: "W"
         device_class: power
         state: >
           {% set hausverbrauch = [0, -(states('sensor.hausverbrauch_netto_watt') | float(0))] | max %}
           {% set raw_einspeisung = states('sensor.solarnet_leistung_netzeinspeisung') | float(0) %}
-          {#{% set raw_target = hausverbrauch + raw_einspeisung %}#}
-          {% set raw_target = hausverbrauch %}
+          {% set raw_target = hausverbrauch + raw_einspeisung %}
           {% set last = this.state | float(0) %}
           {{ raw_target | round(0) if (raw_target - last) | abs > 15 else last }}
 
@@ -257,7 +234,7 @@ template:
             {% if manual > 0 %}
               {{ {'v1': manual, 'v2': manual} }}
             {% else %}
-              {% set total = states('sensor.target_charge_distribution_fast') | float(0) %}
+              {% set total = states('sensor.target_charge_distribution') | float(0) %}
               {% set dyn_soc = states('sensor.dynamic_soc') | float(50) %}
 
               {#{% set s1_raw = states('sensor.marstek_venus_1_batterie_ladezustand') | float(100) %}#}
@@ -279,7 +256,7 @@ template:
                 {{ {'v1': 0, 'v2': 0} }}
               {% else %}
                 {% set target1 = (w1 / sum_w * total) | round(0) %}
-                {% set target2 = (total - target1) | round(0) %}
+                {% set target2 = total - target1 | round(0) %}
                 {% if target1 > lim1 and target2 < lim2 %}
                   {% set v2 = [lim2, target2 + target1 - lim1] | min | round(0) %}
                   {{ {'v1': lim1, 'v2': v2} }}
@@ -320,7 +297,7 @@ template:
                 {{ {'v1': 2500, 'v2': 2500} }}
             {% endif %}
 
-      - name: "Target Discharge Distribution fast"
+      - name: "Target Discharge Distribution"
         unit_of_measurement: "W"
         device_class: power
         state: >
@@ -378,12 +355,12 @@ template:
 automation:
   - alias: "Sende Lade und Entladebefehle an Hardware (Optimiert)"
     id: "sende_batterie_targets_v2"
-    mode: restart
+    mode: queued # Bricht laufende Delays ab, wenn ein neuer Wert kommt
     trigger:
       - platform: state
         entity_id:
-          - sensor.target_charge_distribution_fast
-          - sensor.target_discharge_distribution_fast
+          - sensor.target_charge_distribution
+          - sensor.target_discharge_distribution
         for:
           seconds: 5 # Beruhigungszeit, um Hardware-Stress zu reduzieren
     condition:
@@ -393,20 +370,20 @@ automation:
       - variables:
           # --- Werte für Venus 1 ---
           v1_c_target: >
-            {% set v = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
+            {% set v = state_attr('sensor.target_charge_distribution', 'charge') %}
             {{ v.v1 | int(0) if v is not none else 0 }}
           v1_d_target: >
-            {% set v = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
+            {% set v = state_attr('sensor.target_discharge_distribution', 'discharge') %}
             {{ v.v1 | int(0) if v is not none else 0 }}
           v1_laden: "{{ [v1_c_target, 2500] | min if v1_c_target >= 20 else 0 }}"
           v1_entladen: "{{ [v1_d_target, 2500] | min if v1_d_target >= 20 else 0 }}"
 
           # --- Werte für Venus 2 ---
           v2_c_target: >
-            {% set v = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
+            {% set v = state_attr('sensor.target_charge_distribution', 'charge') %}
             {{ v.v2 | int(0) if v is not none else 0 }}
           v2_d_target: >
-            {% set v = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
+            {% set v = state_attr('sensor.target_discharge_distribution', 'discharge') %}
             {{ v.v2 | int(0) if v is not none else 0 }}
           v2_laden: "{{ [v2_c_target, 2500] | min if v2_c_target >= 20 else 0 }}"
           v2_entladen: "{{ [v2_d_target, 2500] | min if v2_d_target >= 20 else 0 }}"

@@ -8,8 +8,8 @@ utility_meter:
 sensor:
   # für die datenbank
   - platform: filter
-    name: "Hausverbrauch 5 Min Durchschnitt fast"
-    unique_id: hausverbrauch_5min_avg_fast
+    name: "Hausverbrauch 5 Min Durchschnitt"
+    unique_id: hausverbrauch_5min_avg
     entity_id: sensor.hausverbrauch_netto_watt
     filters:
       - filter: time_simple_moving_average
@@ -17,12 +17,12 @@ sensor:
         precision: 0
 
   - platform: filter
-    name: "Average consumption last 1h"
-    unique_id: average_consumption_last_1h
+    name: "Average consumption last 1h fast"
+    unique_id: average_consumption_last_1h_fast
     entity_id: sensor.hausverbrauch_netto_watt
     filters:
       - filter: time_simple_moving_average
-        window_size: "01:00" # Durchschnitt der letzten 60 Minuten
+        window_size: "01:00:00"
         precision: 1
 
   - platform: filter
@@ -102,15 +102,43 @@ template:
 
           {{ (current_total / 1000) | round(3) }}
 
+      - name: "Batterieleistung Gesamt"
+        unique_id: batterieleistung_gesamt
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {# Rohwerte einlesen und sicherheitshalber auf 0 setzen, falls ein Sensor offline ist #}
+          {% set ups = states('sensor.ups_ac_leistung') | float(0) %}
+          {% set venus1 = states('sensor.marstek_venus_1_ac_leistung') | float(0) %}
+          {% set venus2 = states('sensor.marstek_venus_2_ac_leistung') | float(0) %}
+
+          {{ (ups + venus1 + venus2) | round(0) }}
+        availability: >
+          {# Der Sensor ist nur verfügbar, wenn mindestens einer der Quellsensoren einen gültigen Wert liefert #}
+          {{ is_number(states('sensor.ups_ac_leistung')) or 
+             is_number(states('sensor.marstek_venus_1_ac_leistung')) or 
+             is_number(states('sensor.marstek_venus_2_ac_leistung')) }}
+
       - name: "Hausverbrauch Netto Watt"
         unique_id: hausverbrauch_netto_watt
         unit_of_measurement: "W"
         device_class: power
         state: >
-          {# 1. Netz-Differenz berechnen #}
-          {% set netz = states('sensor.solarnet_leistung_netzbezug') | float(0) - states('sensor.solarnet_leistung_netzeinspeisung') | float(0) %}
-          {% set batterie_gesamt = states('sensor.batterieleistung_gesamt') | float(0) %}
-          {{ (netz - batterie_gesamt) | round(0) }}
+          {% set netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
+          {% set batterie_gesamt = states('sensor.marstek_batterieleistung_gesamt') | float(0) %}
+          {{ (netz + batterie_gesamt) | round(0) }}
+
+  - trigger:
+      - platform: time_pattern
+        minutes: "/5"
+    sensor:
+      - name: "Average consumption last 1h"
+        unique_id: average_consumption_last_1h
+        state: "{{ states('sensor.average_consumption_last_fast') }}"
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
 
   - trigger:
       - platform: state
@@ -141,45 +169,6 @@ template:
 
   - trigger:
       - platform: time_pattern
-        minutes: "/5"
-    sensor:
-      - name: "Hausverbrauch 5 Min Statistik"
-        unique_id: hausverbrauch_5min_stats
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        # Erklärt: Wir nehmen den gleitenden Durchschnitt (Filter-Sensor)
-        # und runden ihn auf 0 Stellen (ganze Watt).
-        state: >
-          {% set val = states('sensor.hausverbrauch_5_min_durchschnitt_fast') %}
-          {{ val | round(0) if is_number(val) else 'unavailable' }}
-
-      - name: "Garage Power 5min Statistik"
-        unique_id: garage_power_5min_stats
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        state: >
-          {{ states('sensor.garage_inverter_5min_average') | round(0) }}
-
-      - name: "Balkon Power 5min Statistik"
-        unique_id: Balkon_power_5min_stats
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        state: >
-          {{ states('sensor.balkon_inverter_5min_average') | round(0) }}
-
-      - name: "Balkon 2 Power 5min Statistik"
-        unique_id: balkon_2_power_5min_stats
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        state: >
-          {{ states('sensor.balkon_inverter2_5min_average') | round(0) }}
-
-  - trigger:
-      - platform: time_pattern
         seconds: "/30"
     sensor:
       - name: "PV Produktion Watt"
@@ -189,5 +178,5 @@ template:
         state_class: measurement
         state: >
           {# Wir holen den aktuellen Wert des schnellen Sensors #}
-          {% set val = states('sensor.pv_produktion_watt_fast') | float(0) %}
+          {% set val = states('sensor.pv_produktion_watt_fast') | float(0)  %}
           {{ val | round(3) }}

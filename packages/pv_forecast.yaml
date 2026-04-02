@@ -179,13 +179,15 @@ template:
             {% set ts_now = now().strftime('%Y-%m-%d %H:%M:%S') %}
             
             {% for ts, val in dach.items() if ts.startswith(today) %}
-              {% if val > ns.d_max %}{% set ns.d_max = val %}{% endif %}
-              {% if ts <= ts_now %}{% set ns.d_now = val %}{% endif %}
+              {% set val_num = val | float(0) %}
+              {% if val_num > ns.d_max %}{% set ns.d_max = val_num %}{% endif %}
+              {% if ts <= ts_now %}{% set ns.d_now = val_num %}{% endif %}
             {% endfor %}
             
             {% for ts, val in fassade.items() if ts.startswith(today) %}
-              {% if val > ns.f_max %}{% set ns.f_max = val %}{% endif %}
-              {% if ts <= ts_now %}{% set ns.f_now = val %}{% endif %}
+              {% set val_num = val | float(0) %}
+              {% if val_num > ns.f_max %}{% set ns.f_max = val_num %}{% endif %}
+              {% if ts <= ts_now %}{% set ns.f_now = val_num %}{% endif %}
             {% endfor %}
             
             {# Berechnung: (Rest Dach + 3x Rest Fassade) / 1000 #}
@@ -458,5 +460,5 @@ automation:
                             }
                           data:
                             {
-                              value: "{{ ((states('input_number.weight_' ~ repeat.item.id) | float * (1-alpha)) + ((repeat.item.score | float / total_score) * alpha)) | round(3) }}",
+                              value: "{{ ((states('input_number.weight_' ~ repeat.item.id) | float(0) * (1-alpha)) + ((repeat.item.score | float(0) / total_score) * alpha)) | round(3) }}",
                             }

@@ -24,6 +24,8 @@
       data:
         level: info
         message: PV Forecasts wurden sequenziell nach Neustart aktualisiert.
+  mode: single
+
 - alias: Solarprognose Update Kontrolle
   id: 3f207ea11452424abda5470c01cf4df7
   description: Aktualisiert die Wetterdaten sequenziell (Anti-Blocking)
@@ -54,7 +56,8 @@
     - action: homeassistant.update_entity
       target:
         entity_id: sensor.forecastsolar_api_source_fassade
-  mode: restart
+  mode: single
+
 - alias: Venus Steuermodus einschalten (30 Min nach Sonnenaufgang)
   description: Schaltet die Marstek Venus Switches 30 Minuten nach Sonnenaufgang ein.
   id: "1773505418790"
@@ -69,6 +72,7 @@
           - switch.marstek_venus1_modbus_rs485_steuermodus
           - switch.marstek_venus2_modbus_rs485_steuermodus
   mode: single
+
 - alias: setze cpu-schedutil
   description: Setze CPU auf schedutil
   triggers:
@@ -80,6 +84,7 @@
       metadata: {}
       data: {}
   mode: single
+
 - alias: "Tasmota: Globales Setup an alle"
   id: tasmota_global_broadcast
   triggers:
@@ -95,6 +100,31 @@
         payload: "{% set lat = state_attr('zone.home', 'latitude') | float(0) |
           round(6) %} {% set lon = state_attr('zone.home', 'longitude') | float(0)
           | round(6) %} Latitude {{ lat }}; Longitude {{ lon }}; PowerDelta 105; WattRes
-          1; TelePeriod 15; Sunrise 1
+          1; TelePeriod 15; Sunrise 1"
 
-          "
+- alias: "SOC Override Wochensteuerung"
+  description: "Setzt den Override am Mittwoch auf AN und an anderen Tagen auf AUS"
+  id: soc_override_weekly_control
+  trigger:
+    # Trigger 1: Jeden Morgen um 00:01 Uhr prüfen
+    - platform: time
+      at: "00:01:00"
+    # Trigger 2: Beim Neustart von Home Assistant (Sicherheitsnetz)
+    - platform: homeassistant
+      event: start
+  action:
+    - choose:
+        # Erster Fall: Es ist Mittwoch
+        - conditions:
+            - condition: time
+              weekday:
+                - wed
+          sequence:
+            - service: input_boolean.turn_on
+              target:
+                entity_id: input_boolean.override_soc
+      # Der 'default' Block kommt NACH der Liste der Bedingungen
+      default:
+        - service: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.override_soc

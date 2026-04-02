@@ -20,18 +20,16 @@ recorder:
   db_url: mysql://homeassistant:homeassistant@core-mariadb/homeassistant?charset=utf8mb4
   exclude:
     entities:
-      - sensor.hausverbrauch_netto_watt_fast
-      - sensor.hausverbrauch_netto_watt
       - automation.ups_grobregelung_laden_entladen
       - automation.sende_lade_und_entladebefehle_an_hardware
       - automation.sende_batterie_targets
-      - sensor.hausverbrauch_netto_watt
       - sensor.garage_inverter_energy_power
       - sensor.balkon_inverter2_energy_power
       - sensor.balkon_inverter_energy_power
       - sensor.garage_inverter_5min_average
       - sensor.balkon_inverter_5min_average
       - sensor.balkon_inverter2_5min_average
+      - sensor.hausverbrauch_netto_watt
 
     entity_globs:
       - sensor.marstek_venus_*_spannung
@@ -48,7 +46,7 @@ recorder:
       - sensor.*ac_frequenz*
       - sensor.*batteriestrom*
       - sensor.*autarkiegrad*
-      - sensor.*batterieleistung*
+      - sensor.*batterieleistung
       - sensor.*energy_current*
 
 logger:
@@ -57,6 +55,12 @@ logger:
     homeassistant.components.modbus: error
     custom_components.marstek_modbus: error
 
+input_boolean:
+  override_soc:
+    name: "Manueller SOC Override"
+    icon: mdi:battery-lock
+    initial: false
+
 template:
   # 1. Normale Sensoren (Zustandsbasiert)
   - sensor:
@@ -64,8 +68,8 @@ template:
         unique_id: solar_zeit_logik
         state: >
           {% set ts = as_timestamp(now()) %}
-          {% set ss = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
-          {% set sr = as_timestamp(state_attr('sun.sun', 'next_rising')) %}
+          {% set ss = as_timestamp(state_attr('sun.sun', 'next_setting')) | default(0) %}
+          {% set sr = as_timestamp(state_attr('sun.sun', 'next_rising')) | default(0) %}
           {% set today_sr = sr - 86400 if sr > ts else sr %}
           {% set today_ss = ss - 86400 if ss > as_timestamp(now().replace(hour=23, minute=59)) else ss %}
           {{ 'Tag' if today_sr <= ts <= today_ss else 'Nacht' }}
@@ -78,55 +82,36 @@ template:
             {% set ss = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
             {{ (ss - 86400 if ss > as_timestamp(now().replace(hour=23, minute=59)) else ss) - 12600 }}
 
-      - name: "Override SOC"
-        unique_id: override_soc
-        state: >
-          {{ 1 if now().weekday() == 2 else 0 }}
-        attributes:
-          beschreibung: "Erzwingt 100% SOC für Balancing"
-
       - name: "Dynamic SOC Grenzen"
         unique_id: dynamic_soc_grenzen
         unit_of_measurement: "%"
         state: "{{ states('sensor.battery_soc_total') | float(0) }}"
         attributes:
           min: "5"
-          low: "{{ 100.1 if states('sensor.override_soc') | float(0) != 0 else 60 }}"
-          mid: "{{ 100.1 if states('sensor.override_soc') | float(0) != 0 else 80 }}"
+          low: "{{ 100.1 if is_state('input_boolean.override_soc', 'on') else 60 }}"
+          mid: "{{ 100.1 if is_state('input_boolean.override_soc', 'on') else 80 }}"
           max: "100.1"
           high: >
-            {% if states('sensor.override_soc') | float(0) != 0 %}
+            {% if is_state('input_boolean.override_soc', 'on') %}
               100.1
             {% else %}
               {% set morgen = states('sensor.hp_forecast_weighted_morgen') | float(0) %}
               {{ 85 if morgen > 30 else 100.1 }}
             {% endif %}
 
-  - sensor:
-      - name: "Batterieleistung Gesamt"
-        unique_id: batterieleistung_gesamt
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        state: >
-          {# Rohwerte einlesen und sicherheitshalber auf 0 setzen, falls ein Sensor offline ist #}
-          {% set bms = states('sensor.bms_batterieleistung') | float(0) %}
-          {% set venus1 = states('sensor.marstek_venus_1_ac_leistung') | float(0) %}
-          {% set venus2 = states('sensor.marstek_venus_2_ac_leistung') | float(0) %}
-
-          {{ (-bms - venus1 - venus2) | round(0) }}
-        availability: >
-          {# Der Sensor ist nur verfügbar, wenn mindestens einer der Quellsensoren einen gültigen Wert liefert #}
-          {{ is_number(states('sensor.bms_batterieleistung')) or 
-             is_number(states('sensor.marstek_venus_1_ac_leistung')) or 
-             is_number(states('sensor.marstek_venus_2_ac_leistung')) }}
-
   # 2. Trigger-basierte Sensoren
   - trigger:
       - platform: time_pattern
-        seconds: "/10"
+        minutes: "/5"
       - platform: state
-        entity_id: input_number.manuelle_ladeleistung
+        entity_id:
+          - input_number.manuelle_ladeleistung
+          - sensor.pv_forecast_weighted
+          - sensor.estimated_remaining_consumption
+          - sensor.solar_zeit_logik
+          - sensor.marstek_free_capacity_kwh
+          - sensor.ups_free_capacity_kwh
+
     sensor:
       - name: "Dynamic SOC"
         unique_id: dynamic_soc
@@ -136,8 +121,8 @@ template:
             100.1
           {% else %}
             {% set solar_today = states('sensor.pv_forecast_weighted') | float(-1) %}
-            {% set free_marstek = states('sensor.battery_free_capacity_kwh') | float(0) %}
-            {% set free_ups = states('sensor.bms_free_capacity_kwh') | float(0) %}
+            {% set free_marstek = states('sensor.marstek_free_capacity_kwh') | float(0) %}
+            {% set free_ups = states('sensor.ups_free_capacity_kwh') | float(0) %}
             {% set load_today = max(0, states('sensor.estimated_remaining_consumption') | float(0)) %}
 
             {% if (0.9 * solar_today) > (load_today + free_marstek + free_ups) or solar_today == -1 %}

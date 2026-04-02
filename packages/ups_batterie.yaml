@@ -3,8 +3,8 @@
 ################################################################################
 command_line:
   - sensor:
-      name: "BMS Raw Data"
-      unique_id: bms_raw_data
+      name: "UPS Raw Data"
+      unique_id: ups_raw_data
       command: "curl -s http://battery-bms.lan/show | grep -E 'Power:|SOC:|highest Cell|lowest Cell'"
       scan_interval: 20
       value_template: "{{ value }}"
@@ -14,9 +14,9 @@ command_line:
 ################################################################################
 sensor:
   - platform: filter
-    name: "BMS Batterieleistung glatt"
-    unique_id: bms_batterieleistung_glatt
-    entity_id: sensor.bms_batterieleistung
+    name: "UPS AC Leistung glatt"
+    unique_id: ups_ac_leistung_glatt
+    entity_id: sensor.ups_ac_leistung
     filters:
       - filter: lowpass
         time_constant: 5
@@ -24,17 +24,18 @@ sensor:
       - filter: time_throttle
         window_size: "00:00:30"
 
+  ### xxxxxxx
   - platform: integration
-    source: sensor.bms_batterieleistung_glatt
-    name: "BMS Energiefluss Wh"
-    unique_id: bms_energiefluss_wh
+    source: sensor.ups_ac_leistung_glatt
+    name: "UPS Energiefluss Wh"
+    unique_id: ups_energiefluss_wh
     round: 1
     method: left
 
   - platform: filter
-    name: "BMS SOC stabil"
-    unique_id: bms_soc_stabil
-    entity_id: sensor.bms_soc
+    name: "UPS SOC stabil"
+    unique_id: ups_soc_stabil
+    entity_id: sensor.ups_soc
     filters:
       - filter: lowpass
         time_constant: 2
@@ -59,9 +60,9 @@ sensor:
         window_size: "00:00:10"
 
   - platform: filter
-    name: "BMS Highest Cell stabil"
-    unique_id: bms_highest_cell_stabil
-    entity_id: sensor.bms_highest_cell
+    name: "UPS Highest Cell stabil"
+    unique_id: ups_highest_cell_stabil
+    entity_id: sensor.ups_highest_cell
     filters:
       - filter: lowpass
         time_constant: 1
@@ -70,9 +71,9 @@ sensor:
         window_size: "00:00:20"
 
   - platform: filter
-    name: "BMS Lowest Cell stabil"
-    unique_id: bms_lowest_cell_stabil
-    entity_id: sensor.bms_lowest_cell
+    name: "UPS Lowest Cell stabil"
+    unique_id: ups_lowest_cell_stabil
+    entity_id: sensor.ups_lowest_cell
     filters:
       - filter: lowpass
         time_constant: 1
@@ -87,80 +88,88 @@ template:
   - trigger:
       # Trigger 1: SOC erreicht 100% (bzw. knapp davor)
       - platform: numeric_state
-        entity_id: sensor.bms_soc_stabil
+        entity_id: sensor.ups_soc_stabil
         above: 99
         for: "00:00:10"
       # Trigger 2: Höchste Zelle erreicht Ladeschlussspannung
       - platform: numeric_state
-        entity_id: sensor.bms_highest_cell_stabil
+        entity_id: sensor.ups_highest_cell_stabil
         above: 3.575
         for: "00:00:10"
     sensor:
-      - name: "BMS SOC Reset Punkt"
-        unique_id: bms_soc_reset_punkt
+      - name: "UPS SOC Reset Punkt"
+        unique_id: ups_soc_reset_punkt
         unit_of_measurement: "Wh"
         state: >
-          {% set val = states('sensor.bms_energiefluss_wh') %}
+          {% set val = states('sensor.ups_energiefluss_wh') %}
           {% if val | is_number %}
-            {{ val }}
+            {{ val | float(0) }}
           {% else %}
-            {{ this.state | default(0) }}
+            {{ this.state | default(0) | float(0) }}
           {% endif %}
 
   - trigger:
       - platform: state
-        entity_id: sensor.bms_energiefluss_wh
+        entity_id: sensor.ups_energiefluss_wh
       - platform: homeassistant
         event: start
     sensor:
-      - name: "BMS Custom SOC"
-        unique_id: bms_custom_soc
+      - name: "UPS Custom SOC"
+        unique_id: ups_custom_soc
         unit_of_measurement: "%"
         device_class: battery
         state: >
-          {# Werte sicher als Zahlen laden, bei Fehler 'none' ausgeben #}
-          {% set hw_soc = states('sensor.bms_soc_stabil') | float('none') %}
-          {% set neu_wh = states('sensor.bms_energiefluss_wh') | float('none') %}
-          {% set reset_wh = states('sensor.bms_soc_reset_punkt') | float('none') %}
+          {# Werte als Zahlen laden, Standardwert 0 falls nicht verfügbar #}
+          {% set hw_soc = states('sensor.ups_soc_stabil') | float(-1) %}
+          {% set neu_wh = states('sensor.ups_energiefluss_wh') | float('unknown') %}
+          {% set reset_wh = states('sensor.ups_soc_reset_punkt') | float('unkonwn') %}
 
-          {# PRÜFUNG: Wenn einer der Werte keine Zahl ist, alten Zustand beibehalten #}
-          {% if hw_soc is none or neu_wh is none or reset_wh is none %}
-            {{ states('sensor.bms_custom_soc') if has_value('sensor.bms_custom_soc') else hw_soc }}
-          {% elif hw_soc >= 100 %}
-            100           
+          {# Wenn Hardware offline oder Sensoren nicht bereit -> alten Zustand beibehalten #}
+          {% if hw_soc == -1 or neu_wh == 'unknown' or reset_wh == 'unknown' %}
+            {{ this.state if this.state is defined else hw_soc }}
           {% else %}
-            {% set cap_wh = 1960 %}
-            {% set calc_soc = 100 + ((neu_wh - reset_wh) / cap_wh * 100) %}
-            {{ calc_soc | round(1) | clamp(0, 100) }}
+            {% set alt_wh = this.attributes.get('last_wh', 0) | float(0) %}
+            
+            {% if (neu_wh - alt_wh) | abs > 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
+              {% if hw_soc >= 100 %}
+                100
+              {% else %}
+                {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12) * 1000 %}
+                {% set calc_soc = 100 - ((neu_wh - reset_wh) | abs / cap_wh * 100) %}
+                
+                {# Begrenzt den Wert sauber zwischen 0 und 100 und rundet #}
+                {{ calc_soc | round(1) | clamp(0, 100) }}
+              {% endif %}
+            {% else %}
+              {{ this.state if this.state is defined else hw_soc }}
+            {% endif %}
           {% endif %}
-        attributes:
-          last_wh: "{{ states('sensor.bms_energiefluss_wh') }}"
 
   - trigger:
       - platform: state
-        entity_id: sensor.bms_raw_data
+        entity_id: sensor.ups_raw_data
     sensor:
-      - name: "BMS SOC"
-        unique_id: bms_soc
+      - name: "UPS SOC"
+        unique_id: ups_soc
         unit_of_measurement: "%"
         device_class: battery
-        state: "{{ trigger.to_state.state | regex_findall('SOC:\\s*([0-9.]+)') | first | default(states('sensor.bms_soc')) }}"
+        state: "{{ trigger.to_state.state | regex_findall('SOC:\\s*([0-9.]+)') | first | default(states('sensor.ups_soc')) | float(0) }}"
 
-      - name: "BMS Power"
-        unique_id: bms_power
+      - name: "UPS Power"
+        unique_id: ups_power
         unit_of_measurement: "W"
         device_class: power
-        state: "{{ trigger.to_state.state | regex_findall('Power:\\s*(-?[0-9.]+)') | first | default(states('sensor.bms_power')) }}"
+        state: "{{ trigger.to_state.state | regex_findall('Power:\\s*(-?[0-9.]+)') | first | default(states('sensor.ups_power')) | float(0) }}"
 
-      - name: "BMS Highest Cell"
-        unique_id: bms_highest_cell
+      - name: "UPS Highest Cell"
+        unique_id: ups_highest_cell
         unit_of_measurement: "V"
-        state: "{{ trigger.to_state.state | regex_findall('highest Cell\\s*\\[\\s*\\d+\\s*\\]:\\s*([0-9.]+)') | first | default(states('sensor.bms_highest_cell')) }}"
+        state: "{{ trigger.to_state.state | regex_findall('highest Cell\\s*\\[\\s*\\d+\\s*\\]:\\s*([0-9.]+)') | first | default(states('sensor.ups_highest_cell')) | float(0) }}"
 
-      - name: "BMS Lowest Cell"
-        unique_id: bms_lowest_cell
+      - name: "UPS Lowest Cell"
+        unique_id: ups_lowest_cell
         unit_of_measurement: "V"
-        state: "{{ trigger.to_state.state | regex_findall('lowest Cell\\s*\\[\\s*\\d+\\s*\\]:\\s*([0-9.]+)') | first | default(states('sensor.bms_lowest_cell')) }}"
+        state: "{{ trigger.to_state.state | regex_findall('lowest Cell\\s*\\[\\s*\\d+\\s*\\]:\\s*([0-9.]+)') | first | default(states('sensor.ups_lowest_cell')) | float(0) }}"
 
   - sensor:
       - name: "Battery total charge power"
@@ -172,24 +181,25 @@ template:
           {% set p2 = states('sensor.battery_charger2_energy_power') | float(0) %}
           {{ (p1 + p2) | round(1) }}
 
-      - name: "BMS Batterieleistung"
-        unique_id: bms_batterieleistung
+      - name: "UPS AC Leistung"
+        unique_id: ups_ac_leistung
         unit_of_measurement: "W"
         device_class: power
+        state_class: measurement
         state: >
           {% set charging = states('sensor.battery_total_charge_power') | float(0) %}
           {% set discharging = states('sensor.battery_inverter_energy_power') | float(0) %}
-          {{ (charging - discharging) | round(1) }}
+          {{ (discharging - charging) | round(1) }}
 
-      - name: "BMS free Capacity kWh"
-        unique_id: bms_free_capacity_kwh
+      - name: "UPS free Capacity kWh"
+        unique_id: ups_free_capacity_kwh
         unit_of_measurement: "kWh"
         device_class: energy
         state: >
           {% set total_kwh = 2.0 %} 
-          {% set soc = states('sensor.bms_soc') | float(-1) %}
+          {% set soc = states('sensor.ups_soc') | float(-1) %}
           {{ (total_kwh * (1 - (soc / 100))) | round(2) if soc >= 0 else 0 }}
-        availability: "{{ is_number(states('sensor.bms_soc')) }}"
+        availability: "{{ is_number(states('sensor.ups_soc')) }}"
 
 ################################################################################
 # 4. AUTOMATIONEN
@@ -202,19 +212,19 @@ automation:
     trigger:
       - platform: state
         entity_id:
-          - sensor.target_discharge_stabil
-          - sensor.target_charge_stabil
-          - sensor.bms_soc_stabil
-          - sensor.bms_lowest_cell_stabil
-          - sensor.bms_highest_cell_stabil
+          - sensor.target_discharge_distribution
+          - sensor.target_charge_distribution
+          - sensor.ups_soc_stabil
+          - sensor.ups_lowest_cell_stabil
+          - sensor.ups_highest_cell_stabil
     action:
       - choose:
           # --- NOT-LADUNG (SOC zu niedrig) ---
           - conditions:
               - condition: template
                 value_template: >
-                  {% set soc = states('sensor.bms_soc_stabil') | float(100) %}
-                  {% set low_cell = states('sensor.bms_lowest_cell_stabil') | float(3.65) %}
+                  {% set soc = states('sensor.ups_soc_stabil') | float(100) %}
+                  {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(3.65) %}
                   {{ (soc <= 15 or low_cell < 2.95) and is_state('switch.battery_charger2', 'off') }}
             sequence:
               - action: switch.turn_off
@@ -226,9 +236,9 @@ automation:
           - conditions:
               - condition: template
                 value_template: >
-                  {% set target_discharge = states('sensor.target_discharge_stabil') | float(0) %}
-                  {% set soc = states('sensor.bms_soc_stabil') | float(0) %}
-                  {% set low_cell = states('sensor.bms_lowest_cell_stabil') | float(3.3) %}
+                  {% set target_discharge = states('sensor.target_discharge_distribution') | float(0) %}
+                  {% set soc = states('sensor.ups_soc_stabil') | float(0) %}
+                  {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(3.3) %}
                   {{ target_discharge > 180 and soc > 25 and low_cell > 3.1 and is_state('switch.battery_inverter_tasmota', 'off') }}
             sequence:
               - action: switch.turn_off
@@ -241,9 +251,9 @@ automation:
           - conditions:
               - condition: template
                 value_template: >
-                  {% set target_discharge = states('sensor.target_discharge_stabil') | float(0) %}
-                  {% set soc = states('sensor.bms_soc_stabil') | float(0) %}
-                  {% set low_cell = states('sensor.bms_lowest_cell_stabil') | float(2.8) %}
+                  {% set target_discharge = states('sensor.target_discharge_distribution') | float(0) %}
+                  {% set soc = states('sensor.ups_soc_stabil') | float(0) %}
+                  {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(2.8) %}
                   {{ (target_discharge < 20 or soc <= 20 or low_cell < 3.0) and is_state('switch.battery_inverter_tasmota', 'on') }}
             sequence:
               - action: switch.turn_off
@@ -253,9 +263,9 @@ automation:
           - conditions:
               - condition: template
                 value_template: >
-                  {% set target_charge = states('sensor.target_charge_stabil') | float(0) %}
-                  {% set soc = states('sensor.bms_soc_stabil') | float(100) %}
-                  {% set high_cell = states('sensor.bms_highest_cell_stabil') | float(3.65) %}
+                  {% set target_charge = states('sensor.target_charge_distribution') | float(0) %}
+                  {% set soc = states('sensor.ups_soc_stabil') | float(100) %}
+                  {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
                   {{ (target_charge < 100 or soc >= 100 or high_cell > 3.58) and (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
             sequence:
               - action: switch.turn_off
@@ -266,17 +276,17 @@ automation:
           - conditions:
               - condition: template
                 value_template: >
-                  {% set target_charge = states('sensor.target_charge_stabil') | float(0) %}
-                  {% set soc = states('sensor.bms_soc_stabil') | float(100) %}
+                  {% set target_charge = states('sensor.target_charge_distribution') | float(0) %}
+                  {% set soc = states('sensor.ups_soc_stabil') | float(100) %}
                   {{ target_charge > 820 and soc < 98 and is_state('switch.battery_inverter_tasmota', 'off') }}
             sequence:
               - action: switch.turn_on
                 target: { entity_id: switch.battery_charger }
               - if:
                   - condition: template
-                    value_template: "{{ states('sensor.target_charge_stabil') | float(0) > 1200 and states('sensor.bms_soc_stabil') | float(0) < 99 }}"
+                    value_template: "{{ states('sensor.target_charge_distribution') | float(0) > 1200 and states('sensor.ups_soc_stabil') | float(0) < 99 }}"
                 then:
-                  - delay: "00:00:10"
+                  - delay: "00:00:01"
                   - action: switch.turn_on
                     target: { entity_id: switch.battery_charger2 }
 
