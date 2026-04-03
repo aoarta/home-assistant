@@ -66,7 +66,8 @@ input_number:
     unit_of_measurement: "kWh"
 
 sensor:
-  # --- REST-QUELLEN (Holen die Daten, sind flüchtig) ---
+  # --- PASSIVE REST-QUELLEN ---
+  # scan_interval auf 86400 (24h) verhindert automatische Abrufe beim Booten
   - platform: rest
     name: "Solarprognose API Source Dach"
     resource: "https://www.solarprognose.de/web/solarprediction/api/v1?access-token=c2a2da7b09c3c2e2a20651a2223e7fa7&item=module_field&id=14443&type=hourly"
@@ -96,64 +97,53 @@ sensor:
     value_template: "{{ value_json.message.info.place if value_json is defined else 'OK' }}"
 
 template:
-  - sensor:
-      # --- STABILE ROHDATEN-SENSOREN (Überleben Neustart) ---
-      - name: "Solarprognose Api Raw Dach"
+  # --- TRIGGER-BASIERTE SPEICHER-SENSOREN (Überleben Neustart) ---
+  - trigger:
+      - platform: state
+        entity_id:
+          - sensor.solarprognose_api_source_dach
+          - sensor.solarprognose_api_source_fassade
+          - sensor.forecastsolar_api_source_dach
+          - sensor.forecastsolar_api_source_fassade
+        not_to: ["unknown", "unavailable"]
+    sensor:
+      - name: "Solarprognose Api Raw Dach Stable"
         unique_id: solarprognose_api_raw_dach_stable
         state: "OK"
         attributes:
-          data: >
-            {% set new = state_attr('sensor.solarprognose_api_source_dach', 'data') %}
-            {{ new if new is mapping else state_attr(this.entity_id, 'data') | default({}, true) }}
+          data: "{{ state_attr('sensor.solarprognose_api_source_dach', 'data') }}"
 
-      - name: "Solarprognose Api Raw Fassade"
+      - name: "Solarprognose Api Raw Fassade Stable"
         unique_id: solarprognose_api_raw_fassade_stable
         state: "OK"
         attributes:
-          data: >
-            {% set new = state_attr('sensor.solarprognose_api_source_fassade', 'data') %}
-            {{ new if new is mapping else state_attr(this.entity_id, 'data') | default({}, true) }}
+          data: "{{ state_attr('sensor.solarprognose_api_source_fassade', 'data') }}"
 
-      - name: "ForecastSolar API Raw Dach"
+      - name: "ForecastSolar API Raw Dach Stable"
         unique_id: forecastsolar_api_raw_dach_stable
         state: "OK"
         attributes:
-          result: >
-            {% set source = state_attr('sensor.forecastsolar_api_source_dach', 'result') %}
-            {% set current = state_attr(this.entity_id, 'result') %}
-            {% if source is mapping and source.items() | count > 0 %}
-              {{ source }}
-            {% else %}
-              {{ current if current is mapping else {} }}
-            {% endif %}
+          result: "{{ state_attr('sensor.forecastsolar_api_source_dach', 'result') }}"
 
-      - name: "ForecastSolar API Raw Fassade"
+      - name: "ForecastSolar API Raw Fassade Stable"
         unique_id: forecastsolar_api_raw_fassade_stable
         state: "OK"
         attributes:
-          result: >
-            {% set source = state_attr('sensor.forecastsolar_api_source_fassade', 'result') %}
-            {% set current = state_attr(this.entity_id, 'result') %}
-            {% if source is mapping and source.items() | count > 0 %}
-              {{ source }}
-            {% else %}
-              {{ current if current is mapping else {} }}
-            {% endif %}
+          result: "{{ state_attr('sensor.forecastsolar_api_source_fassade', 'result') }}"
 
-      # --- KOMBINIERTE SENSOREN (Nutzen die stabilen Rohdaten) ---
-      - name: "PV Forecast Solcast combined"
-        unique_id: pv_forecast_solcast_combined
+  # --- BERECHNUNGS-SENSOREN ---
+  - sensor:
+      - name: "PV Forecast Solcast alles"
+        unique_id: pv_forecast_solcast_alles
+        unit_of_measurement: "kWh"
+        state: "{{ states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute') | float(0) }}"
+
+      - name: "PV Forecast Solarprognose alles"
+        unique_id: pv_forecast_solarprognose_alles
         unit_of_measurement: "kWh"
         state: >
-          {% set val = states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute') %}
-          {{ val if is_number(val) else states(this.entity_id) | float(0) }}
-
-      - name: "PV Forecast Solarprognose Combined"
-        unique_id: pv_forecast_solarprognose_combined
-        unit_of_measurement: "kWh"
-        state: >
-          {% set dach = state_attr('sensor.solarprognose_api_raw_dach', 'data') %}
-          {% set fassade = state_attr('sensor.solarprognose_api_raw_fassade', 'data') %}
+          {% set dach = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
+          {% set fassade = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
           {% if dach is mapping %}
             {% set ns = namespace(total=0) %}
             {% set start_ts = now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp() | int %}
@@ -164,40 +154,33 @@ template:
               {% set ns.total = ns.total + (d + (f * 3)) %}
             {% endfor %}
             {{ ns.total | round(2) }}
-          {% else %} {{ states(this.entity_id) | float(0) }} {% endif %}
+          {% else %} {{ this.state | float(0) }} {% endif %}
 
-      - name: "PV Forecast ForecastSolar Combined"
-        unique_id: pv_forecast_forecastsolar_combined
+      - name: "PV Forecast ForecastSolar alles"
+        unique_id: pv_forecast_forecastsolar_alles
         unit_of_measurement: "kWh"
         state: >
           {% set today = now().strftime('%Y-%m-%d') %}
-          {% set dach = state_attr('sensor.forecastsolar_api_raw_dach', 'result') %}
-          {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade', 'result') %}
-
-          {% if dach is mapping and fassade is mapping and dach.items() | count > 0 %}
+          {% set dach = state_attr('sensor.forecastsolar_api_raw_dach_stable', 'result') %}
+          {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade_stable', 'result') %}
+          {% if dach is mapping and fassade is mapping %}
             {% set ns = namespace(d_max=0, f_max=0, d_now=0, f_now=0) %}
             {% set ts_now = now().strftime('%Y-%m-%d %H:%M:%S') %}
-            
             {% for ts, val in dach.items() if ts.startswith(today) %}
               {% set val_num = val | float(0) %}
               {% if val_num > ns.d_max %}{% set ns.d_max = val_num %}{% endif %}
               {% if ts <= ts_now %}{% set ns.d_now = val_num %}{% endif %}
             {% endfor %}
-            
             {% for ts, val in fassade.items() if ts.startswith(today) %}
               {% set val_num = val | float(0) %}
               {% if val_num > ns.f_max %}{% set ns.f_max = val_num %}{% endif %}
               {% if ts <= ts_now %}{% set ns.f_now = val_num %}{% endif %}
             {% endfor %}
-            
-            {# Berechnung: (Rest Dach + 3x Rest Fassade) / 1000 #}
             {{ ([0, ( (ns.d_max - ns.d_now) + 3 * (ns.f_max - ns.f_now) ) / 1000] | max) | round(2) }}
-          {% else %}
-            {{ states(this.entity_id) | float(0) }}
-          {% endif %}
+          {% else %} {{ this.state | float(0) }} {% endif %}
 
-      - name: "PV Forecast openmeteo Combined"
-        unique_id: pv_forecast_openmeteo_combined
+      - name: "PV Forecast openmeteo alles"
+        unique_id: pv_forecast_openmeteo_alles
         unit_of_measurement: "kWh"
         state: >
           {% set dach = state_attr('sensor.home_energy_pv_dach_production_today', 'wh_period') %}
@@ -212,137 +195,27 @@ template:
               {% set ns.total = ns.total + (d + 3*f) / 1000 %}
             {% endfor %}
             {{ ns.total | round(2) }}
-          {% else %} {{ states(this.entity_id) | float(0) }} {% endif %}
-
-      # --- GEWICHTUNG & BIAS ---
-      - name: "PV Forecast Weighted without BIAS"
-        unique_id: pv_forecast_weighted_without_bias
-        unit_of_measurement: "kWh"
-        state: >
-          {% set sc = states('sensor.pv_forecast_solcast_combined') | float(0) %}
-          {% set sp = states('sensor.pv_forecast_solarprognose_combined') | float(0) %}
-          {% set fs = states('sensor.pv_forecast_forecastsolar_combined') | float(0) %}
-          {% set om = states('sensor.pv_forecast_openmeteo_combined') | float(0) %}
-          {% set sc_w = states('input_number.weight_solcast') | float(0.4) if sc > 0 else 0 %}
-          {% set sp_w = states('input_number.weight_solarprognose') | float(0.3) if sp > 0 else 0 %}
-          {% set fs_w = states('input_number.weight_forecastsolar') | float(0.2) if fs > 0 else 0 %}
-          {% set om_w = states('input_number.weight_openmeteo') | float(0.1) if om > 0 else 0 %}
-          {% set total_weight = sc_w + sp_w + fs_w + om_w %}
-          {% if total_weight > 0 %}
-            {{ (sc_w * sc + sp_w * sp + fs_w * fs + om_w * om) / total_weight }}
-          {% else %} {{ states(this.entity_id) | float(0) }} {% endif %}
+          {% else %} {{ this.state | float(0) }} {% endif %}
 
       - name: "PV Forecast Weighted"
         unique_id: pv_forecast_weighted
         unit_of_measurement: "kWh"
         state: >
-          {% set raw = states('sensor.pv_forecast_weighted_without_bias') | float(0) %}
-          {% set bias = states('sensor.pv_forecast_bias_korrekturfaktor') | float(1) %}
-          {{ (raw * bias) | round(2) }}
-
-      # --- PROGNOSE des nächsten Tages---
-
-      - name: "PV Forecast Solcast morgen"
-        unique_id: pv_forecast_solcast_morgen
-        unit_of_measurement: "kWh"
-        state: >
-          {% set val = states('sensor.solcast_pv_forecast_prognose_morgen') %}
-          {{ val if is_number(val) else states('sensor.pv_forecast_solcast_morgen') }}
-
-      - name: "PV Forecast Solarprognose Morgen"
-        unique_id: pv_forecast_solarprognose_morgen
-        unit_of_measurement: "kWh"
-        state: >
-          {% set dach_data = state_attr('sensor.solarprognose_api_raw_dach', 'data') %}
-          {% set fassade_data = state_attr('sensor.solarprognose_api_raw_fassade', 'data') %}
-          {% if dach_data is mapping %}
-            {% set ns = namespace(total=0) %}
-            {% set start_ts = (now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp() + 86400) | int %}
-            {% for i in range(24) %}
-              {% set ts = (start_ts + (i * 3600)) | string %}
-              {% set d = dach_data[ts][1] | float(0) if ts in dach_data else 0 %}
-              {% set f = fassade_data[ts][1] | float(0) if fassade_data is mapping and ts in fassade_data else 0 %}
-              {% set ns.total = ns.total + (d + (f * 3)) %}
-            {% endfor %}
-            {{ ns.total | round(2) }}
-          {% else %} 0.0 {% endif %}
-
-      - name: "PV Forecast ForecastSolar Morgen"
-        unique_id: pv_forecast_forecastsolar_morgen
-        unit_of_measurement: "kWh"
-        state: >
-          {% set tomorrow = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
-          {% set dach = state_attr('sensor.forecastsolar_api_raw_dach', 'result') %}
-          {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade', 'result') %}
-
-          {% if dach is mapping and fassade is mapping %}
-            {% set tomorrow_suffix = tomorrow ~ ' ' %}
-            {% set ns = namespace(d_max=0, f_max=0) %}
-            
-            {# Einfach den höchsten Wert (Endwert) für morgen finden #}
-            {% for ts, val in dach.items() if ts.startswith(tomorrow_suffix) %}
-              {% if val > ns.d_max %}{% set ns.d_max = val %}{% endif %}
-            {% endfor %}
-            
-            {% for ts, val in fassade.items() if ts.startswith(tomorrow_suffix) %}
-              {% if val > ns.f_max %}{% set ns.f_max = val %}{% endif %}
-            {% endfor %}
-
-            {{ ((ns.d_max + 3 * ns.f_max) / 1000) | round(2) }}
-          {% else %} 0.0 {% endif %}
-
-      - name: "PV Forecast Openmeteo Morgen"
-        unique_id: pv_forecast_openmeteo_morgen
-        unit_of_measurement: "kWh"
-        state: >
-          {% set dach = states('sensor.home_energy_pv_dach_production_tomorrow') | float(0) %}
-          {% set fassade = states('sensor.home_energy_pv_fassade_production_tomorrow') | float(0) %}
-          {{ dach + 3*fassade }}
-
-      - name: "PV Forecast Weighted Morgen"
-        unique_id: pv_forecast_weighted_morgen
-        unit_of_measurement: "kWh"
-        state: >
-          {% set sc = states('sensor.pv_forecast_solcast_morgen') | float(0) %}
-          {% set sp = states('sensor.pv_forecast_solarprognose_morgen') | float(0) %}
-          {% set fs = states('sensor.pv_forecast_forecastsolar_morgen') | float(0) %}
-          {% set om = states('sensor.pv_forecast_openmeteo_morgen') | float(0) %}
-
-          {# Gewichte aus den Helfern laden #}
-          {% set sc_w = states('input_number.weight_solcast') | float(0.4) if sc > 0 else 0.0 %}
-          {% set sp_w = states('input_number.weight_solarprognose') | float(0.3) if sp > 0 else 0.0 %}
-          {% set fs_w = states('input_number.weight_forecastsolar') | float(0.2) if fs > 0 else 0.0 %}
-          {% set om_w = states('input_number.weight_openmeteo') | float(0.1) if om > 0 else 0.0 %}
-
+          {% set sc = states('sensor.pv_forecast_solcast_alles') | float(0) %}
+          {% set sp = states('sensor.pv_forecast_solarprognose_alles') | float(0) %}
+          {% set fs = states('sensor.pv_forecast_forecastsolar_alles') | float(0) %}
+          {% set om = states('sensor.pv_forecast_openmeteo_alles') | float(0) %}
+          {% set sc_w = states('input_number.weight_solcast') | float(0.4) if sc > 0 else 0 %}
+          {% set sp_w = states('input_number.weight_solarprognose') | float(0.3) if sp > 0 else 0 %}
+          {% set fs_w = states('input_number.weight_forecastsolar') | float(0.2) if fs > 0 else 0 %}
+          {% set om_w = states('input_number.weight_openmeteo') | float(0.1) if om > 0 else 0 %}
           {% set total_weight = sc_w + sp_w + fs_w + om_w %}
-
+          {% set bias = states('sensor.pv_forecast_bias_korrekturfaktor') | float(1) %}
           {% if total_weight > 0 %}
-            {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om) / total_weight) | round(2) }}
-          {% else %}
-            0.0
-          {% endif %}
+            {{ (((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om) / total_weight) * bias) | round(2) }}
+          {% else %} {{ this.state | float(0) }} {% endif %}
 
-      - name: "PV Prognose Vergleich Tabelle"
-        unique_id: pv_prognose_vergleich_tabelle
-        state: "Analyse"
-        attributes:
-          markdown: >
-            {% set real = states('input_number.pv_reale_ernte_von_gestern') | float(0) %}
-            {% set v_sc = states('input_number.pv_save_solcast_morgens') | float(0) %}
-            {% set v_sp = states('input_number.pv_save_solarprognose_morgens') | float(0) %}
-            {% set v_fs = states('input_number.pv_save_forecastsolar_morgens') | float(0) %}
-            {% set v_om = states('input_number.pv_save_openmeteo_morgens') | float(0) %}
-
-            | Anbieter | Prognose | Abweichung | Fehler % |
-            | :--- | :---: | :---: | :---: |
-            | **Real (Gestern)** | **{{ real }}** | - | - |
-            | Solcast | {{ v_sc }} | {{ (v_sc - real) | round(2) }} | {{ ((v_sc - real) / real * 100) | round(1) if real > 0 else 0 }}% |
-            | Solarprognose | {{ v_sp }} | {{ (v_sp - real) | round(2) }} | {{ ((v_sp - real) / real * 100) | round(1) if real > 0 else 0 }}% |
-            | Forecast.Solar | {{ v_fs }} | {{ (v_fs - real) | round(2) }} | {{ ((v_fs - real) / real * 100) | round(1) if real > 0 else 0 }}% |
-            | OpenMeteo | {{ v_om }} | {{ (v_om - real) | round(2) }} | {{ ((v_om - real) / real * 100) | round(1) if real > 0 else 0 }}% |
-
-            *Gewichtungs-Faktor aktuell (Bias): {{ states('sensor.pv_forecast_bias_korrekturfaktor') }}*
-
+  # --- TRIGGER-BASIERTER BIAS-FAKTOR (Ebenfalls Neustart-sicher) ---
   - trigger:
       - platform: state
         entity_id: input_number.pv_reale_ernte_von_gestern
@@ -360,105 +233,86 @@ template:
           {% else %} {{ current }} {% endif %}
 
 automation:
+  - alias: "PV: API Daten gezielt mehrmals täglich holen"
+    id: pv_fetch_api_data_updates
+    trigger:
+      - trigger: time
+        at:
+          - "06:00:00"
+          - "11:30:00"
+          - "17:30:00"
+    actions: # Wichtig: 'actions' mit S am Ende in der neuen Syntax
+      - action: homeassistant.update_entity
+        target:
+          entity_id:
+            - sensor.solarprognose_api_source_dach
+            - sensor.solarprognose_api_source_fassade
+            - sensor.forecastsolar_api_source_dach
+            - sensor.forecastsolar_api_source_fassade
+
   - alias: "PV: Tagesprognosen morgens fixieren & speichern"
     id: pv_fix_daily_forecast_morning
     trigger:
-      - platform: sun
+      - trigger: sun
         event: sunrise
         offset: "01:00:00"
-    action:
-      # 1. Den gewichteten Gesamtwert speichern
+    actions:
       - action: input_number.set_value
         target:
           entity_id: input_number.pv_prognose_festwert_heute
         data:
           value: "{{ states('sensor.pv_forecast_weighted') | float(0) }}"
-
-      # 2. Die Einzelwerte der Anbieter speichern via Schleife
       - repeat:
-          for_each:
-            - solcast
-            - solarprognose
-            - forecastsolar
-            - openmeteo
+          for_each: [solcast, solarprognose, forecastsolar, openmeteo]
           sequence:
             - action: input_number.set_value
               target:
                 entity_id: "input_number.pv_save_{{ repeat.item }}_morgens"
               data:
-                value: "{{ states('sensor.pv_forecast_' ~ repeat.item ~ '_combined') | float(0) }}"
+                value: "{{ states('sensor.pv_forecast_' ~ repeat.item ~ '_alles') | float(0) }}"
 
   - alias: "PV: Gewichte und Vergleich am Ende des Tages"
     id: pv_daily_comparison_and_weighting
     trigger:
-      - platform: time
+      - trigger: time
         at: "23:55:00"
-    action:
+    actions:
       - action: input_number.set_value
-        target: { entity_id: input_number.pv_prognose_von_gestern }
+        target:
+          entity_id: input_number.pv_prognose_von_gestern
         data:
-          {
-            value: "{{ states('input_number.pv_prognose_festwert_heute') | float(0) }}",
-          }
+          value: "{{ states('input_number.pv_prognose_festwert_heute') | float(0) }}"
       - action: input_number.set_value
-        target: { entity_id: input_number.pv_reale_ernte_von_gestern }
+        target:
+          entity_id: input_number.pv_reale_ernte_von_gestern
         data:
-          {
-            value: "{{ states('sensor.pv_ertrag_heute') | float(0) | round(2) }}",
-          }
+          value: "{{ states('sensor.pv_ertrag_heute') | float(0) | round(2) }}"
       - if:
           - condition: template
             value_template: "{{ states('sensor.pv_ertrag_heute') | float(0) > 1.0 }}"
         then:
           - variables:
               real: "{{ states('sensor.pv_ertrag_heute') | float(0) }}"
-              v_sc: "{{ states('input_number.pv_save_solcast_morgens') | float(0) }}"
-              v_sp: "{{ states('input_number.pv_save_solarprognose_morgens') | float(0) }}"
-              v_fs: "{{ states('input_number.pv_save_forecastsolar_morgens') | float(0) }}"
-              v_om: "{{ states('input_number.pv_save_openmeteo_morgens') | float(0) }}"
-              sc_valid: "{{ v_sc > 0.1 }}"
-              sp_valid: "{{ v_sp > 0.1 }}"
-              fs_valid: "{{ v_fs > 0.1 }}"
-              om_valid: "{{ v_om > 0.1 }}"
-              score_sc: "{{ 1 / ((v_sc - real) | abs + 0.1) if sc_valid else 0.0 }}"
-              score_sp: "{{ 1 / ((v_sp - real) | abs + 0.1) if sp_valid else 0.0 }}"
-              score_fs: "{{ 1 / ((v_fs - real) | abs + 0.1) if fs_valid else 0.0 }}"
-              score_om: "{{ 1 / ((v_om - real) | abs + 0.1) if om_valid else 0.0 }}"
-              total_score: "{{ score_sc + score_sp + score_fs + score_om }}"
+              s_sc: "{{ 1 / ((states('input_number.pv_save_solcast_morgens')|float - real)|abs + 0.1) if states('input_number.pv_save_solcast_morgens')|float > 0 else 0 }}"
+              s_sp: "{{ 1 / ((states('input_number.pv_save_solarprognose_morgens')|float - real)|abs + 0.1) if states('input_number.pv_save_solarprognose_morgens')|float > 0 else 0 }}"
+              s_fs: "{{ 1 / ((states('input_number.pv_save_forecastsolar_morgens')|float - real)|abs + 0.1) if states('input_number.pv_save_forecastsolar_morgens')|float > 0 else 0 }}"
+              s_om: "{{ 1 / ((states('input_number.pv_save_openmeteo_morgens')|float - real)|abs + 0.1) if states('input_number.pv_save_openmeteo_morgens')|float > 0 else 0 }}"
+              total: "{{ (s_sc|float + s_sp|float + s_fs|float + s_om|float) | float }}"
               alpha: 0.1
-          - if: "{{ total_score > 0 }}"
+          - if: "{{ total > 0 }}"
             then:
               - repeat:
                   for_each:
-                    - {
-                        id: "solcast",
-                        valid: "{{ sc_valid }}",
-                        score: "{{ score_sc }}",
-                      }
-                    - {
-                        id: "solarprognose",
-                        valid: "{{ sp_valid }}",
-                        score: "{{ score_sp }}",
-                      }
-                    - {
-                        id: "forecastsolar",
-                        valid: "{{ fs_valid }}",
-                        score: "{{ score_fs }}",
-                      }
-                    - {
-                        id: "openmeteo",
-                        valid: "{{ om_valid }}",
-                        score: "{{ score_om }}",
-                      }
+                    - { id: "solcast", s: "{{ s_sc }}" }
+                    - { id: "solarprognose", s: "{{ s_sp }}" }
+                    - { id: "forecastsolar", s: "{{ s_fs }}" }
+                    - { id: "openmeteo", s: "{{ s_om }}" }
                   sequence:
-                    - if: "{{ repeat.item.valid }}"
-                      then:
-                        - action: input_number.set_value
-                          target:
-                            {
-                              entity_id: "input_number.weight_{{ repeat.item.id }}",
-                            }
-                          data:
-                            {
-                              value: "{{ ((states('input_number.weight_' ~ repeat.item.id) | float(0) * (1-alpha)) + ((repeat.item.score | float(0) / total_score) * alpha)) | round(3) }}",
-                            }
+                    - action: input_number.set_value
+                      target:
+                        entity_id: "input_number.weight_{{ repeat.item.id }}"
+                      data:
+                        value: >
+                          {% set old = states('input_number.weight_' ~ repeat.item.id) | float %}
+                          {% set target = repeat.item.s | float / total | float %}
+                          {{ (old * (1 - alpha) + target * alpha) | round(3) }}

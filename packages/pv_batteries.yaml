@@ -27,7 +27,7 @@ sensor:
 
   #666
   - platform: integration
-    source: sensor.marstek_venus_1_ac_leistung_glatt # positiv ist laden
+    source: sensor.marstek_venus_1_ac_leistung # positiv ist laden
     name: "Venus 1 Energiefluss Wh"
     unique_id: marstek_venus_1_energiefluss_wh
     round: 1
@@ -35,7 +35,7 @@ sensor:
 
   # 666
   - platform: integration
-    source: sensor.marstek_venus_2_ac_leistung_glatt # positiv ist laden
+    source: sensor.marstek_venus_2_ac_leistung # positiv ist laden
     name: "Venus 2 Energiefluss Wh"
     unique_id: marstek_venus_2_energiefluss_wh
     round: 1

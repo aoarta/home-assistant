@@ -17,6 +17,15 @@ sensor:
         precision: 0
 
   - platform: filter
+    name: "PV Produktion 5 Min Durchschnitt"
+    unique_id: pv_produktion_5min_avg
+    entity_id: sensor.solarnet_pv_leistung
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "00:05:00"
+        precision: 0
+
+  - platform: filter
     name: "Average consumption last 1h fast"
     unique_id: average_consumption_last_1h_fast
     entity_id: sensor.hausverbrauch_netto_watt

@@ -30,6 +30,10 @@ recorder:
       - sensor.balkon_inverter_5min_average
       - sensor.balkon_inverter2_5min_average
       - sensor.hausverbrauch_netto_watt
+      - sensor.solarnet_leistung_netzbezug
+      - sensor.solarnet_leistung_netzeinspeisung
+      - sensor.solarnet_leistung_verbrauch
+      - sensor.solarnet_pv_leistung
 
     entity_globs:
       - sensor.marstek_venus_*_spannung
@@ -54,6 +58,20 @@ logger:
   logs:
     homeassistant.components.modbus: error
     custom_components.marstek_modbus: error
+
+sql:
+  - name: "DB Top 10 Schreiber"
+    query: >
+      SELECT 
+          m.entity_id, 
+          COUNT(*) AS anzahl 
+      FROM states s
+      JOIN states_meta m ON s.metadata_id = m.metadata_id
+      WHERE s.last_updated_ts >= UNIX_TIMESTAMP(NOW() - INTERVAL 15 MINUTE)
+      GROUP BY s.metadata_id
+      ORDER BY anzahl DESC
+      LIMIT 10;
+    column: "entity_id"
 
 input_boolean:
   override_soc:
