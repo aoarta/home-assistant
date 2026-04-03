@@ -9,7 +9,7 @@ sensor:
     filters:
       - filter: lowpass
         time_constant: 5 # Glättet über ca. 5 Messwerte (ca. 5-10 Sek. Trägheit)
-        precision: 1 # Rundet auf eine Nachkommastelle
+        precision: 0 # Rundet auf eine Nachkommastelle
       - filter: time_throttle
         window_size: "00:00:30" # Schreibt nur alle 30 Sekunden einen Wert in die DB
 
@@ -21,7 +21,7 @@ sensor:
     filters:
       - filter: lowpass
         time_constant: 5 # Glättet über ca. 5 Messwerte (ca. 5-10 Sek. Trägheit)
-        precision: 1 # Rundet auf eine Nachkommastelle
+        precision: 0 # Rundet auf eine Nachkommastelle
       - filter: time_throttle
         window_size: "00:00:30" # Schreibt nur alle 30 Sekunden einen Wert in die DB
 
@@ -30,7 +30,7 @@ sensor:
     source: sensor.marstek_venus_1_ac_leistung # positiv ist laden
     name: "Venus 1 Energiefluss Wh"
     unique_id: marstek_venus_1_energiefluss_wh
-    round: 1
+    round: 0
     method: left
 
   # 666
@@ -38,7 +38,7 @@ sensor:
     source: sensor.marstek_venus_2_ac_leistung # positiv ist laden
     name: "Venus 2 Energiefluss Wh"
     unique_id: marstek_venus_2_energiefluss_wh
-    round: 1
+    round: 0
     method: left
 
   - platform: filter
@@ -121,7 +121,7 @@ template:
                 100
               {% else %}
                 {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12) * 1000 %}
-                {% set calc_soc = 100 - ((neu_wh - reset_wh) | abs / cap_wh * 100) %}
+                {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
                 
                 {# Begrenzt den Wert sauber zwischen 0 und 100 und rundet #}
                 {{ calc_soc | round(1) | clamp(0, 100) }}
@@ -173,7 +173,7 @@ template:
                 100
               {% else %}
                 {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.12) * 1000 %}
-                {% set calc_soc = 100 - ((neu_wh - reset_wh) | abs / cap_wh * 100) %}
+                {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
                 
                 {# Begrenzt den Wert sauber zwischen 0 und 100 und rundet #}
                 {{ calc_soc | round(1) | clamp(0, 100) }}
@@ -195,6 +195,26 @@ template:
             {% else %}
               {{ alt_wh }}
             {% endif %}
+
+  - trigger:
+      - platform: time_pattern
+        minutes: "/5"
+    sensor:
+      - name: "Marstek Free capacity kWh"
+        unique_id: marstek_free_capacity_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state: >
+          {% set cap1 = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12) %}
+          {% set soc1 = states('sensor.venus_1_custom_soc') | float(0) %}
+
+          {% set cap2 = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.12) %}
+          {% set soc2 = states('sensor.venus_2_custom_soc') | float(0) %}
+
+          {% set free1 = cap1 * (1 - (soc1 / 100)) %}
+          {% set free2 = cap2 * (1 - (soc2 / 100)) %}
+
+          {{ (free1 + free2) | round(2) }}
 
   - sensor:
       - name: "Battery SOC Total"
@@ -354,26 +374,6 @@ template:
                 {{ {'v1': v1, 'v2': v2} }}
               {% endif %}
             {% endif %}
-
-      - name: "Marstek Free capacity kWh"
-        unique_id: marstek_free_capacity_kwh
-        unit_of_measurement: "kWh"
-        device_class: energy
-        state: >
-          {# Gesamtkapazität der Venus 1 (Standard 5.12 kWh) #}
-          {% set cap1 = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12) %}
-          {% set soc1 = states('sensor.venus_1_custom_soc') | float(0) %}
-
-          {# Gesamtkapazität der Venus 2 (Standard 5.12 kWh) #}
-          {% set cap2 = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.12) %}
-          {% set soc2 = states('sensor.venus_2_custom_soc') | float(0) %}
-
-          {# Berechnung der freien kWh pro Batterie #}
-          {% set free1 = cap1 * (1 - (soc1 / 100)) %}
-          {% set free2 = cap2 * (1 - (soc2 / 100)) %}
-
-          {# Summe bilden und auf 2 Nachkommastellen runden #}
-          {{ (free1 + free2) | round(2) }}
 
 automation:
   - alias: "Sende Lade und Entladebefehle an Hardware (Optimiert)"

@@ -15,6 +15,8 @@ sensor:
       - filter: time_simple_moving_average
         window_size: "00:05:00"
         precision: 0
+      - filter: throttle
+        window_size: 300
 
   - platform: filter
     name: "PV Produktion 5 Min Durchschnitt"
@@ -24,6 +26,20 @@ sensor:
       - filter: time_simple_moving_average
         window_size: "00:05:00"
         precision: 0
+      - filter: throttle
+        window_size: 300
+
+  # für die datenbank
+  - platform: filter
+    name: "Solarnet Leistung vom Netz 5 min Durchschnitt"
+    unique_id: solarnet_leistung_vom_netzt_5min_avg
+    entity_id: sensor.solarnet_leistung_vom_netz
+    filters:
+      - filter: time_simple_moving_average
+        window_size: "00:05:00"
+        precision: 0
+      - filter: throttle
+        window_size: 300
 
   - platform: filter
     name: "Average consumption last 1h fast"
@@ -42,6 +58,8 @@ sensor:
       - filter: time_simple_moving_average
         window_size: "00:05:00"
         precision: 0
+      - filter: throttle
+        window_size: 300
 
   - platform: filter
     name: "Balkon Inverter 5min Average"
@@ -51,6 +69,8 @@ sensor:
       - filter: time_simple_moving_average
         window_size: "00:05:00"
         precision: 0
+      - filter: throttle
+        window_size: 300
 
   - platform: filter
     name: "Balkon Inverter 2 5min Average"
@@ -60,6 +80,8 @@ sensor:
       - filter: time_simple_moving_average
         window_size: "00:05:00"
         precision: 0
+      - filter: throttle
+        window_size: 300
 
 template:
   - sensor:

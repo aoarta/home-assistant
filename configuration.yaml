@@ -34,6 +34,7 @@ recorder:
       - sensor.solarnet_leistung_netzeinspeisung
       - sensor.solarnet_leistung_verbrauch
       - sensor.solarnet_pv_leistung
+      - sensor.solarnet_leistung_vom_netz
 
     entity_globs:
       - sensor.marstek_venus_*_spannung
@@ -78,6 +79,23 @@ input_boolean:
     name: "Manueller SOC Override"
     icon: mdi:battery-lock
     initial: false
+
+command_line:
+  - sensor:
+      name: "CPU Aktuelle Geschwindigkeit"
+      unique_id: cpu_current_speed_mhz
+      command: "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
+      unit_of_measurement: "MHz"
+      value_template: "{{ (value | float / 1000) | round(0) }}"
+      scan_interval: 60
+
+  - sensor:
+      name: "CPU Maximale Geschwindigkeit"
+      unique_id: cpu_max_speed_mhz
+      command: "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"
+      unit_of_measurement: "MHz"
+      value_template: "{{ (value | float / 1000) | round(0) }}"
+      scan_interval: 86400 # Reicht einmal am Tag
 
 template:
   # 1. Normale Sensoren (Zustandsbasiert)
