@@ -85,27 +85,49 @@ sensor:
 ################################################################################
 template:
   - trigger:
-      # Trigger 1: SOC erreicht 100% (bzw. knapp davor)
-      - platform: numeric_state
-        entity_id: sensor.ups_soc_stabil
-        above: 99
-        for: "00:00:10"
-      # Trigger 2: Höchste Zelle erreicht Ladeschlussspannung
       - platform: numeric_state
         entity_id: sensor.ups_highest_cell_stabil
         above: 3.575
         for: "00:00:10"
+      - platform: state
+        entity_id: sensor.ups_soc_stabil
+        to: "100.0"
+        for: "00:01:00"
+      - platform: state
+        entity_id: sensor.ups_custom_soc
+        to: "100.0"
+      - platform: time_pattern
+        minutes: "/5"
     sensor:
       - name: "UPS SOC Reset Punkt"
         unique_id: ups_soc_reset_punkt
         unit_of_measurement: "Wh"
         state: >
-          {% set val = states('sensor.ups_energiefluss_wh') %}
-          {% if val | is_number %}
-            {{ val | float(0) }}
+          {% set current_energy = states('sensor.ups_energiefluss_wh') | float(0) %}
+          {% set raw_last_reset = states('sensor.ups_soc_reset_punkt') %}
+          {% set hw_soc = states('sensor.ups_soc_stabil') | float(0) %}
+          {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(0) %}
+
+          {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
+          {# Reset wenn HW-SOC 100 oder Zelle voll #}
+          {% if hw_soc >= 100 or high_cell >= 3.575 %}
+            {{ [current_energy, last_reset] | min }}
+          {% elif current_energy < last_reset %}
+            {{ current_energy }}
           {% else %}
-            {{ this.state | default(0) | float(0) }}
+            {{ last_reset }}
           {% endif %}
+
+  - trigger:
+      - platform: state
+        entity_id: sensor.ups_custom_soc
+        to: "100"
+        for: "00:01:00"
+    sensor:
+      - name: "UPS Last Full"
+        unique_id: ups_last_full_timestamp
+        device_class: timestamp
+        state: "{{ now() }}"
 
   - trigger:
       - platform: state
@@ -113,7 +135,6 @@ template:
       - platform: homeassistant
         event: start
       - platform: time_pattern
-        # Löst alle 5 Minuten aus (z. B. 08:00, 08:05, 08:10...)
         minutes: "/5"
     sensor:
       - name: "UPS Custom SOC"
@@ -121,7 +142,6 @@ template:
         unit_of_measurement: "%"
         device_class: battery
         state: >
-          {# Werte als Zahlen laden, Standardwert 0 falls nicht verfügbar #}
           {% set hw_soc = states('sensor.ups_soc_stabil') | float(-1) %}
           {% set neu_wh = states('sensor.ups_energiefluss_wh') | float('unknown') %}
           {% set reset_wh = states('sensor.ups_soc_reset_punkt') | float('unknown') %}
@@ -236,8 +256,23 @@ automation:
           - sensor.ups_soc_stabil
           - sensor.ups_lowest_cell_stabil
           - sensor.ups_highest_cell_stabil
+          - binary_sensor.batterie_wartung_erforderlich
     action:
       - choose:
+          # --- Wartungsmodus ein (mit Überladeschutz!)
+          - conditions:
+              - condition: template
+                value_template: >
+                  {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
+                  {# Nur laden wenn Wartung aktiv UND Batterie noch nicht voll #}
+                  {{ states('input_number.manuelle_ladeleistung') | float(0) >= 1000 
+                     and high_cell < 3.58 }}
+            sequence:
+              - action: switch.turn_off
+                target: { entity_id: switch.battery_inverter_tasmota }
+              - action: switch.turn_on
+                target: { entity_id: switch.battery_charger2 }
+
           # --- NOT-LADUNG (SOC zu niedrig) ---
           - conditions:
               - condition: template
