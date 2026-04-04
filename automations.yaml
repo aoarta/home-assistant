@@ -68,3 +68,46 @@
         - service: input_boolean.turn_off
           target:
             entity_id: input_boolean.override_soc
+
+- alias: "Batterie Wartung: Nachtladung erzwingen"
+  id: batterie_wartung_nachtladung
+  trigger:
+    - platform: sun
+      event: sunset
+      offset: "00:05:00"
+    - platform: state
+      entity_id: binary_sensor.batterie_wartung_erforderlich
+      to: "on"
+  condition:
+    - condition: state
+      entity_id: binary_sensor.batterie_wartung_erforderlich
+      state: "on"
+    - condition: sun
+      after: sunset
+  action:
+    # Wir nutzen deine vorhandene manuelle Ladeleistung als Override
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.manuelle_ladeleistung
+      data:
+        value: 1000 # Mit 1000W pro Batterie laden (oder dein gewünschter Wert)
+
+
+- alias: "Batterie Wartung: Beenden wenn voll"
+  id: batterie_wartung_beenden
+  trigger:
+    - platform: state
+      entity_id:
+        - sensor.marstek_venus_1_batterie_ladezustand
+        - sensor.marstek_venus_2_batterie_ladezustand
+      to: "100"
+  condition:
+    - condition: state
+      entity_id: input_number.manuelle_ladeleistung
+      state: "1000.0" # Nur wenn wir im Wartungsmodus sind
+  action:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.manuelle_ladeleistung
+      data:
+        value: 0
