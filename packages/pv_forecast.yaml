@@ -83,15 +83,15 @@ sensor:
     value_template: "{{ value_json.status if value_json is defined else 'OK' }}"
 
   - platform: rest
-    name: "ForecastSolar API Source Dach"
-    resource_template: "https://api.forecast.solar/estimate/watthours/{{state_attr('zone.home','latitude')}}/{{state_attr('zone.home','longitude')}}/30/-45/7.5"
+    name: "Forecastsolar API Source Dach"
+    resource_template: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/30/-45/7.5"
     scan_interval: 86400
     json_attributes: [result]
     value_template: "{{ value_json.message.info.place if value_json is defined else 'OK' }}"
 
   - platform: rest
-    name: "ForecastSolar API Source Fassade"
-    resource_template: "https://api.forecast.solar/estimate/watthours/{{state_attr('zone.home','latitude')}}/{{state_attr('zone.home','longitude')}}/90/85/0.8"
+    name: "Forecastsolar API Source Fassade"
+    resource_template: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/90/85/0.8"
     scan_interval: 86400
     json_attributes: [result]
     value_template: "{{ value_json.message.info.place if value_json is defined else 'OK' }}"
@@ -99,13 +99,15 @@ sensor:
 template:
   # --- TRIGGER-BASIERTE SPEICHER-SENSOREN (Überleben Neustart) ---
   - trigger:
+      - platform: time_pattern
+        minutes: "/5"
+      # Zusätzlich triggern, wenn HA startet, damit die Werte sofort da sind
+      - platform: homeassistant
+        event: start
       - platform: state
         entity_id:
           - sensor.solarprognose_api_source_dach
           - sensor.solarprognose_api_source_fassade
-          - sensor.forecastsolar_api_source_dach
-          - sensor.forecastsolar_api_source_fassade
-        not_to: ["unknown", "unavailable"]
     sensor:
       - name: "Solarprognose Api Raw Dach Stable"
         unique_id: solarprognose_api_raw_dach_stable
@@ -119,17 +121,32 @@ template:
         attributes:
           data: "{{ state_attr('sensor.solarprognose_api_source_fassade', 'data') }}"
 
-      - name: "ForecastSolar API Raw Dach Stable"
+  - trigger:
+      - platform: time_pattern
+        minutes: "/5"
+      # Zusätzlich triggern, wenn HA startet, damit die Werte sofort da sind
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id:
+          - sensor.forecastsolar_api_source_dach
+          - sensor.forecastsolar_api_source_fassade
+    sensor:
+      - name: "Forecastsolar API Raw Dach Stable"
         unique_id: forecastsolar_api_raw_dach_stable
         state: "OK"
         attributes:
-          result: "{{ state_attr('sensor.forecastsolar_api_source_dach', 'result') }}"
+          result: >
+            {% set val = state_attr('sensor.forecastsolar_api_source_dach', 'result') %}
+            {{ val if val is mapping else state_attr('this', 'result') }}
 
-      - name: "ForecastSolar API Raw Fassade Stable"
+      - name: "Forecastsolar API Raw Fassade Stable"
         unique_id: forecastsolar_api_raw_fassade_stable
         state: "OK"
         attributes:
-          result: "{{ state_attr('sensor.forecastsolar_api_source_fassade', 'result') }}"
+          result: >
+            {% set val = state_attr('sensor.forecastsolar_api_source_fassade', 'result') %}
+            {{ val if val is mapping else state_attr('this', 'result') }}
 
   # --- BERECHNUNGS-SENSOREN ---
   - sensor:
@@ -156,7 +173,7 @@ template:
             {{ ns.total | round(2) }}
           {% else %} {{ this.state | float(0) }} {% endif %}
 
-      - name: "PV Forecast ForecastSolar alles"
+      - name: "PV Forecast Forecastsolar alles"
         unique_id: pv_forecast_forecastsolar_alles
         unit_of_measurement: "kWh"
         state: >
@@ -165,16 +182,21 @@ template:
           {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade_stable', 'result') %}
           {% if dach is mapping and fassade is mapping %}
             {% set ns = namespace(d_max=0, f_max=0, d_now=0, f_now=0) %}
-            {% set ts_now = now().strftime('%Y-%m-%d %H:%M:%S') %}
+            {% set now_ts = now().timestamp() %}
+            
             {% for ts, val in dach.items() if ts.startswith(today) %}
+              {# Wir hängen die lokale Zeitzone an den String an, falls sie fehlt #}
+              {% set ts_local = as_timestamp(ts ~ now().strftime('%z')) %}
               {% set val_num = val | float(0) %}
+              
               {% if val_num > ns.d_max %}{% set ns.d_max = val_num %}{% endif %}
-              {% if ts <= ts_now %}{% set ns.d_now = val_num %}{% endif %}
+              {# Vergleich mit dem korrigierten Zeitstempel #}
+              {% if ts_local <= now_ts %}{% set ns.d_now = val_num %}{% endif %}
             {% endfor %}
             {% for ts, val in fassade.items() if ts.startswith(today) %}
               {% set val_num = val | float(0) %}
               {% if val_num > ns.f_max %}{% set ns.f_max = val_num %}{% endif %}
-              {% if ts <= ts_now %}{% set ns.f_now = val_num %}{% endif %}
+              {% if as_timestamp(ts) <= now_ts %}{% set ns.f_now = val_num %}{% endif %}
             {% endfor %}
             {{ ([0, ( (ns.d_max - ns.d_now) + 3 * (ns.f_max - ns.f_now) ) / 1000] | max) | round(2) }}
           {% else %} {{ this.state | float(0) }} {% endif %}
@@ -188,14 +210,21 @@ template:
           {% if dach is mapping and fassade is mapping %}
             {% set ns = namespace(total=0) %}
             {% set today = now().strftime('%Y-%m-%d') %}
-            {% for i in range(now().hour, 24) %}
-              {% set ts = today ~ 'T' ~ "%02d"|format(i) ~ ':00:00+01:00' %}
-              {% set d = dach[ts] | float(0) if ts in dach else 0 %}
-              {% set f = fassade[ts] | float(0) if ts in fassade else 0 %}
-              {% set ns.total = ns.total + (d + 3*f) / 1000 %}
+            {# Zeitstempel der aktuellen vollen Stunde (z.B. heute 10:00:00 Uhr) #}
+            {% set current_hour_ts = now().replace(minute=0, second=0, microsecond=0).timestamp() %}
+            
+            {% for ts, d_val in dach.items() %}
+              {# Nur Werte von heute nehmen, die in der aktuellen oder einer zukünftigen Stunde liegen #}
+              {% if ts.startswith(today) and as_timestamp(ts) >= current_hour_ts %}
+                {% set d = d_val | float(0) %}
+                {% set f = fassade[ts] | float(0) if ts in fassade else 0 %}
+                {% set ns.total = ns.total + (d + 3 * f) / 1000 %}
+              {% endif %}
             {% endfor %}
             {{ ns.total | round(2) }}
-          {% else %} {{ this.state | float(0) }} {% endif %}
+          {% else %} 
+            {{ this.state | float(0) }} 
+          {% endif %}
 
       - name: "PV Forecast Weighted"
         unique_id: pv_forecast_weighted
@@ -219,6 +248,8 @@ template:
   - trigger:
       - platform: state
         entity_id: input_number.pv_reale_ernte_von_gestern
+      - platform: homeassistant
+        event: start # Berechnet sich auch beim Start neu
     sensor:
       - name: "PV Forecast Bias Korrekturfaktor"
         unique_id: pv_forecast_bias_korrekturfaktor
@@ -263,13 +294,17 @@ automation:
         data:
           value: "{{ states('sensor.pv_forecast_weighted') | float(0) }}"
       - repeat:
-          for_each: [solcast, solarprognose, forecastsolar, openmeteo]
+          for_each:
+            - { id: "solcast" }
+            - { id: "solarprognose" }
+            - { id: "forecastsolar" }
+            - { id: "openmeteo" }
           sequence:
             - action: input_number.set_value
               target:
-                entity_id: "input_number.pv_save_{{ repeat.item }}_morgens"
+                entity_id: "input_number.pv_save_{{ repeat.item.id }}_morgens"
               data:
-                value: "{{ states('sensor.pv_forecast_' ~ repeat.item ~ '_alles') | float(0) }}"
+                value: "{{ states('sensor.pv_forecast_' ~ repeat.item.id ~ '_alles') | float(0) }}"
 
   - alias: "PV: Gewichte und Vergleich am Ende des Tages"
     id: pv_daily_comparison_and_weighting
@@ -293,11 +328,11 @@ automation:
         then:
           - variables:
               real: "{{ states('sensor.pv_ertrag_heute') | float(0) }}"
-              s_sc: "{{ 1 / ((states('input_number.pv_save_solcast_morgens')|float - real)|abs + 0.1) if states('input_number.pv_save_solcast_morgens')|float > 0 else 0 }}"
-              s_sp: "{{ 1 / ((states('input_number.pv_save_solarprognose_morgens')|float - real)|abs + 0.1) if states('input_number.pv_save_solarprognose_morgens')|float > 0 else 0 }}"
-              s_fs: "{{ 1 / ((states('input_number.pv_save_forecastsolar_morgens')|float - real)|abs + 0.1) if states('input_number.pv_save_forecastsolar_morgens')|float > 0 else 0 }}"
-              s_om: "{{ 1 / ((states('input_number.pv_save_openmeteo_morgens')|float - real)|abs + 0.1) if states('input_number.pv_save_openmeteo_morgens')|float > 0 else 0 }}"
-              total: "{{ (s_sc|float + s_sp|float + s_fs|float + s_om|float) | float }}"
+              s_sc: "{{ 1 / ((states('input_number.pv_save_solcast_morgens')|float(0) - real)|abs + 0.1) if states('input_number.pv_save_solcast_morgens')|float > 0 else 0 }}"
+              s_sp: "{{ 1 / ((states('input_number.pv_save_solarprognose_morgens')|float(0) - real)|abs + 0.1) if states('input_number.pv_save_solarprognose_morgens')|float > 0 else 0 }}"
+              s_fs: "{{ 1 / ((states('input_number.pv_save_forecastsolar_morgens')|float(0) - real)|abs + 0.1) if states('input_number.pv_save_forecastsolar_morgens')|float > 0 else 0 }}"
+              s_om: "{{ 1 / ((states('input_number.pv_save_openmeteo_morgens')|float(0) - real)|abs + 0.1) if states('input_number.pv_save_openmeteo_morgens')|float > 0 else 0 }}"
+              total: "{{ (s_sc|float(0) + s_sp|float(0) + s_fs|float(0) + s_om|float(0)) | float(0) }}"
               alpha: 0.1
           - if: "{{ total > 0 }}"
             then:
@@ -313,6 +348,6 @@ automation:
                         entity_id: "input_number.weight_{{ repeat.item.id }}"
                       data:
                         value: >
-                          {% set old = states('input_number.weight_' ~ repeat.item.id) | float %}
-                          {% set target = repeat.item.s | float / total | float %}
+                          {% set old = states('input_number.weight_' ~ repeat.item.id) | float(0.25) %}
+                          {% set target = repeat.item.s | float(0) / total | float(1) %}
                           {{ (old * (1 - alpha) + target * alpha) | round(3) }}
