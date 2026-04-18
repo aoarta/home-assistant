@@ -63,6 +63,7 @@ class MarstekCoordinator(DataUpdateCoordinator):
         self.BUTTON_DEFINITIONS = []
         self.EFFICIENCY_SENSOR_DEFINITIONS = []
         self.STORED_ENERGY_SENSOR_DEFINITIONS = []
+        self.CYCLE_SENSOR_DEFINITIONS = []
 
         # Combine all sensor definitions for polling
         self._all_definitions = []
@@ -220,6 +221,7 @@ class MarstekCoordinator(DataUpdateCoordinator):
             self.BUTTON_DEFINITIONS = data.get("BUTTON_DEFINITIONS", [])
             self.EFFICIENCY_SENSOR_DEFINITIONS = data.get("EFFICIENCY_SENSOR_DEFINITIONS", [])
             self.STORED_ENERGY_SENSOR_DEFINITIONS = data.get("STORED_ENERGY_SENSOR_DEFINITIONS", [])
+            self.CYCLE_SENSOR_DEFINITIONS = data.get("CYCLE_SENSOR_DEFINITIONS", [])
 
             # Combine into a single list for polling
             self._all_definitions = (
@@ -443,7 +445,11 @@ class MarstekCoordinator(DataUpdateCoordinator):
         entity_registry = er.async_get(self.hass)
 
         # Collect all dependency keys from all definitions
-        all_definitions_for_deps = self.EFFICIENCY_SENSOR_DEFINITIONS + self.STORED_ENERGY_SENSOR_DEFINITIONS
+        all_definitions_for_deps = (
+            self.EFFICIENCY_SENSOR_DEFINITIONS
+            + self.STORED_ENERGY_SENSOR_DEFINITIONS
+            + self.CYCLE_SENSOR_DEFINITIONS
+        )
         dependency_keys_set = {
             dep_key
             for defn in all_definitions_for_deps
@@ -670,6 +676,7 @@ def get_registers(version: str):
       - BUTTON_DEFINITIONS
       - EFFICIENCY_SENSOR_DEFINITIONS
       - STORED_ENERGY_SENSOR_DEFINITIONS
+    - CYCLE_SENSOR_DEFINITIONS
 
     If an unknown version is requested, the function falls back to the v1/v2
     register set (because v1 and v2 share the same registers in this integration).
@@ -677,7 +684,11 @@ def get_registers(version: str):
     # Normalize incoming version value and accept legacy tokens.
     version_raw = (version or "").strip()
     version = version_raw.lower()
-
+    _LOGGER.info(
+        "Version '%s' mapped to '%s'" ,
+        version_raw,
+        version,
+    )
     # Accept legacy tokens 'v1/v2' and 'v3' and automatically map them
     # to the new tokens used by the integration ('e v1/v2', 'e v3').
     legacy_to_new = {
@@ -746,45 +757,10 @@ def get_registers(version: str):
                     "STORED_ENERGY_SENSOR_DEFINITIONS": _normalize_section(
                         data.get("STORED_ENERGY_SENSOR_DEFINITIONS")
                     ),
+                    "CYCLE_SENSOR_DEFINITIONS": _normalize_section(
+                        data.get("CYCLE_SENSOR_DEFINITIONS")
+                    ),
                 }
             except Exception as e:
                 _LOGGER.warning("Failed to load YAML registers %s: %s", yaml_path, e)
 
-    # Fall back to legacy Python modules if YAML not present or failed to load
-    if version == "e v1/v2":
-        from . import registers_v12 as registers
-    elif version == "e v3":
-        from . import registers_v3 as registers
-    elif version == "d":
-        from . import registers_d as registers
-    elif version == "a":
-        # No legacy Python module for A exists; return empty definitions as fallback
-        registers = None
-
-    if registers:
-        return {
-            "SENSOR_DEFINITIONS": getattr(registers, "SENSOR_DEFINITIONS", []),
-            "BINARY_SENSOR_DEFINITIONS": getattr(registers, "BINARY_SENSOR_DEFINITIONS", []),
-            "SELECT_DEFINITIONS": getattr(registers, "SELECT_DEFINITIONS", []),
-            "SWITCH_DEFINITIONS": getattr(registers, "SWITCH_DEFINITIONS", []),
-            "NUMBER_DEFINITIONS": getattr(registers, "NUMBER_DEFINITIONS", []),
-            "BUTTON_DEFINITIONS": getattr(registers, "BUTTON_DEFINITIONS", []),
-            "EFFICIENCY_SENSOR_DEFINITIONS": getattr(
-                registers, "EFFICIENCY_SENSOR_DEFINITIONS", []
-            ),
-            "STORED_ENERGY_SENSOR_DEFINITIONS": getattr(
-                registers, "STORED_ENERGY_SENSOR_DEFINITIONS", []
-            ),
-        }
-
-    # Default empty return if nothing found
-    return {
-        "SENSOR_DEFINITIONS": [],
-        "BINARY_SENSOR_DEFINITIONS": [],
-        "SELECT_DEFINITIONS": [],
-        "SWITCH_DEFINITIONS": [],
-        "NUMBER_DEFINITIONS": [],
-        "BUTTON_DEFINITIONS": [],
-        "EFFICIENCY_SENSOR_DEFINITIONS": [],
-        "STORED_ENERGY_SENSOR_DEFINITIONS": [],
-    }

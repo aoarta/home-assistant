@@ -79,7 +79,6 @@ SENSOR_DEFINITIONS:
         register: 32104
         scale: 1
         unit: "%"
-        category: diagnostic
         device_class: battery
         state_class: measurement
         enabled_by_default: true
@@ -440,14 +439,6 @@ SENSOR_DEFINITIONS:
         category: diagnostic
         enabled_by_default: false
         scan_interval: medium
-    # Schedule 1 broken out into individual registers for clarity:
-    # 43100: days bitmask (use a SelectEntity mapping bit values to day names)
-    # 43101: start time - exposed as NumberEntity
-    # 43102: end time - exposed as NumberEntity
-    # 43103: mode (numeric) - exposed as NumberEntity
-    # 43104: enabled (0/1) - exposed as SwitchEntity
-    # The following schedules (2..6) are broken out similarly to schedule_1
-    # and therefore are not defined as packed schedules here.
 
 BINARY_SENSOR_DEFINITIONS:
     wifi_status:
@@ -656,7 +647,6 @@ SWITCH_DEFINITIONS:
         data_type: uint16
         category: config
         scan_interval: very_low
-
 
 NUMBER_DEFINITIONS:
     set_charge_power:
@@ -986,4 +976,14 @@ STORED_ENERGY_SENSOR_DEFINITIONS:
         state_class: total
         dependency_keys:
             soc: battery_soc
+            capacity: battery_total_energy
+
+CYCLE_SENSOR_DEFINITIONS:
+    battery_cycle_count_calc:
+        key: battery_cycle_count_calc
+        icon: "mdi:counter"
+        category: diagnostic
+        state_class: measurement
+        dependency_keys:
+            discharge: total_discharging_energy
             capacity: battery_total_energy

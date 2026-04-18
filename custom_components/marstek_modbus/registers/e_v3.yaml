@@ -79,7 +79,6 @@ SENSOR_DEFINITIONS:
         register: 34002
         scale: 0.1
         unit: "%"
-        category: diagnostic
         device_class: battery
         state_class: measurement
         enabled_by_default: true
@@ -220,6 +219,16 @@ SENSOR_DEFINITIONS:
         data_type: int32
         precision: 2
         scan_interval: low
+    battery_cycle_count:
+        register: 34003
+        scale: 1
+        icon: "mdi:counter"
+        state_class: total_increasing
+        category: diagnostic
+        enabled_by_default: true
+        data_type: uint16
+        precision: 0
+        scan_interval: low
     total_daily_charging_energy:
         register: 33004
         count: 2
@@ -304,7 +313,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_1_voltage:
+    battery_1_cell_1_voltage:
         register: 34018
         scale: 0.001
         unit: V
@@ -314,7 +323,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_2_voltage:
+    battery_1_cell_2_voltage:
         register: 34019
         scale: 0.001
         unit: V
@@ -324,7 +333,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_3_voltage:
+    battery_1_cell_3_voltage:
         register: 34020
         scale: 0.001
         unit: V
@@ -334,7 +343,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_4_voltage:
+    battery_1_cell_4_voltage:
         register: 34021
         scale: 0.001
         unit: V
@@ -344,7 +353,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_5_voltage:
+    battery_1_cell_5_voltage:
         register: 34022
         scale: 0.001
         unit: V
@@ -354,7 +363,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_6_voltage:
+    battery_1_cell_6_voltage:
         register: 34023
         scale: 0.001
         unit: V
@@ -364,7 +373,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_7_voltage:
+    battery_1_cell_7_voltage:
         register: 34024
         scale: 0.001
         unit: V
@@ -374,7 +383,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_8_voltage:
+    battery_1_cell_8_voltage:
         register: 34025
         scale: 0.001
         unit: V
@@ -384,7 +393,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_9_voltage:
+    battery_1_cell_9_voltage:
         register: 34026
         scale: 0.001
         unit: V
@@ -394,7 +403,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_10_voltage:
+    battery_1_cell_10_voltage:
         register: 34027
         scale: 0.001
         unit: V
@@ -404,7 +413,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_11_voltage:
+    battery_1_cell_11_voltage:
         register: 34028
         scale: 0.001
         unit: V
@@ -414,7 +423,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_12_voltage:
+    battery_1_cell_12_voltage:
         register: 34029
         scale: 0.001
         unit: V
@@ -424,7 +433,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_13_voltage:
+    battery_1_cell_13_voltage:
         register: 34030
         scale: 0.001
         unit: V
@@ -434,7 +443,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_14_voltage:
+    battery_1_cell_14_voltage:
         register: 34031
         scale: 0.001
         unit: V
@@ -444,7 +453,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_15_voltage:
+    battery_1_cell_15_voltage:
         register: 34032
         scale: 0.001
         unit: V
@@ -454,7 +463,7 @@ SENSOR_DEFINITIONS:
         data_type: int16
         precision: 3
         scan_interval: medium
-    cell_16_voltage:
+    battery_1_cell_16_voltage:
         register: 34033
         scale: 0.001
         unit: V
@@ -539,7 +548,7 @@ SENSOR_DEFINITIONS:
         category: diagnostic
         enabled_by_default: false
         scan_interval: medium
-        
+
 BINARY_SENSOR_DEFINITIONS:
     wifi_status:
         register: 30300
@@ -1032,4 +1041,14 @@ STORED_ENERGY_SENSOR_DEFINITIONS:
         state_class: total
         dependency_keys:
             soc: battery_soc
+            capacity: battery_total_energy
+
+CYCLE_SENSOR_DEFINITIONS:
+    battery_cycle_count_calc:
+        key: battery_cycle_count_calc
+        icon: "mdi:counter"
+        category: diagnostic
+        state_class: measurement
+        dependency_keys:
+            discharge: total_discharging_energy
             capacity: battery_total_energy

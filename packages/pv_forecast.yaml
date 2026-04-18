@@ -7,25 +7,21 @@ input_number:
     min: 0
     max: 1
     step: 0.001
-    initial: 0.4
   weight_solarprognose:
     name: "Gewicht Solarprognose"
     min: 0
     max: 1
     step: 0.001
-    initial: 0.3
   weight_forecastsolar:
     name: "Gewicht ForecastSolar"
     min: 0
     max: 1
     step: 0.001
-    initial: 0.2
   weight_openmeteo:
     name: "Gewicht OpenMeteo"
     min: 0
     max: 1
     step: 0.001
-    initial: 0.1
 
   # --- Referenzspeicher & Statistik ---
   pv_save_solcast_morgens:
@@ -168,7 +164,7 @@ template:
               {% set ts = (start_ts + (i * 3600)) | string %}
               {% set d = dach[ts][1] | float(0) if ts in dach else 0 %}
               {% set f = fassade[ts][1] | float(0) if fassade is mapping and ts in fassade else 0 %}
-              {% set ns.total = ns.total + (d + (f * 3)) %}
+              {% set ns.total = ns.total + (d + f) %}
             {% endfor %}
             {{ ns.total | round(2) }}
           {% else %} {{ this.state | float(0) }} {% endif %}
@@ -244,6 +240,87 @@ template:
             {{ (((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om) / total_weight) * bias) | round(2) }}
           {% else %} {{ this.state | float(0) }} {% endif %}
 
+      # --- PROGNOSE des nächsten Tages---
+
+      - name: "PV Forecast Solcast morgen"
+        unique_id: pv_forecast_solcast_morgen
+        unit_of_measurement: "kWh"
+        state: >
+          {% set val = states('sensor.solcast_pv_forecast_prognose_morgen') %}
+          {{ val if is_number(val) else states('sensor.pv_forecast_solcast_morgen') }}
+
+      - name: "PV Forecast Solarprognose Morgen"
+        unique_id: pv_forecast_solarprognose_morgen
+        unit_of_measurement: "kWh"
+        state: >
+          {% set dach_data = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
+          {% set fassade_data = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
+          {% if dach_data is mapping %}
+            {% set ns = namespace(total=0) %}
+            {% set start_ts = (now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp() + 86400) | int %}
+            {% for i in range(24) %}
+              {% set ts = (start_ts + (i * 3600)) | string %}
+              {% set d = dach_data[ts][1] | float(0) if ts in dach_data else 0 %}
+              {% set f = fassade_data[ts][1] | float(0) if fassade_data is mapping and ts in fassade_data else 0 %}
+              {% set ns.total = ns.total + (d + (f * 3)) %}
+            {% endfor %}
+            {{ ns.total | round(2) }}
+          {% else %} 0.0 {% endif %}
+
+      - name: "PV Forecast ForecastSolar Morgen"
+        unique_id: pv_forecast_forecastsolar_morgen
+        unit_of_measurement: "kWh"
+        state: >
+          {% set tomorrow = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
+          {% set dach = state_attr('sensor.forecastsolar_api_raw_dach_stable', 'result') %}
+          {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade_stable', 'result') %}
+
+          {% if dach is mapping and fassade is mapping %}
+            {% set tomorrow_suffix = tomorrow ~ ' ' %}
+            {% set ns = namespace(d_max=0, f_max=0) %}
+            
+            {# Einfach den höchsten Wert (Endwert) für morgen finden #}
+            {% for ts, val in dach.items() if ts.startswith(tomorrow_suffix) %}
+              {% if val > ns.d_max %}{% set ns.d_max = val %}{% endif %}
+            {% endfor %}
+            
+            {% for ts, val in fassade.items() if ts.startswith(tomorrow_suffix) %}
+              {% if val > ns.f_max %}{% set ns.f_max = val %}{% endif %}
+            {% endfor %}
+
+            {{ ((ns.d_max + 3 * ns.f_max) / 1000) | round(2) }}
+          {% else %} 0.0 {% endif %}
+
+      - name: "PV Forecast Openmeteo Morgen"
+        unique_id: pv_forecast_openmeteo_morgen
+        unit_of_measurement: "kWh"
+        state: >
+          {% set dach = states('sensor.home_energy_pv_dach_production_tomorrow') | float(0) %}
+          {% set fassade = states('sensor.home_energy_pv_fassade_production_tomorrow') | float(0) %}
+          {{ dach + 3*fassade }}
+
+      - name: "PV Forecast Weighted Morgen"
+        unique_id: pv_forecast_weighted_morgen
+        unit_of_measurement: "kWh"
+        state: >
+          {% set sc = states('sensor.pv_forecast_solcast_morgen') | float(0) %}
+          {% set sp = states('sensor.pv_forecast_solarprognose_morgen') | float(0) %}
+          {% set fs = states('sensor.pv_forecast_forecastsolar_morgen') | float(0) %}
+          {% set om = states('sensor.pv_forecast_openmeteo_morgen') | float(0) %}
+
+          {% set sc_w = states('input_number.weight_solcast') | float(0.4) if sc > 0 else 0.0 %}
+          {% set sp_w = states('input_number.weight_solarprognose') | float(0.3) if sp > 0 else 0.0 %}
+          {% set fs_w = states('input_number.weight_forecastsolar') | float(0.2) if fs > 0 else 0.0 %}
+          {% set om_w = states('input_number.weight_openmeteo') | float(0.1) if om > 0 else 0.0 %}
+
+          {% set total_weight = sc_w + sp_w + fs_w + om_w %}
+          {% set bias = states('sensor.pv_forecast_bias_korrekturfaktor') | float(1) %}
+
+          {% if total_weight > 0 %}
+            {{ (((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om) / total_weight) * bias) | round(2) }}
+          {% else %}
+            0.0
+          {% endif %}
   # --- TRIGGER-BASIERTER BIAS-FAKTOR (Ebenfalls Neustart-sicher) ---
   - trigger:
       - platform: state
@@ -254,6 +331,7 @@ template:
       - name: "PV Forecast Bias Korrekturfaktor"
         unique_id: pv_forecast_bias_korrekturfaktor
         unit_of_measurement: "ratio"
+        state_class: measurement
         state: >
           {% set real = states('input_number.pv_reale_ernte_von_gestern') | float(0) %}
           {% set forecast = states('input_number.pv_prognose_von_gestern') | float(0) %}
@@ -284,9 +362,9 @@ automation:
   - alias: "PV: Tagesprognosen morgens fixieren & speichern"
     id: pv_fix_daily_forecast_morning
     trigger:
-      - trigger: sun
-        event: sunrise
-        offset: "01:00:00"
+      - trigger: time
+        at:
+          - "06:30:00"
     actions:
       - action: input_number.set_value
         target:

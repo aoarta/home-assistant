@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.device_registry import DeviceEntryType
 
 from .const import DOMAIN, MANUFACTURER, MODEL
 from .coordinator import MarstekCoordinator
@@ -25,24 +26,50 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """
-    Set up select sensor entities when the config entry is loaded.
-
-    This function retrieves the coordinator from hass.data,
-    creates select entities based on SELECT_DEFINITIONS,
-    and registers them with Home Assistant.
-
-    Args:
-        hass: Home Assistant instance.
-        entry: Configuration entry.
-        async_add_entities: Callback to add entities.
+    Set up select entities when the config entry is loaded.
     """
-    # Retrieve the coordinator instance from hass data and add entities
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = [
-        MarstekSelect(coordinator, definition)
-        for definition in coordinator.SELECT_DEFINITIONS
-    ]
-    async_add_entities(entities)
+    coordinator: MarstekCoordinator = hass.data[DOMAIN][entry.entry_id]
+
+    sel_defs = getattr(coordinator, "SELECT_DEFINITIONS", None)
+
+    # Defensive normalisation: accept list (preferred) or mapping
+    try:
+        if isinstance(sel_defs, dict):
+            # Mapping {key: def} -> List with set 'key'
+            normalized: list[dict[str, Any]] = []
+            for key, definition in sel_defs.items():
+                d = dict(definition or {})
+                d.setdefault("key", key)
+                normalized.append(d)
+            sel_defs = normalized
+        elif isinstance(sel_defs, list):
+            # Make sure that 'key' is present
+            for d in sel_defs:
+                if "key" not in d:
+                    raise ValueError(f"Select definition ohne 'key': {d}")
+        else:
+            _LOGGER.error("SELECT_DEFINITIONS is empty or unknown Typ: %r", type(sel_defs))
+            sel_defs = []
+    except Exception as err:
+        _LOGGER.exception("Error normalising SELECT_DEFINITIONS: %s", err)
+        sel_defs = []
+
+    entities: list[MarstekSelect] = []
+    for definition in sel_defs:
+        try:
+            entities.append(MarstekSelect(coordinator, definition))
+        except Exception as err:
+            _LOGGER.exception("Error creating a select entity from %r: %s", definition, err)
+
+    _LOGGER.debug(
+        "Set up %d Select Entities: %s",
+        len(entities),
+        [getattr(e, "_key", "?") for e in entities],
+    )
+
+    if entities:
+        # Update_before_add: ensures faster first Status
+        async_add_entities(entities, update_before_add=True)
 
 
 class MarstekSelect(CoordinatorEntity, SelectEntity):
@@ -69,23 +96,28 @@ class MarstekSelect(CoordinatorEntity, SelectEntity):
         self._key = definition["key"]
         self.definition = definition
 
+        # Defensive: Make sure the map exists in the coordinator
+        if not hasattr(self.coordinator, "_entity_types") or self.coordinator._entity_types is None:
+            self.coordinator._entity_types = {}
         # Assign the entity type to the coordinator mapping
         self.coordinator._entity_types[self._key] = self.entity_type
 
         # Set entity attributes from definition
         self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{self._key}"
         self._attr_has_entity_name = True
+
+        # Use key as translation_key for automatic translations
         self._attr_translation_key = definition["key"]
 
         # Internal state variables
         self._state = None
         self._register = definition["register"]
 
-        # set category if defined in the definition
+        # Set category if defined in the definition
         if "category" in self.definition:
             self._attr_entity_category = EntityCategory(self.definition.get("category"))
 
-        # Set icon if defined in the button definition
+        # Set icon if defined in the definition
         if "icon" in self.definition:
             self._attr_icon = self.definition.get("icon")
 
@@ -93,15 +125,12 @@ class MarstekSelect(CoordinatorEntity, SelectEntity):
         if definition.get("enabled_by_default") is False:
             self._attr_entity_registry_enabled_default = False
 
-        # Use key as translation_key for automatic translations
-        self._attr_translation_key = definition["key"]
-        
         # Force entity_id to use key regardless of language setting
         # This ensures English entity_ids while friendly_name follows user language
         self._attr_suggested_object_id = definition["key"]
 
-        # Use option keys (lowercase, underscore) instead of display names
-        self._attr_options = list(definition["options"].keys())
+        # You can rely on the property below, but pre-fill for HA caching behavior
+        self._attr_options = list(self.definition.get("options", {}).keys())
 
     @property
     def entity_type(self) -> str:
@@ -123,9 +152,6 @@ class MarstekSelect(CoordinatorEntity, SelectEntity):
     def options(self) -> list[str]:
         """
         Return a list of available options for selection.
-
-        Returns:
-            List of option strings.
         """
         return list(self.definition.get("options", {}).keys())
 
@@ -147,16 +173,16 @@ class MarstekSelect(CoordinatorEntity, SelectEntity):
 
         options_map = self.definition.get("options", {})
         # Reverse the mapping: {int_value: option_name}
-        reversed_map = {int(v): k for k, v in options_map.items()}
-
-        return reversed_map.get(int(value))
+        try:
+            reversed_map = {int(v): k for k, v in options_map.items()}
+            return reversed_map.get(int(value))
+        except Exception:
+            _LOGGER.debug("current_option: value=%r passt nicht zu options_map=%r", value, options_map)
+            return None
 
     async def async_select_option(self, option: str) -> None:
         """
         Change the selected option by writing to the device register.
-
-        Args:
-            option: The option string to select.
         """
         options_map = self.definition.get("options", {})
         if option not in options_map:
@@ -190,5 +216,5 @@ class MarstekSelect(CoordinatorEntity, SelectEntity):
             "name": self.coordinator.config_entry.title,
             "manufacturer": MANUFACTURER,
             "model": MODEL,
-            "entry_type": "service",
+            "entry_type": DeviceEntryType.SERVICE,
         }

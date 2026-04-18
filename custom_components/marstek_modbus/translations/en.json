@@ -8,7 +8,7 @@
           "host": "IP Address",
           "port": "Port",
           "unit_id": "Unit ID",
-          "device_version": "Device version"
+          "device_version": "Device Version"
         }
       }
     },
@@ -17,7 +17,7 @@
       "connection_refused": "Connection refused",
       "timed_out": "Connection timed out",
       "invalid_host": "Invalid host or IP address",
-      "invalid_unit_id": "Invalid Modbus Unit ID (must be 1-255)",
+      "invalid_unit_id": "Invalid Modbus Unit ID (must be 1–255)",
       "unit_id_no_response": "No response from Unit ID. Check if the device uses this Unit ID",
       "cannot_connect": "Cannot connect to the device"
     },
@@ -54,7 +54,7 @@
       },
       "connection": {
         "title": "Edit connection details",
-        "description": "Change the Modbus TCP host, port and unit id",
+        "description": "Change the Modbus TCP host, port and unit ID",
         "data": {
           "host": "IP Address",
           "port": "Port",
@@ -69,7 +69,7 @@
         "name": "Device Name"
       },
       "sn_code": {
-        "name": "SN Code"
+        "name": "Serial Number"
       },
       "software_version": {
         "name": "Software Version"
@@ -90,7 +90,25 @@
         "name": "MAC Address"
       },
       "battery_soc": {
-        "name": "Battery SOC"
+        "name": "Battery SoC"
+      },
+      "battery_soc_1": {
+        "name": "Battery Pack 1 SoC"
+      },
+      "battery_soc_2": {
+        "name": "Battery Pack 2 SoC"
+      },
+      "battery_soc_3": {
+        "name": "Battery Pack 3 SoC"
+      },
+      "battery_soc_4": {
+        "name": "Battery Pack 4 SoC"
+      },
+      "battery_soc_5": {
+        "name": "Battery Pack 5 SoC"
+      },
+      "battery_soc_6": {
+        "name": "Battery Pack 6 SoC"
       },
       "battery_total_energy": {
         "name": "Battery Total Energy"
@@ -131,17 +149,23 @@
       "total_discharging_energy": {
         "name": "Total Discharging Energy"
       },
+      "battery_cycle_count": {
+        "name": "Cycle Count"
+      },
+      "battery_cycle_count_calc": {
+        "name": "Cycle Count (Calc)"
+      },
       "total_daily_charging_energy": {
-        "name": "Total Daily Charging Energy"
+        "name": "Daily Charging Energy"
       },
       "total_daily_discharging_energy": {
-        "name": "Total Daily Discharging Energy"
+        "name": "Daily Discharging Energy"
       },
       "total_monthly_charging_energy": {
-        "name": "Total Monthly Charging Energy"
+        "name": "Monthly Charging Energy"
       },
       "total_monthly_discharging_energy": {
-        "name": "Total Monthly Discharging Energy"
+        "name": "Monthly Discharging Energy"
       },
       "max_cell_temperature": {
         "name": "Max Cell Temperature"
@@ -154,6 +178,249 @@
       },
       "min_cell_voltage": {
         "name": "Min Cell Voltage"
+      },
+      "battery_1_cell_1_voltage": {
+        "name": "Battery Pack 1 Cell 1 Voltage"
+      },
+      "battery_1_cell_2_voltage": {
+        "name": "Battery Pack 1 Cell 2 Voltage"
+      },
+      "battery_1_cell_3_voltage": {
+        "name": "Battery Pack 1 Cell 3 Voltage"
+      },
+      "battery_1_cell_4_voltage": {
+        "name": "Battery Pack 1 Cell 4 Voltage"
+      },
+      "battery_1_cell_5_voltage": {
+        "name": "Battery Pack 1 Cell 5 Voltage"
+      },
+      "battery_1_cell_6_voltage": {
+        "name": "Battery Pack 1 Cell 6 Voltage"
+      },
+      "battery_1_cell_7_voltage": {
+        "name": "Battery Pack 1 Cell 7 Voltage"
+      },
+      "battery_1_cell_8_voltage": {
+        "name": "Battery Pack 1 Cell 8 Voltage"
+      },
+      "battery_1_cell_9_voltage": {
+        "name": "Battery Pack 1 Cell 9 Voltage"
+      },
+      "battery_1_cell_10_voltage": {
+        "name": "Battery Pack 1 Cell 10 Voltage"
+      },
+      "battery_1_cell_11_voltage": {
+        "name": "Battery Pack 1 Cell 11 Voltage"
+      },
+      "battery_1_cell_12_voltage": {
+        "name": "Battery Pack 1 Cell 12 Voltage"
+      },
+      "battery_1_cell_13_voltage": {
+        "name": "Battery Pack 1 Cell 13 Voltage"
+      },
+      "battery_1_cell_14_voltage": {
+        "name": "Battery Pack 1 Cell 14 Voltage"
+      },
+      "battery_1_cell_15_voltage": {
+        "name": "Battery Pack 1 Cell 15 Voltage"
+      },
+      "battery_1_cell_16_voltage": {
+        "name": "Battery Pack 1 Cell 16 Voltage"
+      },
+      "battery_2_cell_1_voltage": {
+        "name": "Battery Pack 2 Cell 1 Voltage"
+      },
+      "battery_2_cell_2_voltage": {
+        "name": "Battery Pack 2 Cell 2 Voltage"
+      },
+      "battery_2_cell_3_voltage": {
+        "name": "Battery Pack 2 Cell 3 Voltage"
+      },
+      "battery_2_cell_4_voltage": {
+        "name": "Battery Pack 2 Cell 4 Voltage"
+      },
+      "battery_2_cell_5_voltage": {
+        "name": "Battery Pack 2 Cell 5 Voltage"
+      },
+      "battery_2_cell_6_voltage": {
+        "name": "Battery Pack 2 Cell 6 Voltage"
+      },
+      "battery_2_cell_7_voltage": {
+        "name": "Battery Pack 2 Cell 7 Voltage"
+      },
+      "battery_2_cell_8_voltage": {
+        "name": "Battery Pack 2 Cell 8 Voltage"
+      },
+      "battery_2_cell_9_voltage": {
+        "name": "Battery Pack 2 Cell 9 Voltage"
+      },
+      "battery_2_cell_10_voltage": {
+        "name": "Battery Pack 2 Cell 10 Voltage"
+      },
+      "battery_2_cell_11_voltage": {
+        "name": "Battery Pack 2 Cell 11 Voltage"
+      },
+      "battery_2_cell_12_voltage": {
+        "name": "Battery Pack 2 Cell 12 Voltage"
+      },
+      "battery_2_cell_13_voltage": {
+        "name": "Battery Pack 2 Cell 13 Voltage"
+      },
+      "battery_3_cell_1_voltage": {
+        "name": "Battery Pack 3 Cell 1 Voltage"
+      },
+      "battery_3_cell_2_voltage": {
+        "name": "Battery Pack 3 Cell 2 Voltage"
+      },
+      "battery_3_cell_3_voltage": {
+        "name": "Battery Pack 3 Cell 3 Voltage"
+      },
+      "battery_3_cell_4_voltage": {
+        "name": "Battery Pack 3 Cell 4 Voltage"
+      },
+      "battery_3_cell_5_voltage": {
+        "name": "Battery Pack 3 Cell 5 Voltage"
+      },
+      "battery_3_cell_6_voltage": {
+        "name": "Battery Pack 3 Cell 6 Voltage"
+      },
+      "battery_3_cell_7_voltage": {
+        "name": "Battery Pack 3 Cell 7 Voltage"
+      },
+      "battery_3_cell_8_voltage": {
+        "name": "Battery Pack 3 Cell 8 Voltage"
+      },
+      "battery_3_cell_9_voltage": {
+        "name": "Battery Pack 3 Cell 9 Voltage"
+      },
+      "battery_3_cell_10_voltage": {
+        "name": "Battery Pack 3 Cell 10 Voltage"
+      },
+      "battery_3_cell_11_voltage": {
+        "name": "Battery Pack 3 Cell 11 Voltage"
+      },
+      "battery_3_cell_12_voltage": {
+        "name": "Battery Pack 3 Cell 12 Voltage"
+      },
+      "battery_3_cell_13_voltage": {
+        "name": "Battery Pack 3 Cell 13 Voltage"
+      },
+      "battery_4_cell_1_voltage": {
+        "name": "Battery Pack 4 Cell 1 Voltage"
+      },
+      "battery_4_cell_2_voltage": {
+        "name": "Battery Pack 4 Cell 2 Voltage"
+      },
+      "battery_4_cell_3_voltage": {
+        "name": "Battery Pack 4 Cell 3 Voltage"
+      },
+      "battery_4_cell_4_voltage": {
+        "name": "Battery Pack 4 Cell 4 Voltage"
+      },
+      "battery_4_cell_5_voltage": {
+        "name": "Battery Pack 4 Cell 5 Voltage"
+      },
+      "battery_4_cell_6_voltage": {
+        "name": "Battery Pack 4 Cell 6 Voltage"
+      },
+      "battery_4_cell_7_voltage": {
+        "name": "Battery Pack 4 Cell 7 Voltage"
+      },
+      "battery_4_cell_8_voltage": {
+        "name": "Battery Pack 4 Cell 8 Voltage"
+      },
+      "battery_4_cell_9_voltage": {
+        "name": "Battery Pack 4 Cell 9 Voltage"
+      },
+      "battery_4_cell_10_voltage": {
+        "name": "Battery Pack 4 Cell 10 Voltage"
+      },
+      "battery_4_cell_11_voltage": {
+        "name": "Battery Pack 4 Cell 11 Voltage"
+      },
+      "battery_4_cell_12_voltage": {
+        "name": "Battery Pack 4 Cell 12 Voltage"
+      },
+      "battery_4_cell_13_voltage": {
+        "name": "Battery Pack 4 Cell 13 Voltage"
+      },
+      "battery_5_cell_1_voltage": {
+        "name": "Battery Pack 5 Cell 1 Voltage"
+      },
+      "battery_5_cell_2_voltage": {
+        "name": "Battery Pack 5 Cell 2 Voltage"
+      },
+      "battery_5_cell_3_voltage": {
+        "name": "Battery Pack 5 Cell 3 Voltage"
+      },
+      "battery_5_cell_4_voltage": {
+        "name": "Battery Pack 5 Cell 4 Voltage"
+      },
+      "battery_5_cell_5_voltage": {
+        "name": "Battery Pack 5 Cell 5 Voltage"
+      },
+      "battery_5_cell_6_voltage": {
+        "name": "Battery Pack 5 Cell 6 Voltage"
+      },
+      "battery_5_cell_7_voltage": {
+        "name": "Battery Pack 5 Cell 7 Voltage"
+      },
+      "battery_5_cell_8_voltage": {
+        "name": "Battery Pack 5 Cell 8 Voltage"
+      },
+      "battery_5_cell_9_voltage": {
+        "name": "Battery Pack 5 Cell 9 Voltage"
+      },
+      "battery_5_cell_10_voltage": {
+        "name": "Battery Pack 5 Cell 10 Voltage"
+      },
+      "battery_5_cell_11_voltage": {
+        "name": "Battery Pack 5 Cell 11 Voltage"
+      },
+      "battery_5_cell_12_voltage": {
+        "name": "Battery Pack 5 Cell 12 Voltage"
+      },
+      "battery_5_cell_13_voltage": {
+        "name": "Battery Pack 5 Cell 13 Voltage"
+      },
+      "battery_6_cell_1_voltage": {
+        "name": "Battery Pack 6 Cell 1 Voltage"
+      },
+      "battery_6_cell_2_voltage": {
+        "name": "Battery Pack 6 Cell 2 Voltage"
+      },
+      "battery_6_cell_3_voltage": {
+        "name": "Battery Pack 6 Cell 3 Voltage"
+      },
+      "battery_6_cell_4_voltage": {
+        "name": "Battery Pack 6 Cell 4 Voltage"
+      },
+      "battery_6_cell_5_voltage": {
+        "name": "Battery Pack 6 Cell 5 Voltage"
+      },
+      "battery_6_cell_6_voltage": {
+        "name": "Battery Pack 6 Cell 6 Voltage"
+      },
+      "battery_6_cell_7_voltage": {
+        "name": "Battery Pack 6 Cell 7 Voltage"
+      },
+      "battery_6_cell_8_voltage": {
+        "name": "Battery Pack 6 Cell 8 Voltage"
+      },
+      "battery_6_cell_9_voltage": {
+        "name": "Battery Pack 6 Cell 9 Voltage"
+      },
+      "battery_6_cell_10_voltage": {
+        "name": "Battery Pack 6 Cell 10 Voltage"
+      },
+      "battery_6_cell_11_voltage": {
+        "name": "Battery Pack 6 Cell 11 Voltage"
+      },
+      "battery_6_cell_12_voltage": {
+        "name": "Battery Pack 6 Cell 12 Voltage"
+      },
+      "battery_6_cell_13_voltage": {
+        "name": "Battery Pack 6 Cell 13 Voltage"
       },
       "inverter_state": {
         "name": "Inverter State",
@@ -189,10 +456,10 @@
         "name": "WiFi Signal Strength"
       },
       "round_trip_efficiency_total": {
-        "name": "Round-Trip Efficiency Total"
+        "name": "Round Trip Efficiency Total"
       },
       "round_trip_efficiency_monthly": {
-        "name": "Round-Trip Efficiency Monthly"
+        "name": "Round Trip Efficiency Monthly"
       },
       "conversion_efficiency": {
         "name": "Conversion Efficiency"
@@ -236,6 +503,7 @@
       "mppt4_power": {
         "name": "MPPT4 Power"
       },
+
       "bluetooth_status": {
         "name": "Bluetooth Status",
         "state": {
@@ -248,16 +516,17 @@
       }
     },
     "binary_sensor": {
-      "wifi_status": {
-        "name": "WiFi Status"
+      "wifi_status": { 
+        "name": "WiFi Status" 
       },
-      "cloud_status": {
-        "name": "Cloud Status"
+      "cloud_status": { 
+        "name": "Cloud Status" 
       },
-      "discharge_limit_mode": {
-        "name": "Discharge Limit"
+      "discharge_limit_mode": { 
+        "name": "Discharge Limit" 
       }
     },
+
     "select": {
       "user_work_mode": {
         "name": "User Work Mode",
@@ -363,18 +632,17 @@
         }
       }
     },
+
     "switch": {
       "backup_function": {
         "name": "Backup Function"
       },
       "rs485_control_mode": {
         "name": "RS485 Control Mode"
-      }
-      ,
+      },
       "schedule_1_enabled": {
         "name": "Schedule 1 Enabled"
-      }
-      ,
+      },
       "schedule_2_enabled": {
         "name": "Schedule 2 Enabled"
       },
@@ -393,10 +661,10 @@
     },
     "number": {
       "set_charge_power": {
-        "name": "Set Forcible Charge Power"
+        "name": "Set Charge Power"
       },
       "set_discharge_power": {
-        "name": "Set Forcible Discharge Power"
+        "name": "Set Discharge Power"
       },
       "max_charge_power": {
         "name": "Max Charge Power"
@@ -411,9 +679,8 @@
         "name": "Discharging Cutoff Capacity"
       },
       "charge_to_soc": {
-        "name": "Charge to SOC"
-      }
-      ,
+        "name": "Charge to SoC"
+      },
       "schedule_1_start": {
         "name": "Schedule 1 Start"
       },
@@ -432,6 +699,7 @@
       "schedule_6_start": {
         "name": "Schedule 6 Start"
       },
+
       "schedule_1_end": {
         "name": "Schedule 1 End"
       },
@@ -452,8 +720,7 @@
       },
       "schedule_1_mode": {
         "name": "Schedule 1 Mode"
-      }
-      ,
+      },
       "schedule_2_mode": {
         "name": "Schedule 2 Mode"
       },
@@ -475,7 +742,7 @@
         "name": "Reset Device"
       },
       "factory_reset": {
-        "name": "Factory reset"
+        "name": "Factory Reset"
       }
     }
   }

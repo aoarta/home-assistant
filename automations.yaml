@@ -12,7 +12,6 @@
           - switch.marstek_venus1_modbus_rs485_steuermodus
           - switch.marstek_venus2_modbus_rs485_steuermodus
   mode: single
-
 - alias: setze cpu-schedutil
   description: Setze CPU auf schedutil
   triggers:
@@ -24,7 +23,7 @@
       metadata: {}
       data: {}
   mode: single
-
+  id: 2ec11fc5fd5147ca9a2ab304ef7b4b8c
 - alias: "Tasmota: Globales Setup an alle"
   id: tasmota_global_broadcast
   triggers:
@@ -41,40 +40,12 @@
           round(6) %} {% set lon = state_attr('zone.home', 'longitude') | float(0)
           | round(6) %} Latitude {{ lat }}; Longitude {{ lon }}; PowerDelta 105; WattRes
           1; TelePeriod 15; Sunrise 1"
-
-- alias: "SOC Override Wochensteuerung"
-  description: "Setzt den Override am Mittwoch auf AN und an anderen Tagen auf AUS"
-  id: soc_override_weekly_control
-  trigger:
-    # Trigger 1: Jeden Morgen um 00:01 Uhr prüfen
-    - platform: time
-      at: "00:01:00"
-    # Trigger 2: Beim Neustart von Home Assistant (Sicherheitsnetz)
-    - platform: homeassistant
-      event: start
-  action:
-    - choose:
-        # Erster Fall: Es ist Mittwoch
-        - conditions:
-            - condition: time
-              weekday:
-                - wed
-          sequence:
-            - service: input_boolean.turn_on
-              target:
-                entity_id: input_boolean.override_soc
-      # Der 'default' Block kommt NACH der Liste der Bedingungen
-      default:
-        - service: input_boolean.turn_off
-          target:
-            entity_id: input_boolean.override_soc
-
 - alias: "Batterie Wartung: Nachtladung erzwingen"
   id: batterie_wartung_nachtladung
   trigger:
     - platform: sun
       event: sunset
-      offset: "00:05:00"
+      offset: 00:05:00
     - platform: state
       entity_id: binary_sensor.batterie_wartung_erforderlich
       to: "on"
@@ -85,14 +56,11 @@
     - condition: sun
       after: sunset
   action:
-    # Wir nutzen deine vorhandene manuelle Ladeleistung als Override
     - action: input_number.set_value
       target:
         entity_id: input_number.manuelle_ladeleistung
       data:
-        value: 1000 # Mit 1000W pro Batterie laden (oder dein gewünschter Wert)
-
-
+        value: 1000
 - alias: "Batterie Wartung: Beenden wenn voll"
   id: batterie_wartung_beenden
   trigger:
@@ -104,10 +72,46 @@
   condition:
     - condition: state
       entity_id: input_number.manuelle_ladeleistung
-      state: "1000.0" # Nur wenn wir im Wartungsmodus sind
+      state: "1000.0"
   action:
     - action: input_number.set_value
       target:
         entity_id: input_number.manuelle_ladeleistung
       data:
         value: 0
+- alias: SOC Override bedarfsgesteuert (7 Tage)
+  description:
+    Setzt den Override auf AN, wenn eine der Batterien seit über 7 Tagen
+    nicht voll war, sonst auf AUS
+  id: soc_override_weekly_control
+  trigger:
+    - trigger: time
+      at: 00:03:00
+    - trigger: homeassistant
+      event: start
+  action:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template:
+                "{% set v1_last = states('sensor.venus_1_last_full') %}
+                {% set v2_last = states('sensor.venus_2_last_full') %} {% set ups_last
+                = states('sensor.ups_last_full') %} {% set threshold = 7 * 86400 %} {#
+                7 Tage in Sekunden #} {% set now_ts = as_timestamp(now()) %}
+
+                {% set v1_age = (now_ts - as_timestamp(v1_last)) if has_value('sensor.venus_1_last_full')
+                else 9999999 %} {% set v2_age = (now_ts - as_timestamp(v2_last)) if has_value('sensor.venus_2_last_full')
+                else 9999999 %} {% set ups_age = (now_ts - as_timestamp(ups_last)) if has_value('sensor.ups_last_full')
+                else 9999999 %}
+
+                {{ v1_age > threshold or v2_age > threshold or ups_age > threshold }}
+
+                "
+          sequence:
+            - action: input_boolean.turn_on
+              target:
+                entity_id: input_boolean.override_soc
+      default:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.override_soc

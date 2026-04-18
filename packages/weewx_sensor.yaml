@@ -1,0 +1,161 @@
+mqtt:
+  sensor:
+    - name: "Außentemperatur"
+      unique_id: ws_out_temp
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "°C"
+      value_template: "{{ value_json.outTemp_C | float(none) | round(1) }}"
+      device_class: temperature
+      state_class: measurement
+      device: &ws_device
+        identifiers: "wetterstation_mqtt_01"
+        name: "Wetterstation"
+        model: "WeeWX / MQTT Gateway"
+
+    - name: "Luftfeuchtigkeit"
+      unique_id: ws_out_hum
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "%"
+      value_template: "{{ value_json.outHumidity | float(none) | round(0) }}"
+      device_class: humidity
+      state_class: measurement
+      device: *ws_device
+
+    - name: "Luftdruck"
+      unique_id: ws_pressure
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "hPa"
+      value_template: "{{ value_json.barometer_mbar | float(none) | round(1) }}"
+      device_class: pressure
+      state_class: measurement
+      device: *ws_device
+
+    - name: "Windgeschwindigkeit"
+      unique_id: ws_wind_speed
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "km/h"
+      value_template: "{{ value_json.windSpeed_kph | float(none) | round(1) }}"
+      device_class: wind_speed
+      state_class: measurement
+      device: *ws_device
+
+    - name: "Windböen"
+      unique_id: ws_wind_gust
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "km/h"
+      value_template: "{{ value_json.windGust_kph | float(none) | round(1) }}"
+      device_class: wind_speed
+      state_class: measurement
+      device: *ws_device
+
+    - name: "Windrichtung"
+      unique_id: ws_wind_dir
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "°"
+      value_template: "{{ value_json.windDir | float(none) | round(0) }}"
+      icon: "mdi:compass"
+      device: *ws_device
+
+    - name: "Regenrate"
+      unique_id: ws_rain_rate
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "mm/h"
+      value_template: "{{ (value_json.rainRate_cm_per_hour | float(0) * 10) | round(1) }}"
+      device_class: precipitation_intensity
+      state_class: measurement
+      device: *ws_device
+
+    - name: "Regen heute"
+      unique_id: ws_rain_day
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "mm"
+      value_template: "{{ (value_json.dayRain_cm | float(0) * 10) | round(1) }}"
+      device_class: precipitation
+      state_class: total_increasing
+      device: *ws_device
+
+    - name: "Regen letzte 24 Stunden"
+      unique_id: ws_rain_24h
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "mm"
+      value_template: "{{ (value_json.rain24_cm | float(0) * 10) | round(1) }}"
+      device_class: precipitation
+      state_class: total_increasing
+      device: *ws_device
+
+    - name: "Solarstrahlung"
+      unique_id: ws_solar_rad
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "W/m²"
+      value_template: "{{ value_json.radiation_Wpm2 | float(none) | round(0) }}"
+      device_class: irradiance
+      state_class: measurement
+      device: *ws_device
+
+    - name: "UV Index"
+      unique_id: ws_uv_index
+      state_topic: "weather/loop"
+      expire_after: 600
+      value_template: "{{ value_json.UV | float(none) | round(1) }}"
+      icon: "mdi:weather-sunny-alert"
+      state_class: measurement
+      device: *ws_device
+
+    - name: "Taupunkt"
+      unique_id: ws_dewpoint
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "°C"
+      value_template: "{{ value_json.dewpoint_C | float(none) | round(1) }}"
+      device_class: temperature
+      state_class: measurement
+      device: *ws_device
+
+    - name: "Gefühlte Temperatur"
+      unique_id: ws_app_temp
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "°C"
+      value_template: "{{ value_json.appTemp_C | float(none) | round(1) }}"
+      device_class: temperature
+      state_class: measurement
+      device: *ws_device
+
+    - name: "Wolkenuntergrenze"
+      unique_id: ws_cloudbase
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "m"
+      value_template: "{{ value_json.cloudbase_meter | float(none) | round(0) }}"
+      icon: "mdi:weather-cloudy"
+      device: *ws_device
+
+    - name: "Verdunstung (ET)"
+      unique_id: ws_evapotranspiration
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "mm"
+      value_template: "{{ (value_json.ET_cm | float(0) * 10) | round(2) }}"
+      icon: "mdi:water-percent"
+      state_class: total_increasing
+      device: *ws_device
+
+    - name: "Innentemperatur"
+      unique_id: ws_in_temp
+      state_topic: "weather/loop"
+      expire_after: 600
+      unit_of_measurement: "°C"
+      value_template: "{{ value_json.inTemp_C | float(none) | round(1) }}"
+      device_class: temperature
+      state_class: measurement
+      device: *ws_device
