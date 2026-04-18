@@ -35,8 +35,8 @@ template:
         state_class: total_increasing
         availability: "{{ is_number(states('sensor.balkon_inverter_energy_total')) }}"
         state: >
-          {% set val = states('sensor.balkon_inverter_energy_total') | float(0) %}
-          {% set last = this.state | float(0) %}
+          {% set val = states('sensor.balkon_inverter_energy_total') | float(none) %}
+          {% set last = this.state | float(none) %}
           {% if val is not none %}
             {% if last is not none %}
               {# Verhindert das Sinken des Wertes, aber erlaubt Initialisierung #}
@@ -55,8 +55,8 @@ template:
         state_class: total_increasing
         availability: "{{ is_number(states('sensor.balkon_inverter2_energy_total')) }}"
         state: >
-          {% set val = states('sensor.balkon_inverter2_energy_total') | float(0) %}
-          {% set last = this.state | float(0) %}
+          {% set val = states('sensor.balkon_inverter2_energy_total') | float(none) %}
+          {% set last = this.state | float(none) %}
           {% if val is not none %}
             {% if last is not none %}
               {# Verhindert das Sinken des Wertes, aber erlaubt Initialisierung #}
@@ -75,8 +75,8 @@ template:
         state_class: total_increasing
         availability: "{{ is_number(states('sensor.garage_inverter_energy_total')) }}"
         state: >
-          {% set val = states('sensor.garage_inverter_energy_total') | float(0) %}
-          {% set last = this.state | float(0) %}
+          {% set val = states('sensor.garage_inverter_energy_total') | float(none) %}
+          {% set last = this.state | float(none) %}
           {% if val is not none %}
             {% if last is not none %}
               {# Verhindert das Sinken des Wertes, aber erlaubt Initialisierung #}
@@ -87,35 +87,6 @@ template:
           {% else %}
             {{ last }}
           {% endif %}
-
-      - name: "Dach Energie Clean"
-        unique_id: dach_energie_clean
-        unit_of_measurement: "kWh"
-        device_class: energy
-        state_class: total_increasing
-        availability: "{{ is_number(states('sensor.zwicknagl_martin_energie_gesamt')) }}"
-        state: >
-          {% set raw = states('sensor.zwicknagl_martin_energie_gesamt') | float(0) %}
-          {% set last = this.state | float(0) %}
-          {% set val = (raw / 1000) | round(2) %}
-          {{ [val, last] | max }}
-        # WICHTIG: Der Sensor ist nur verfügbar, wenn alle Unter-Sensoren Zahlen liefern
-        availability: >
-          {{ is_number(states('sensor.balkon_inverter_1_clean')) and 
-             is_number(states('sensor.balkon_inverter_2_clean')) and
-             is_number(states('sensor.garage_inverter_clean')) }}
-        state: >
-          {% set s2 = states('sensor.balkon_inverter_1_clean') | float(none) %}
-          {% set s3 = states('sensor.balkon_inverter_2_clean') | float(none) %}
-          {% set s4 = states('sensor.garage_inverter_clean') | float(none) %}
-          
-          {% if s2 is not none and s3 is not none and s4 is not none %}
-            {{ (s2 + s3 + s4) | round(2) }}
-          {% else %}
-            {# Falls Verfügbarkeit oben nicht greift, niemals 0 ausgeben! #}
-            {{ states('sensor.pv_energy_balkon_realtime') }}
-          {% endif %}
-
 
       - name: "PV Produktion Balkon Watt fast"
         unique_id: pv_produktion_balkon_watt_fast
@@ -132,6 +103,27 @@ template:
           {# Nur addieren, was wirklich als Zahl vorliegt #}
           {% set total = (s1|default(0) + s2|default(0) + s3|default(0)) %}
           {{ total | round(0) }}
+
+      - name: "Dach Energie Clean"
+        unique_id: dach_energie_clean
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        availability: "{{ is_number(states('sensor.zwicknagl_martin_energie_gesamt')) }}"
+        state: >
+          {% set raw = states('sensor.zwicknagl_martin_energie_gesamt') | float(none) %}
+          {% set last = this.state | float(none) %}
+          {% if raw is not none %}
+            {% set val = (raw / 1000) | round(2) %}
+            {% if last is not none %}
+              {# Verhindert das Sinken des Wertes, aber erlaubt Initialisierung #}
+              {{ [val, last] | max }}
+            {% else %}
+              {{ val }}
+            {% endif %}
+          {% else %}
+            {{ last }}
+          {% endif %}
 
       - name: "PV Produktion Watt fast"
         unique_id: pv_produktion_watt_fast
@@ -174,9 +166,17 @@ template:
         state_class: total_increasing
         #zeilen: Dach + Balkon Gesamt
         availability: >
-          {{ is_number(states('sensor.zwicknagl_martin_energie_tag')) and 
+          {{ is_number(states('sensor.dach_energie_clean')) and 
              is_number(states('sensor.pv_energy_balkon_realtime')) }}
         state: >
-          {% set dach = states('sensor.zwicknagl_martin_energie_tag') | float(0) %}
+          {% set dach = states('sensor.dach_energie_clean') | float(0) %}
           {% set balkon = states('sensor.pv_energy_balkon_realtime') | float(0) %}
           {{ (dach + balkon) | round(2) }}
+
+      - name: "PV Produktion Watt"
+        unique_id: pv_produktion_watt
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {{ states('sensor.pv_produktion_watt_fast') | float(0) | round(0) }}

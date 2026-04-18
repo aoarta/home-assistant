@@ -58,6 +58,7 @@ recorder:
       - sensor.*autarkiegrad*
       - sensor.*batterieleistung
       - sensor.*energy_current*
+      - sensor.*energy_voltage
 
 logger:
   default: warning
@@ -135,8 +136,8 @@ template:
             {% if is_state('input_boolean.override_soc', 'on') %}
               100.1
             {% else %}
-              {% set morgen = states('sensor.hp_forecast_weighted_morgen') | float(0) %}
-              {{ 85 if morgen > 30 else 100.1 }}
+              {% set morgen = states('sensor.pv_forecast_weighted_morgen') | float(0) %}
+              {{ 85 if morgen > 30 else 100.2 }}
             {% endif %}
 
   # 2. Trigger-basierte Sensoren
