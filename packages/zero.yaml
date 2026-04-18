@@ -1,0 +1,122 @@
+input_number:
+  zero_ladung_start_soc:
+    name: "Zero Start SoC"
+    initial: 65 # Dein gewünschter Standardwert für den Start
+    min: 50
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:battery-arrow-up
+  zero_ladung_stop_soc:
+    name: "Zero Stop SoC"
+    initial: 90 # Dein gewünschter Standardwert für den Stopp
+    min: 50
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:battery-check
+
+template:
+  - sensor:
+      - name: "Warp3 Berechnete Leistung"
+        unique_id: "warp3_calculated_power"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {% if is_state('binary_sensor.zero_motorcycles_1037976_charging', 'on') %}
+            {% set current = states('sensor.warp3_2ita_allowedcurrent') | float(0) %}
+            {{ (current * 235) | round(0) }}
+          {% else %}
+            0
+          {% endif %}
+
+  - trigger:
+      - platform: time_pattern
+        seconds: "/20"
+      - platform: homeassistant
+        event: start
+    sensor:
+      - name: "Zero Dynamischer Ladestrom"
+        unique_id: zero_dynamischer_ladestrom
+        unit_of_measurement: "A"
+        state: >
+          {% set pv = states('sensor.solarnet_pv_leistung') | float(0) %}
+          {% set haus = states('sensor.hausverbrauch_netto_watt') | float(0) %}
+          {% set diff = pv - haus %}
+
+          {% if diff > 0 %}
+            {% set amps = (diff / 235) | round(1) %}
+            {% if amps < 5 %}
+              0
+            {% elif amps > 16 %}
+              16
+            {% else %}
+              {{ amps }}
+            {% endif %}
+          {% else %}
+            0
+          {% endif %}
+
+automation:
+  - alias: "Zero: PV-Überschuss Laden Dynamisch"
+    id: zero_pv_dynamic_charging
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: sensor.zero_dynamischer_ladestrom
+    condition:
+      - condition: state
+        entity_id: binary_sensor.zero_motorcycles_1037976_pluggedin
+        state: "on"
+    action:
+      - variables:
+          soc: "{{ states('sensor.zero_motorcycles_1037976_soc') | float(0) }}"
+          target_amps: "{{ states('sensor.zero_dynamischer_ladestrom') | float(0) }}"
+          is_charging: "{{ is_state('binary_sensor.zero_motorcycles_1037976_charging', 'on') }}"
+
+          start_limit: "{{ states('input_number.zero_ladung_start_soc') | float(85) }}"
+          stop_limit: "{{ states('input_number.zero_ladung_stop_soc') | float(90) }}"
+
+      - choose:
+          - conditions:
+              - "{{ soc < start_limit }}"
+              - "{{ not is_charging }}"
+              - "{{ target_amps >= 5 }}"
+            sequence:
+              - action: number.set_value
+                target:
+                  entity_id: number.warp3_2ita_globalcurrent
+                data:
+                  value: "{{ target_amps }}"
+              - action: button.press
+                target:
+                  entity_id: button.warp3_2ita_startcharge
+
+          # ANPASSEN: Während des Ladens bis 90%
+          - conditions:
+              - "{{ is_charging }}"
+              - "{{ soc < stop_limit }}"
+              - "{{ target_amps >= 5 }}"
+            sequence:
+              - action: number.set_value
+                target:
+                  entity_id: number.warp3_2ita_globalcurrent
+                data:
+                  value: "{{ target_amps }}"
+
+          # STOPP: SoC erreicht oder zu wenig Sonne
+          - conditions:
+              - condition: or
+                conditions:
+                  - "{{ soc >= stop_limit }}"
+                  - "{{ target_amps < 5 }}"
+            sequence:
+              - action: button.press
+                target:
+                  entity_id: button.warp3_2ita_stopcharge
+              - action: number.set_value
+                target:
+                  entity_id: number.warp3_2ita_globalcurrent
+                data:
+                  value: "{{ 0 }}"

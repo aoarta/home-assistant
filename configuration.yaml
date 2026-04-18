@@ -14,6 +14,11 @@ scene: !include scenes.yaml
 shell_command:
   optimize_cpu: 'bash -c "echo schedutil > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor && echo 10000 > /sys/devices/system/cpu/cpufreq/schedutil/rate_limit_us"'
 
+rest_command:
+  awekas_upload:
+    url: "https://ws.awekas.at/weatherstation/updateweatherstation.php?ID=zwim&PASSWORD=Exodus666waa&tempf={{ (states('sensor.wetterstation_aussentemperatur') | float ) | round(1) }}&humidity={{ states('sensor.wetterstation_luftfeuchtigkeit') }}&softwaretype=HomeAssistant"
+    method: GET
+
 recorder:
   purge_keep_days: 8
   commit_interval: 60
@@ -98,7 +103,6 @@ command_line:
       scan_interval: 86400 # Reicht einmal am Tag
 
 template:
-  # 1. Normale Sensoren (Zustandsbasiert)
   - sensor:
       - name: "Solar Zeit-Logik"
         unique_id: solar_zeit_logik
@@ -116,7 +120,7 @@ template:
           t1130: "{{ as_timestamp(now().replace(hour=11, minute=30, second=0, microsecond=0)) }}"
           b_set: >
             {% set ss = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
-            {{ (ss - 86400 if ss > as_timestamp(now().replace(hour=23, minute=59)) else ss) - 12600 }}
+            {{ (ss - 86400 if ss > as_timestamp(now().replace(hour=23, minute=59)) else ss) - 4*3600 }}
 
       - name: "Dynamic SOC Grenzen"
         unique_id: dynamic_soc_grenzen

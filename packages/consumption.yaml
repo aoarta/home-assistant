@@ -1,12 +1,11 @@
-utility_meter:
-  pv_ertrag_heute:
-    unique_id: pv_ertrag_heute
-    source: sensor.pv_energy_total_realtime
-    name: "PV Ertrag Heute"
-    cycle: daily
-
 sensor:
-  # für die datenbank
+  - platform: integration
+    source: sensor.hausverbrauch_netto_watt
+    name: hausverbrauch_energy
+    unit_prefix: k
+    round: 2
+    method: left
+
   - platform: filter
     name: "Hausverbrauch 5 Min Durchschnitt"
     unique_id: hausverbrauch_5min_avg
@@ -85,54 +84,6 @@ sensor:
 
 template:
   - sensor:
-      - name: "PV Energy Total Realtime"
-        unique_id: pv_energy_total_realtime
-        unit_of_measurement: "kWh"
-        device_class: energy
-        state_class: total_increasing
-        state: >
-          {# 1. Rohwerte holen - S1 direkt umrechnen #}
-          {% set s1 = states('sensor.zwicknagl_martin_energie_gesamt') | float(0) / 1000 %}
-          {% set s2 = states('sensor.balkon_inverter_energy_total') | float(0) %}
-          {% set s3 = states('sensor.balkon_inverter2_energy_total') | float(0) %}
-          {% set s4 = states('sensor.garage_inverter_energy_total') | float(0) %}
-
-          {# 2. Aktuelle Summe bilden #}
-          {% set current_total = (s1 + s2 + s3 + s4) | round(2) %}
-
-          {# 3. Vorherigen Wert des Sensors holen #}
-          {% set last_total = states('sensor.pv_energy_total_realtime') | float(0) %}
-
-          {# 4. Logik: Nur ausgeben, wenn S1 gültig ist UND der neue Wert nicht kleiner als der alte ist #}
-          {% if s1 > 0 %}
-            {{ [current_total, last_total] | max }}
-          {% else %}
-            {{ last_total }}
-          {% endif %}
-
-        # PRÜFUNG DER EINGANGSSENSOREN STATT SELBSTREFERENZ
-        availability: >
-          {{ is_number(states('sensor.zwicknagl_martin_energie_gesamt')) or 
-             is_number(states('sensor.balkon_inverter_energy_total')) or 
-             is_number(states('sensor.balkon_inverter2_energy_total')) or 
-             is_number(states('sensor.garage_inverter_energy_total')) }}
-
-      - name: "PV Produktion Watt fast"
-        unique_id: pv_produktion_watt_fast
-        unit_of_measurement: "kW"
-        device_class: power
-        state: >
-          {# 1. Rohwerte holen - S1 direkt umrechnen #}
-          {% set s1 = states('sensor.zwicknagl_martin_leistung_ac') | float(0) %}
-          {% set s2 = states('sensor.balkon_inverter_energy_power') | float(0) %}
-          {% set s3 = states('sensor.balkon_inverter2_energy_power') | float(0) %}
-          {% set s4 = states('sensor.garage_inverter_energy_power') | float(0) %}
-
-          {# 2. Aktuelle Summe bilden #}
-          {% set current_total = (s1 + s2 + s3 + s4) | round(2) %}
-
-          {{ (current_total / 1000) | round(3) }}
-
       - name: "Batterieleistung Gesamt"
         unique_id: batterieleistung_gesamt
         unit_of_measurement: "W"
@@ -180,6 +131,7 @@ template:
       - name: "Estimated remaining consumption"
         unique_id: estimated_remaining_consumption
         unit_of_measurement: "kWh"
+        availability: "{{ is_number(states('sensor.average_consumption_last_1h')) }}"
         state: >
           {% set sun_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
           {% set now_ts = as_timestamp(now()) %}
@@ -197,17 +149,3 @@ template:
           verbleibende_zeit_h: >
             {% set sun_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
             {{ ((sun_set - as_timestamp(now())) / 3600) | round(2) if sun_set > as_timestamp(now()) else 0 }}
-
-  - trigger:
-      - platform: time_pattern
-        seconds: "/30"
-    sensor:
-      - name: "PV Produktion Watt"
-        unique_id: pv_produktion_watt
-        unit_of_measurement: "kW"
-        device_class: power
-        state_class: measurement
-        state: >
-          {# Wir holen den aktuellen Wert des schnellen Sensors #}
-          {% set val = states('sensor.pv_produktion_watt_fast') | float(0)  %}
-          {{ val | round(3) }}
