@@ -84,28 +84,14 @@ sensor:
 
 template:
   - sensor:
-      - name: "Batterieleistung Gesamt"
-        unique_id: batterieleistung_gesamt
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        state: >
-          {# Rohwerte einlesen und sicherheitshalber auf 0 setzen, falls ein Sensor offline ist #}
-          {% set ups = states('sensor.ups_ac_leistung') | float(0) %}
-          {% set venus1 = states('sensor.marstek_venus_1_ac_leistung') | float(0) %}
-          {% set venus2 = states('sensor.marstek_venus_2_ac_leistung') | float(0) %}
-
-          {{ (ups + venus1 + venus2) | round(0) }}
-        availability: >
-          {# Der Sensor ist nur verfügbar, wenn mindestens einer der Quellsensoren einen gültigen Wert liefert #}
-          {{ is_number(states('sensor.ups_ac_leistung')) or 
-             is_number(states('sensor.marstek_venus_1_ac_leistung')) or 
-             is_number(states('sensor.marstek_venus_2_ac_leistung')) }}
-
       - name: "Hausverbrauch Netto Watt"
         unique_id: hausverbrauch_netto_watt
         unit_of_measurement: "W"
         device_class: power
+        state_class: measurement
+        availability: >
+          {{ has_value('sensor.solarnet_leistung_vom_netz') and 
+             has_value('sensor.marstek_batterieleistung_gesamt') }}
         state: >
           {% set netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
           {% set batterie_gesamt = states('sensor.marstek_batterieleistung_gesamt') | float(0) %}
@@ -114,34 +100,57 @@ template:
   - trigger:
       - platform: time_pattern
         minutes: "/5"
+      - platform: homeassistant
+        event: start
     sensor:
       - name: "Average consumption last 1h"
         unique_id: average_consumption_last_1h
-        state: "{{ states('sensor.average_consumption_last_fast') }}"
         unit_of_measurement: W
         device_class: power
         state_class: measurement
+        ###-zeile: availability entfernt, da 'unavailable' den this.state überschreiben würde. Logik ist nun im state.
+        ###-zeile: state umgebaut, damit der letzte Wert bei einem Neustart erhalten bleibt.
+        state: >
+          {% set fast = states('sensor.average_consumption_last_1h_fast') %}
+          {% if is_number(fast) %}
+            {{ fast | float(0) }}
+          {% elif this.state is defined and is_number(this.state) %}
+            {{ this.state }}
+          {% else %}
+            0
+          {% endif %}
 
   - trigger:
       - platform: state
         entity_id: sensor.average_consumption_last_1h
       - platform: time_pattern
         minutes: "/1" # Nur alle 1 min. neu berechnen, statt bei jedem Watt
+      - platform: homeassistant
+        event: start
     sensor:
       - name: "Estimated remaining consumption"
         unique_id: estimated_remaining_consumption
         unit_of_measurement: "kWh"
-        availability: "{{ is_number(states('sensor.average_consumption_last_1h')) }}"
+        state_class: measurement
+        ###-zeile: availability entfernt, Fehlerabfang läuft jetzt robuster über das state-Template.
+        ###-zeile: state Logik komplett überarbeitet für this.state Fallback bei fehlenden Attributen/Zahlen.
         state: >
-          {% set sun_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
-          {% set now_ts = as_timestamp(now()) %}
-          {% set hausverbrauch_watt = states('sensor.average_consumption_last_1h') | float(0) %}
+          {% set hausverbrauch_watt = states('sensor.average_consumption_last_1h') %}
+          {% set sun_set_attr = state_attr('sensor.solar_zeit_logik', 'sun_set') %}
 
-          {# Nur berechnen, wenn die Sonne noch nicht untergegangen ist #}
-          {% if sun_set > now_ts %}
-            {% set verbleibende_stunden = (sun_set - now_ts) / 3600 %}
-            {# Formel: (Watt * Stunden) / 1000 = kWh #}
-            {{ (hausverbrauch_watt * verbleibende_stunden / 1000) | round(2) }}
+          {% if is_number(hausverbrauch_watt) and sun_set_attr is not none %}
+            {% set sun_set = sun_set_attr | float(0) %}
+            {% set now_ts = as_timestamp(now()) %}
+            {% set watt = hausverbrauch_watt | float(0) %}
+
+            {% if sun_set > now_ts %}
+              {% set verbleibende_stunden = (sun_set - now_ts) / 3600 %}
+              {{ (watt * verbleibende_stunden / 1000) | round(2) }}
+            {% else %}
+              0.0
+            {% endif %}
+          {% elif this.state is defined and is_number(this.state) %}
+            {{ this.state }}
           {% else %}
             0.0
           {% endif %}

@@ -107,6 +107,7 @@ template:
   - sensor:
       - name: "Solar Zeit-Logik"
         unique_id: solar_zeit_logik
+        availability: "{{ state_attr('sun.sun', 'next_setting') is not none }}"
         state: >
           {% set ts = as_timestamp(now()) %}
           {% set ss = as_timestamp(state_attr('sun.sun', 'next_setting')) | default(0) %}
@@ -126,7 +127,9 @@ template:
       - name: "Dynamic SOC Grenzen"
         unique_id: dynamic_soc_grenzen
         unit_of_measurement: "%"
-        state: "{{ states('sensor.battery_soc_total') | float(0) }}"
+        state: >
+          {% set soc = states('sensor.battery_soc_total') %}
+          {{ soc if is_number(soc) else this.state | default(0) }}
         attributes:
           min: "5"
           low: "{{ 100.1 if is_state('input_boolean.override_soc', 'on') else 60 }}"
@@ -154,6 +157,20 @@ template:
           - sensor.ups_free_capacity_kwh
 
     sensor:
+      - name: "PV Speicher Bilanz Heute"
+        unique_id: voraussichtlicher_bedarf_heute
+        unit_of_measurement: "kWh"
+        state: >
+          {% set free_m = states('sensor.marstek_free_capacity_kwh') %}
+          {% set free_u = states('sensor.ups_free_capacity_kwh') %}
+          {% set load = states('sensor.estimated_remaining_consumption') %}
+
+          {% if is_number(free_m) and is_number(free_u) and is_number(load) %}
+            {{ (free_m|float + free_u|float - load|float) | round(1) }}
+          {% else %}
+            {{ this.state | default(0) }}
+          {% endif %}
+
       - name: "Dynamic SOC"
         unique_id: dynamic_soc
         unit_of_measurement: "%"
@@ -166,9 +183,9 @@ template:
             {% set solar_today = states('sensor.pv_forecast_weighted') | float(-1) %}
             {% set free_marstek = states('sensor.marstek_free_capacity_kwh') | float(0) %}
             {% set free_ups = states('sensor.ups_free_capacity_kwh') | float(0) %}
-            {% set load_today = max(0, states('sensor.estimated_remaining_consumption') | float(0)) %}
+            {% set load_today = states('sensor.estimated_remaining_consumption') | float(0) %}
 
-            {% if (0.9 * solar_today) > (load_today + free_marstek + free_ups) or solar_today == -1 %}
+            {% if (0.9 * solar_today) > (free_marstek + free_ups - load_today) or solar_today == -1 %}
               {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
               {% set s_rise = state_attr('sensor.solar_zeit_logik', 'sun_rise') | float(0) %}
               {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}

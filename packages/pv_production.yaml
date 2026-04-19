@@ -1,28 +1,54 @@
 # --- UTILITY METER (Verbrauchsstatistiken) ---
 utility_meter:
-  pv_ertrag_heute:
-    unique_id: pv_ertrag_heute
+  pv_ertrag_heute_um:
+    unique_id: pv_ertrag_heute_um
     source: sensor.pv_energy_total_realtime
     name: "PV Ertrag Heute"
     cycle: daily
 
-  pv_ertrag_balkon_heute:
-    unique_id: pv_ertrag_balkon_heute
+  pv_ertrag_balkon_heute_um:
+    unique_id: pv_ertrag_balkon_heute_um
     source: sensor.pv_energy_balkon_realtime
     name: "PV Ertrag Balkon Heute"
     cycle: daily
 
-  pv_ertrag_dach_heute:
-    unique_id: pv_ertrag_dach_heute
+  pv_ertrag_dach_heute_um:
+    unique_id: pv_ertrag_dach_heute_um
     source: sensor.dach_energie_clean
     name: "PV Ertrag Dach Heute"
     cycle: daily
 
-  hausverbrauch_heute:
-    unique_id: hausverbrauch_heute
+  hausverbrauch_heute_um:
+    unique_id: hausverbrauch_heute_um
     source: sensor.hausverbrauch_energy
     name: "Hausverbrauch Heute"
     cycle: daily
+
+sensor:
+  - platform: filter
+    name: "PV Energy Ertrag heute"
+    entity_id: sensor.pv_ertrag_heute_um
+    filters:
+      - filter: range
+        upper_bound: 100 # Alles über 100 kWh pro Tag wird ignoriert
+  - platform: filter
+    name: "PV Energy Ertrag Balkon heute"
+    entity_id: sensor.pv_ertrag_balkon_heute_um
+    filters:
+      - filter: range
+        upper_bound: 15 # Alles über 15 kWh pro Tag wird ignoriert
+  - platform: filter
+    name: "PV Energy Ertrag Dach heute"
+    entity_id: sensor.pv_ertrag_dach_heute_um
+    filters:
+      - filter: range
+        upper_bound: 60 # Alles über 60 kWh pro Tag wird ignoriert
+  - platform: filter
+    name: "Hausverbrauch heute"
+    entity_id: sensor.hausverbrauch_heute_um
+    filters:
+      - filter: range
+        upper_bound: 60 # Alles über 60 kWh pro Tag wird ignoriert
 
 template:
   - sensor:
