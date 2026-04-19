@@ -1,7 +1,7 @@
 # packages/pv_batteries.yaml
 
 sensor:
-  # 666
+  # DB
   - platform: filter
     name: "Marstek Venus 1 AC Leistung glatt"
     unique_id: marstek_venus_1_ac_leistung_glatt
@@ -13,7 +13,7 @@ sensor:
       - filter: time_throttle
         window_size: "00:00:30" # Schreibt nur alle 30 Sekunden einen Wert in die DB
 
-  #666
+  # DB
   - platform: filter
     name: "Marstek Venus 2 AC Leistung glatt"
     unique_id: marstek_venus_2_ac_leistung_glatt

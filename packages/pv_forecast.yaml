@@ -87,7 +87,7 @@ sensor:
 
   - platform: rest
     name: "Forecastsolar API Source Fassade"
-    resource_template: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/90/85/0.8"
+    resource_template: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/85/90/2.4"
     scan_interval: 86400
     json_attributes: [result]
     value_template: "{{ value_json.message.info.place if value_json is defined else 'OK' }}"
@@ -108,14 +108,20 @@ template:
       - name: "Solarprognose Api Raw Dach Stable"
         unique_id: solarprognose_api_raw_dach_stable
         state: "OK"
+        availability: "{{ state_attr('sensor.solarprognose_api_source_dach', 'data') is mapping }}"
         attributes:
-          data: "{{ state_attr('sensor.solarprognose_api_source_dach', 'data') }}"
+          data: >
+            {% set val = state_attr('sensor.solarprognose_api_source_dach', 'data') %}
+            {{ val if val is mapping else state_attr('this', 'data') }}
 
       - name: "Solarprognose Api Raw Fassade Stable"
         unique_id: solarprognose_api_raw_fassade_stable
         state: "OK"
+        availability: "{{ state_attr('sensor.solarprognose_api_source_fassade', 'data') is mapping }}"
         attributes:
-          data: "{{ state_attr('sensor.solarprognose_api_source_fassade', 'data') }}"
+          data: >
+            {% set val = state_attr('sensor.solarprognose_api_source_fassade', 'data') %}
+            {{ val if val is mapping else state_attr('this', 'data') }}
 
   - trigger:
       - platform: time_pattern
@@ -131,6 +137,7 @@ template:
       - name: "Forecastsolar API Raw Dach Stable"
         unique_id: forecastsolar_api_raw_dach_stable
         state: "OK"
+        availability: "{{ state_attr('sensor.forecastsolar_api_source_dach', 'data') is mapping }}"
         attributes:
           result: >
             {% set val = state_attr('sensor.forecastsolar_api_source_dach', 'result') %}
@@ -139,6 +146,7 @@ template:
       - name: "Forecastsolar API Raw Fassade Stable"
         unique_id: forecastsolar_api_raw_fassade_stable
         state: "OK"
+        availability: "{{ state_attr('sensor.forecastsolar_api_source_fassade', 'data') is mapping }}"
         attributes:
           result: >
             {% set val = state_attr('sensor.forecastsolar_api_source_fassade', 'result') %}
@@ -149,75 +157,148 @@ template:
       - name: "PV Forecast Solcast alles"
         unique_id: pv_forecast_solcast_alles
         unit_of_measurement: "kWh"
-        state: "{{ states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute') | float(0) }}"
+        availability: "{{ state_attr('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute', 'data') is mapping }}"
+        state: "{{ states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute') | float(0) | round(1)}}"
 
       - name: "PV Forecast Solarprognose alles"
         unique_id: pv_forecast_solarprognose_alles
         unit_of_measurement: "kWh"
+        availability: >
+          {{ state_attr('sensor.solarprognose_api_raw_dach_stable', 'result') is mapping and 
+             state_attr('sensor.solarprognose_api_raw_fassade_stable', 'result') is mapping }}
         state: >
           {% set dach = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
           {% set fassade = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
+
           {% if dach is mapping %}
             {% set ns = namespace(total=0) %}
-            {% set start_ts = now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp() | int %}
-            {% for i in range(now().hour, 24) %}
-              {% set ts = (start_ts + (i * 3600)) | string %}
-              {% set d = dach[ts][1] | float(0) if ts in dach else 0 %}
-              {% set f = fassade[ts][1] | float(0) if fassade is mapping and ts in fassade else 0 %}
-              {% set ns.total = ns.total + (d + f) %}
-            {% endfor %}
-            {{ ns.total | round(2) }}
-          {% else %} {{ this.state | float(0) }} {% endif %}
+            {% set now_dt = now() %}
+            {% set start_ts = now_dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() | int %}
+            
+            {# 1. Die aktuelle Stunde anteilig berechnen (Interpolation) #}
+            {% set current_hour = now_dt.hour %}
+            {% set ts_now = (start_ts + (current_hour * 3600)) | string %}
+            
+            {# Wie viel Prozent der aktuellen Stunde liegen noch vor uns? #}
+            {% set seconds_passed = (now_dt.minute * 60) + now_dt.second %}
+            {% set fraction_left = (3600 - seconds_passed) / 3600 %}
+            
+            {% set d_now = dach[ts_now][1] | float(0) if ts_now in dach else 0 %}
+            {% set f_now = fassade[ts_now][1] | float(0) if (fassade is mapping and ts_now in fassade) else 0 %}
+            
+            {% set ns.total = (d_now + f_now) * fraction_left %}
+            
+            {# 2. Alle zukünftigen vollen Stunden addieren #}
+            {% if current_hour < 23 %}
+              {% for i in range(current_hour + 1, 24) %}
+                {% set ts = (start_ts + (i * 3600)) | string %}
+                {% set d = dach[ts][1] | float(0) if ts in dach else 0 %}
+                {% set f = fassade[ts][1] | float(0) if (fassade is mapping and ts in fassade) else 0 %}
+                {% set ns.total = ns.total + (d + f) %}
+              {% endfor %}
+            {% endif %}
+            
+            {{ ns.total | round(1) }}
+          {% else %}
+            {{ this.state | float(0) }}
+          {% endif %}
 
       - name: "PV Forecast Forecastsolar alles"
         unique_id: pv_forecast_forecastsolar_alles
         unit_of_measurement: "kWh"
+        availability: >
+          {{ state_attr('sensor.forecastsolar_api_raw_dach_stable', 'result') is mapping and 
+             state_attr('sensor.forecastsolar_api_raw_fassade_stable', 'result') is mapping }}
         state: >
           {% set today = now().strftime('%Y-%m-%d') %}
           {% set dach = state_attr('sensor.forecastsolar_api_raw_dach_stable', 'result') %}
           {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade_stable', 'result') %}
+
           {% if dach is mapping and fassade is mapping %}
-            {% set ns = namespace(d_max=0, f_max=0, d_now=0, f_now=0) %}
+            {% set ns = namespace(d_max=0, f_max=0, d_now=0, f_now=0, prev_t=0, prev_v=0) %}
             {% set now_ts = now().timestamp() %}
+            {% set tz = now().strftime('%z') %}
             
+            {# Berechnung für Dach #}
             {% for ts, val in dach.items() if ts.startswith(today) %}
-              {# Wir hängen die lokale Zeitzone an den String an, falls sie fehlt #}
-              {% set ts_local = as_timestamp(ts ~ now().strftime('%z')) %}
-              {% set val_num = val | float(0) %}
+              {% set t = as_timestamp(ts ~ tz) %}
+              {% set v = val | float(0) %}
+              {% if v > ns.d_max %}{% set ns.d_max = v %}{% endif %}
               
-              {% if val_num > ns.d_max %}{% set ns.d_max = val_num %}{% endif %}
-              {# Vergleich mit dem korrigierten Zeitstempel #}
-              {% if ts_local <= now_ts %}{% set ns.d_now = val_num %}{% endif %}
+              {# Interpolation zwischen dem letzten (prev) und aktuellen (t) Datenpunkt #}
+              {% if ns.prev_t <= now_ts <= t and ns.prev_t != 0 %}
+                {% set fraction = (now_ts - ns.prev_t) / (t - ns.prev_t) %}
+                {% set ns.d_now = ns.prev_v + (v - ns.prev_v) * fraction %}
+              {% elif now_ts > t %}
+                {% set ns.d_now = v %}
+              {% endif %}
+              {% set ns.prev_t, ns.prev_v = t, v %}
             {% endfor %}
+
+            {# Reset für Fassade #}
+            {% set ns.prev_t, ns.prev_v = 0, 0 %}
+            
+            {# Berechnung für Fassade #}
             {% for ts, val in fassade.items() if ts.startswith(today) %}
-              {% set val_num = val | float(0) %}
-              {% if val_num > ns.f_max %}{% set ns.f_max = val_num %}{% endif %}
-              {% if as_timestamp(ts) <= now_ts %}{% set ns.f_now = val_num %}{% endif %}
+              {% set t = as_timestamp(ts ~ tz) %}
+              {% set v = val | float(0) %}
+              {% if v > ns.f_max %}{% set ns.f_max = v %}{% endif %}
+              
+              {% if ns.prev_t <= now_ts <= t and ns.prev_t != 0 %}
+                {% set fraction = (now_ts - ns.prev_t) / (t - ns.prev_t) %}
+                {% set ns.f_now = ns.prev_v + (v - ns.prev_v) * fraction %}
+              {% elif now_ts > t %}
+                {% set ns.f_now = v %}
+              {% endif %}
+              {% set ns.prev_t, ns.prev_v = t, v %}
             {% endfor %}
-            {{ ([0, ( (ns.d_max - ns.d_now) + 3 * (ns.f_max - ns.f_now) ) / 1000] | max) | round(2) }}
-          {% else %} {{ this.state | float(0) }} {% endif %}
+
+            {# Endergebnis: Verbleibende kWh für heute #}
+            {{ ([0, ( (ns.d_max - ns.d_now) + (ns.f_max - ns.f_now) ) / 1000] | max) | round(1) }}
+          {% else %}
+            {{ this.state | float(0) }}
+          {% endif %}
 
       - name: "PV Forecast openmeteo alles"
         unique_id: pv_forecast_openmeteo_alles
         unit_of_measurement: "kWh"
+        availability: >
+          {{ state_attr('sensor.home_energy_pv_dach_production_today', 'wh_period') is mapping and
+             state_attr('sensor.home_energy_pv_fassade_production_today', 'wh_period') is mapping }}
+
         state: >
           {% set dach = state_attr('sensor.home_energy_pv_dach_production_today', 'wh_period') %}
           {% set fassade = state_attr('sensor.home_energy_pv_fassade_production_today', 'wh_period') %}
+
           {% if dach is mapping and fassade is mapping %}
             {% set ns = namespace(total=0) %}
-            {% set today = now().strftime('%Y-%m-%d') %}
-            {# Zeitstempel der aktuellen vollen Stunde (z.B. heute 10:00:00 Uhr) #}
-            {% set current_hour_ts = now().replace(minute=0, second=0, microsecond=0).timestamp() %}
+            {% set now_dt = now() %}
+            {% set today = now_dt.strftime('%Y-%m-%d') %}
+            
+            {# Start der aktuellen Stunde als Timestamp #}
+            {% set current_hour_ts = now_dt.replace(minute=0, second=0, microsecond=0).timestamp() %}
+            
+            {# Wie viel Prozent der aktuellen Stunde sind noch übrig? #}
+            {% set seconds_passed = (now_dt.minute * 60) + now_dt.second %}
+            {% set fraction_left = (3600 - seconds_passed) / 3600 %}
             
             {% for ts, d_val in dach.items() %}
-              {# Nur Werte von heute nehmen, die in der aktuellen oder einer zukünftigen Stunde liegen #}
-              {% if ts.startswith(today) and as_timestamp(ts) >= current_hour_ts %}
-                {% set d = d_val | float(0) %}
-                {% set f = fassade[ts] | float(0) if ts in fassade else 0 %}
-                {% set ns.total = ns.total + (d + 3 * f) / 1000 %}
+              {% if ts.startswith(today) %}
+                {% set t = as_timestamp(ts) %}
+                {% set f_val = fassade[ts] | float(0) if ts in fassade else 0 %}
+                {% set combined_wh = (d_val | float(0)) + f_val %}
+                
+                {% if t == current_hour_ts %}
+                  {# Aktuelle Stunde nur anteilig berechnen #}
+                  {% set ns.total = ns.total + (combined_wh * fraction_left) %}
+                {% elif t > current_hour_ts %}
+                  {# Zukünftige Stunden voll addieren #}
+                  {% set ns.total = ns.total + combined_wh %}
+                {% endif %}
               {% endif %}
             {% endfor %}
-            {{ ns.total | round(2) }}
+            
+            {{ (ns.total / 1000) | round(1) }}
           {% else %} 
             {{ this.state | float(0) }} 
           {% endif %}
@@ -225,6 +306,14 @@ template:
       - name: "PV Forecast Weighted"
         unique_id: pv_forecast_weighted
         unit_of_measurement: "kWh"
+        state_class: measurement
+        availability: >
+          {% set sc = states('sensor.pv_forecast_solcast_alles') %}
+          {% set sp = states('sensor.pv_forecast_solarprognose_alles') %}
+          {% set fs = states('sensor.pv_forecast_forecastsolar_alles') %}
+          {% set om = states('sensor.pv_forecast_openmeteo_alles') %}
+          {# Verfügbar, wenn mindestens ein Sensor eine Zahl liefert #}
+          {{ is_number(sc) or is_number(sp) or is_number(fs) or is_number(om) }}
         state: >
           {% set sc = states('sensor.pv_forecast_solcast_alles') | float(0) %}
           {% set sp = states('sensor.pv_forecast_solarprognose_alles') | float(0) %}
@@ -262,7 +351,7 @@ template:
               {% set ts = (start_ts + (i * 3600)) | string %}
               {% set d = dach_data[ts][1] | float(0) if ts in dach_data else 0 %}
               {% set f = fassade_data[ts][1] | float(0) if fassade_data is mapping and ts in fassade_data else 0 %}
-              {% set ns.total = ns.total + (d + (f * 3)) %}
+              {% set ns.total = ns.total + (d + f) %}
             {% endfor %}
             {{ ns.total | round(2) }}
           {% else %} 0.0 {% endif %}
@@ -288,7 +377,7 @@ template:
               {% if val > ns.f_max %}{% set ns.f_max = val %}{% endif %}
             {% endfor %}
 
-            {{ ((ns.d_max + 3 * ns.f_max) / 1000) | round(2) }}
+            {{ ((ns.d_max + ns.f_max) / 1000) | round(2) }}
           {% else %} 0.0 {% endif %}
 
       - name: "PV Forecast Openmeteo Morgen"
@@ -297,7 +386,7 @@ template:
         state: >
           {% set dach = states('sensor.home_energy_pv_dach_production_tomorrow') | float(0) %}
           {% set fassade = states('sensor.home_energy_pv_fassade_production_tomorrow') | float(0) %}
-          {{ dach + 3*fassade }}
+          {{ dach + fassade }}
 
       - name: "PV Forecast Weighted Morgen"
         unique_id: pv_forecast_weighted_morgen

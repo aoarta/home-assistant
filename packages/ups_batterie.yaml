@@ -25,9 +25,9 @@ sensor:
         window_size: "00:00:30"
 
   - platform: integration
-    source: sensor.ups_ac_leistung_glatt
     name: "UPS Energiefluss Wh"
     unique_id: ups_energiefluss_wh
+    source: sensor.ups_ac_leistung_glatt
     round: 0
     method: left
 
@@ -41,22 +41,6 @@ sensor:
         precision: 1
       - filter: time_throttle
         window_size: "00:01:00"
-
-  - platform: filter
-    name: "Target Charge stabil"
-    unique_id: target_charge_stabil
-    entity_id: sensor.target_charge_distribution
-    filters:
-      - filter: time_throttle
-        window_size: "00:00:10"
-
-  - platform: filter
-    name: "Target Discharge stabil"
-    unique_id: target_discharge_stabil
-    entity_id: sensor.target_discharge_distribution
-    filters:
-      - filter: time_throttle
-        window_size: "00:00:10"
 
   - platform: filter
     name: "UPS Highest Cell stabil"
@@ -357,7 +341,7 @@ automation:
           - switch.battery_charger
           - switch.battery_charger2
         to: "on"
-        for: "00:00:03" # Erst nach 3 Sek. Gleichzeitigkeit triggern, um Umschaltvorgänge zu erlauben
+        for: "00:00:03"
     condition:
       - condition: template
         value_template: >
