@@ -6,22 +6,35 @@ input_number:
     name: "Gewicht Solcast"
     min: 0
     max: 1
+    initial: 0.25
     step: 0.001
   weight_solarprognose:
     name: "Gewicht Solarprognose"
     min: 0
     max: 1
+    initial: 0.15
     step: 0.001
   weight_forecastsolar:
     name: "Gewicht ForecastSolar"
     min: 0
     max: 1
+    initial: 0.15
     step: 0.001
   weight_openmeteo:
     name: "Gewicht OpenMeteo"
     min: 0
     max: 1
+    initial: 0.45
     step: 0.001
+
+  pv_forecast_bias_korrekturfaktor:
+    name: "PV Forecast Bias Korrekturfaktor"
+    min: 0.6
+    max: 1.4
+    initial: 1.0
+    step: 0.001
+    unit_of_measurement: "ratio"
+    mode: box
 
   # --- Referenzspeicher & Statistik ---
   pv_save_solcast_morgens:
@@ -137,7 +150,7 @@ template:
       - name: "Forecastsolar API Raw Dach Stable"
         unique_id: forecastsolar_api_raw_dach_stable
         state: "OK"
-        availability: "{{ state_attr('sensor.forecastsolar_api_source_dach', 'data') is mapping }}"
+        availability: "{{ state_attr('sensor.forecastsolar_api_source_dach', 'result') is mapping }}"
         attributes:
           result: >
             {% set val = state_attr('sensor.forecastsolar_api_source_dach', 'result') %}
@@ -146,7 +159,7 @@ template:
       - name: "Forecastsolar API Raw Fassade Stable"
         unique_id: forecastsolar_api_raw_fassade_stable
         state: "OK"
-        availability: "{{ state_attr('sensor.forecastsolar_api_source_fassade', 'data') is mapping }}"
+        availability: "{{ state_attr('sensor.forecastsolar_api_source_fassade', 'result') is mapping }}"
         attributes:
           result: >
             {% set val = state_attr('sensor.forecastsolar_api_source_fassade', 'result') %}
@@ -164,8 +177,8 @@ template:
         unique_id: pv_forecast_solarprognose_alles
         unit_of_measurement: "kWh"
         availability: >
-          {{ state_attr('sensor.solarprognose_api_raw_dach_stable', 'result') is mapping and 
-             state_attr('sensor.solarprognose_api_raw_fassade_stable', 'result') is mapping }}
+          {{ state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') is mapping and 
+             state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') is mapping }}
         state: >
           {% set dach = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
           {% set fassade = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
@@ -324,7 +337,7 @@ template:
           {% set fs_w = states('input_number.weight_forecastsolar') | float(0.2) if fs > 0 else 0 %}
           {% set om_w = states('input_number.weight_openmeteo') | float(0.1) if om > 0 else 0 %}
           {% set total_weight = sc_w + sp_w + fs_w + om_w %}
-          {% set bias = states('sensor.pv_forecast_bias_korrekturfaktor') | float(1) %}
+          {% set bias = states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) %}
           {% if total_weight > 0 %}
             {{ (((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om) / total_weight) * bias) | round(2) }}
           {% else %} {{ this.state | float(0) }} {% endif %}
@@ -361,8 +374,8 @@ template:
         unit_of_measurement: "kWh"
         state: >
           {% set tomorrow = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
-          {% set dach = state_attr('sensor.forecastsolar_api_raw_dach_stable', 'result') %}
-          {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade_stable', 'result') %}
+          {% set dach = state_attr('sensor.forecastsolar_api_raw_dach_stable', 'data') %}
+          {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade_stable', 'data') %}
 
           {% if dach is mapping and fassade is mapping %}
             {% set tomorrow_suffix = tomorrow ~ ' ' %}
@@ -403,32 +416,13 @@ template:
           {% set om_w = states('input_number.weight_openmeteo') | float(0.1) if om > 0 else 0.0 %}
 
           {% set total_weight = sc_w + sp_w + fs_w + om_w %}
-          {% set bias = states('sensor.pv_forecast_bias_korrekturfaktor') | float(1) %}
+          {% set bias = states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) %}
 
           {% if total_weight > 0 %}
             {{ (((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om) / total_weight) * bias) | round(2) }}
           {% else %}
             0.0
           {% endif %}
-  # --- TRIGGER-BASIERTER BIAS-FAKTOR (Ebenfalls Neustart-sicher) ---
-  - trigger:
-      - platform: state
-        entity_id: input_number.pv_reale_ernte_von_gestern
-      - platform: homeassistant
-        event: start # Berechnet sich auch beim Start neu
-    sensor:
-      - name: "PV Forecast Bias Korrekturfaktor"
-        unique_id: pv_forecast_bias_korrekturfaktor
-        unit_of_measurement: "ratio"
-        state_class: measurement
-        state: >
-          {% set real = states('input_number.pv_reale_ernte_von_gestern') | float(0) %}
-          {% set forecast = states('input_number.pv_prognose_von_gestern') | float(0) %}
-          {% set current = this.state | float(1.0) %}
-          {% if forecast > 2 and real > 0 %}
-            {% set new = (current * 0.8) + ((real / forecast) * 0.2) %}
-            {{ [[0.6, new] | max, 1.2] | min | round(3) }}
-          {% else %} {{ current }} {% endif %}
 
 automation:
   - alias: "PV: API Daten gezielt mehrmals täglich holen"
@@ -479,6 +473,21 @@ automation:
       - trigger: time
         at: "23:55:00"
     actions:
+      # 1. Erst den Bias-Faktor basierend auf dem heutigen Tag aktualisieren
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.pv_forecast_bias_korrekturfaktor
+        data:
+          value: >
+            {% set real = states('sensor.pv_ertrag_heute') | float(0) %}
+            {% set forecast = states('input_number.pv_prognose_festwert_heute') | float(0) %}
+            {% set current = states('input_number.pv_forecast_bias_korrekturfaktor') | float(1.0) %}
+            {% if forecast > 2 and real > 0 %}
+              {% set new_val = (current * 0.9) + ((real / forecast) * 0.1) %}
+              {{ new_val | clamp(0.6, 1.4) | round(3) }}
+            {% else %} {{ current }} {% endif %}
+
+      # 2. Dann die Statistik-Werte für die Anzeige "gestern" wegschreiben
       - action: input_number.set_value
         target:
           entity_id: input_number.pv_prognose_von_gestern
@@ -488,7 +497,9 @@ automation:
         target:
           entity_id: input_number.pv_reale_ernte_von_gestern
         data:
-          value: "{{ states('sensor.pv_ertrag_heute') | float(0) | round(2) }}"
+          value: "{{ states('sensor.pv_ertrag_heute') | float(0) | round(0) }}"
+
+      # 3. Die Gewichte der einzelnen Anbieter anpassen
       - if:
           - condition: template
             value_template: "{{ states('sensor.pv_ertrag_heute') | float(0) > 1.0 }}"

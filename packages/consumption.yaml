@@ -105,7 +105,7 @@ template:
     sensor:
       - name: "Average consumption last 1h"
         unique_id: average_consumption_last_1h
-        unit_of_measurement: W
+        unit_of_measurement: "W"
         device_class: power
         state_class: measurement
         ###-zeile: availability entfernt, da 'unavailable' den this.state überschreiben würde. Logik ist nun im state.

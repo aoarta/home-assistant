@@ -168,11 +168,11 @@ template:
         device_class: battery
         state: >
           {% set hw_soc = states('sensor.marstek_venus_1_batterie_ladezustand') | float(-1) %}
-          {% set neu_wh = states('sensor.venus_1_energiefluss_wh') | float('unknown') %}
-          {% set reset_wh = states('sensor.venus_1_soc_reset_punkt') | float('unknown') %}
+          {% set neu_wh = states('sensor.venus_1_energiefluss_wh') | float(none) %}
+          {% set reset_wh = states('sensor.venus_1_soc_reset_punkt') | float(none) %}
 
           {# Wenn Hardware offline oder Sensoren nicht bereit -> alten Zustand beibehalten #}
-          {% if hw_soc == -1 or neu_wh == 'unknown' or reset_wh == 'unknown' %}
+          {% if hw_soc == -1 or neu_wh is none or reset_wh is none %}
             {{ this.state if this.state is defined else 'unknown' }}
           {% else %}
             {% set alt_wh = this.attributes.get('last_wh', 0) | float(0) %}
@@ -194,10 +194,10 @@ template:
         attributes:
           last_wh: >
             {% set hw_soc = states('sensor.marstek_venus_1_batterie_ladezustand') | float(-1) %}
-            {% set neu_wh = states('sensor.venus_1_energiefluss_wh') | float('unknown') %}
+            {% set neu_wh = states('sensor.venus_1_energiefluss_wh') | float(none) %}
             {% set alt_wh = this.attributes.get('last_wh', neu_wh) | float(0) %}
 
-            {% if neu_wh == 'unknown' or hw_soc == -1 %}
+            {% if neu_wh is none or hw_soc == -1 %}
               {{ this.attributes.get('last_wh', 0) }}
             {% elif (neu_wh - alt_wh) | abs >= 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
               {{ neu_wh }}
@@ -220,11 +220,11 @@ template:
         device_class: battery
         state: >
           {% set hw_soc = states('sensor.marstek_venus_2_batterie_ladezustand') | float(-1) %}
-          {% set neu_wh = states('sensor.venus_2_energiefluss_wh') | float('unknown') %}
-          {% set reset_wh = states('sensor.venus_2_soc_reset_punkt') | float('unknown') %}
+          {% set neu_wh = states('sensor.venus_2_energiefluss_wh') | float(none) %}
+          {% set reset_wh = states('sensor.venus_2_soc_reset_punkt') | float(none) %}
 
           {# Wenn Hardware offline oder Sensoren nicht bereit -> alten Zustand beibehalten #}
-          {% if hw_soc == -1 or neu_wh == 'unknown' or reset_wh == 'unknown' %}
+          {% if hw_soc == -1 or neu_wh is none or reset_wh is none %}
             {{ this.state if this.state is defined else 'unknown' }}
           {% else %}
             {% set alt_wh = this.attributes.get('last_wh', 0) | float(0) %}
@@ -246,10 +246,10 @@ template:
         attributes:
           last_wh: >
             {% set hw_soc = states('sensor.marstek_venus_2_batterie_ladezustand') | float(-1) %}
-            {% set neu_wh = states('sensor.venus_2_energiefluss_wh') | float('unknown') %}
+            {% set neu_wh = states('sensor.venus_2_energiefluss_wh') | float(none) %}
             {% set alt_wh = this.attributes.get('last_wh', neu_wh) | float(0) %}
 
-            {% if neu_wh == 'unknown' or hw_soc == -1 %}
+            {% if neu_wh is none or hw_soc == -1 %}
               {{ this.attributes.get('last_wh', 0) }}
             {% elif (neu_wh - alt_wh) | abs >= 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
               {{ neu_wh }}
