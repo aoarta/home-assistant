@@ -32,17 +32,6 @@ sensor:
     method: left
 
   - platform: filter
-    name: "UPS SOC stabil"
-    unique_id: ups_soc_stabil
-    entity_id: sensor.ups_soc
-    filters:
-      - filter: lowpass
-        time_constant: 2
-        precision: 1
-      - filter: time_throttle
-        window_size: "00:01:00"
-
-  - platform: filter
     name: "UPS Highest Cell stabil"
     unique_id: ups_highest_cell_stabil
     entity_id: sensor.ups_highest_cell
@@ -71,10 +60,10 @@ template:
   - trigger:
       - platform: numeric_state
         entity_id: sensor.ups_highest_cell_stabil
-        above: 3.575
+        above: 3.5
         for: "00:00:10"
       - platform: state
-        entity_id: sensor.ups_soc_stabil
+        entity_id: sensor.ups_soc
         to: "100.0"
         for: "00:01:00"
       - platform: state
@@ -89,12 +78,12 @@ template:
         state: >
           {% set current_energy = states('sensor.ups_energiefluss_wh') | float(0) %}
           {% set raw_last_reset = states('sensor.ups_soc_reset_punkt') %}
-          {% set hw_soc = states('sensor.ups_soc_stabil') | float(0) %}
+          {% set hw_soc = states('sensor.ups_soc') | float(0) %}
           {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(0) %}
 
           {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
           {# Reset wenn HW-SOC 100 oder Zelle voll #}
-          {% if hw_soc >= 100 or high_cell >= 3.575 %}
+          {% if hw_soc >= 100 or high_cell >= 3.5 %}
             {{ [current_energy, last_reset] | min }}
           {% elif current_energy < last_reset %}
             {{ current_energy }}
@@ -108,7 +97,7 @@ template:
         to: "100"
         for: "00:01:00"
       - platform: state
-        entity_id: sensor.ups_soc_stabil
+        entity_id: sensor.ups_soc
         to: "100.0"
         for: "00:02:00"
     sensor:
@@ -130,12 +119,12 @@ template:
         unit_of_measurement: "%"
         device_class: battery
         state: >
-          {% set hw_soc = states('sensor.ups_soc_stabil') | float(-1) %}
-          {% set neu_wh = states('sensor.ups_energiefluss_wh') | float('unknown') %}
-          {% set reset_wh = states('sensor.ups_soc_reset_punkt') | float('unknown') %}
+          {% set hw_soc = states('sensor.ups_soc') | float(-1) %}
+          {% set neu_wh = states('sensor.ups_energiefluss_wh') | float(none) %}
+          {% set reset_wh = states('sensor.ups_soc_reset_punkt') | float(none) %}
 
           {# Wenn Hardware offline oder Sensoren nicht bereit -> alten Zustand beibehalten #}
-          {% if hw_soc == -1 or neu_wh == 'unknown' or reset_wh == 'unknown' %}
+          {% if hw_soc == -1 or neu_wh is none or reset_wh is none %}
             {{ this.state if is_number(this.state) else hw_soc }}
           {% else %}
             {% set alt_wh = this.attributes.get('last_wh', 0) | float(0) %}
@@ -156,11 +145,11 @@ template:
           {% endif %}
         attributes:
           last_wh: >
-            {% set hw_soc = states('sensor.ups_soc_stabil') | float(-1) %}
-            {% set neu_wh = states('sensor.ups_energiefluss_wh') | float('unknown') %}
+            {% set hw_soc = states('sensor.ups_soc') | float(-1) %}
+            {% set neu_wh = states('sensor.ups_energiefluss_wh') | float(none) %}
             {% set alt_wh = this.attributes.get('last_wh', neu_wh) | float(0) %}
 
-            {% if neu_wh == 'unknown' or hw_soc == -1 %}
+            {% if neu_wh is none or hw_soc == -1 %}
               {{ this.attributes.get('last_wh', 0) }}
             {% elif (neu_wh - alt_wh) | abs >= 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
               {{ neu_wh }}
@@ -204,9 +193,9 @@ template:
         device_class: energy
         state: >
           {% set total_kwh = 2.0 %} 
-          {% set soc = states('sensor.ups_soc_stabil') | float(-1) %}
+          {% set soc = states('sensor.ups_soc') | float(-1) %}
           {{ (total_kwh * (1 - (soc / 100))) | round(2) if soc >= 0 else 0 }}
-        availability: "{{ is_number(states('sensor.ups_soc_stabil')) }}"
+        availability: "{{ is_number(states('sensor.ups_soc')) }}"
 
   - sensor:
       - name: "Battery total charge power"
@@ -245,6 +234,7 @@ automation:
           - sensor.ups_lowest_cell_stabil
           - sensor.ups_highest_cell_stabil
           - binary_sensor.batterie_wartung_erforderlich
+          - sensor.zwicknagl_martin_leistung_ac
     action:
       - choose:
           # --- Wartungsmodus ein (mit Überladeschutz!)
@@ -254,7 +244,7 @@ automation:
                   {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
                   {# Nur laden wenn Wartung aktiv UND Batterie noch nicht voll #}
                   {{ states('input_number.manuelle_ladeleistung') | float(0) >= 1000 
-                     and high_cell < 3.58 }}
+                     and high_cell < 3.55 }}
             sequence:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
@@ -313,14 +303,17 @@ automation:
                 target:
                   entity_id: [switch.battery_charger, switch.battery_charger2]
 
-          # --- LADEN STARTEN ---
+          # --- LADEN STARTEN
           - conditions:
               - condition: template
                 value_template: >
                   {% set target_charge = states('sensor.target_charge_distribution_fast') | float(0) %}
                   {% set soc = states('sensor.ups_custom_soc') | float(100) %}
                   {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
-                  {{ target_charge > 820 and high_cell < 3.50 and is_state('switch.battery_inverter_tasmota', 'off') }}
+                  {% set pv_leistung_ac = states('sensor.zwicknagl_martin_leistung_ac') | float(0) %}
+                  {{ target_charge > 820 and soc < 96 and high_cell < 3.42 and pv_leistung_ac > 820 
+                      and is_state('switch.battery_inverter_tasmota', 'off') }}
+
             sequence:
               - action: switch.turn_on
                 target: { entity_id: switch.battery_charger }

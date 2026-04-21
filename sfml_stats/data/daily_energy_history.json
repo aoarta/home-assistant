@@ -1,0 +1,21 @@
+{
+  "days": {
+    "2026-04-20": {
+      "solar_yield_kwh": 0.6799999999999999,
+      "grid_import_kwh": 9558680.0,
+      "battery_charge_solar_kwh": null,
+      "battery_charge_grid_kwh": null,
+      "grid_export_kwh": 18840108.0,
+      "price_ct_kwh": null,
+      "yield_groups": {
+        "Gruppe 1": 0.6,
+        "Gruppe 2": 0.08
+      },
+      "solar_to_house_kwh": 0.6799999999999999,
+      "timestamp": "2026-04-20T09:24:37.328319",
+      "home_consumption_kwh": 9558680.0,
+      "price_mode": "dynamic"
+    }
+  },
+  "last_updated": "2026-04-20T09:24:37.329019"
+}

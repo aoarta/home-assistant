@@ -16,7 +16,14 @@ shell_command:
 
 rest_command:
   awekas_upload:
-    url: "https://ws.awekas.at/weatherstation/updateweatherstation.php?ID=zwim&PASSWORD=Exodus666waa&tempf={{ (states('sensor.wetterstation_aussentemperatur') | float ) | round(1) }}&humidity={{ states('sensor.wetterstation_luftfeuchtigkeit') }}&softwaretype=HomeAssistant"
+    url: >
+      {% set temp = states('sensor.wetterstation_aussentemperatur') %}
+      {% set hum = states('sensor.wetterstation_luftfeuchtigkeit') %}
+      {% if is_number(temp) and is_number(hum) %}
+        https://ws.awekas.at/weatherstation/updateweatherstation.php?ID=zwim&PASSWORD=Exodus666waa&tempf={{ (temp | float * 9/5 + 32) | round(1) }}&humidity={{ hum | int }}&softwaretype=HomeAssistant
+      {% else %}
+        https://ws.awekas.at/weatherstation/updateweatherstation.php?ID=zwim&PASSWORD=Exodus666waa&status=offline
+      {% endif %}
     method: GET
 
 recorder:
@@ -143,6 +150,17 @@ template:
               {{ 85 if morgen > 30 else 100.2 }}
             {% endif %}
 
+      - name: "Batterieleistung gesamt"
+        unique_id: batterieleistung_gesamt
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {% set venus1 = states('sensor.marstek_venus_1_ac_leistung') | float(0) %}
+          {% set venus2 = states('sensor.marstek_venus_2_ac_leistung') | float(0) %}
+          {% set ups = states('sensor.ups_ac_leistung') | float(0) %}
+          {{ (venus1 + venus2 + ups) | round(0) }}
+
   # 2. Trigger-basierte Sensoren
   - trigger:
       - platform: time_pattern
@@ -166,7 +184,7 @@ template:
           {% set load = states('sensor.estimated_remaining_consumption') %}
 
           {% if is_number(free_m) and is_number(free_u) and is_number(load) %}
-            {{ (free_m|float + free_u|float - load|float) | round(1) }}
+            {{ (free_m|float + free_u|float + load|float) | round(1) }}
           {% else %}
             {{ this.state | default(0) }}
           {% endif %}
@@ -185,7 +203,7 @@ template:
             {% set free_ups = states('sensor.ups_free_capacity_kwh') | float(0) %}
             {% set load_today = states('sensor.estimated_remaining_consumption') | float(0) %}
 
-            {% if (0.9 * solar_today) > (free_marstek + free_ups - load_today) or solar_today == -1 %}
+            {% if (0.9 * solar_today) > (free_marstek + free_ups + load_today) or solar_today == -1 %}
               {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
               {% set s_rise = state_attr('sensor.solar_zeit_logik', 'sun_rise') | float(0) %}
               {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
