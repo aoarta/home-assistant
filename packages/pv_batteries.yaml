@@ -339,7 +339,7 @@ template:
             {% if manual > 0 %}
               {{ {'v1': manual, 'v2': manual} }}
             {% else %}
-              {% set total = states('sensor.target_charge_distribution_fast') | float(0) %}
+              {% set total_charge_power = states('sensor.target_charge_distribution_fast') | float(0) %}
               {% set dyn_soc = states('sensor.dynamic_soc') | float(50) %}
 
               {#{% set s1_raw = states('sensor.marstek_venus_1_batterie_ladezustand') | float(100) %}#}
@@ -360,8 +360,25 @@ template:
               {% if sum_w == 0 %}
                 {{ {'v1': 0, 'v2': 0} }}
               {% else %}
-                {% set target1 = (w1 / sum_w * total) | round(0) %}
-                {% set target2 = (total - target1) | round(0) %}
+                {# Berechnung der ursprünglichen Werte #}
+                {% set t1_raw = [(w1 * total_charge_power / sum_w) | round(0), 0] | max %}
+                {% set t2_raw = [(total_charge_power - t1_raw) | round(0), 0] | max %}
+
+                {# Logik für die Schwellenwerte #}
+                {% if t1_raw < 250 and t2_raw < 250 %}
+                  {# Beide kleiner als 250: Zufällige Auswahl #}
+                  {# Wochentags-Logik: Montag=1, Dienstag=2, ... Sonntag=7 #}
+                  {# winner ist 0 bei geraden Tagen, 1 bei ungeraden Tagen #}
+                  {% set winner = now().isoweekday() % 2 %}
+                  {% set target1 = total_charge_power if winner == 0 else 0 %}
+                  {% set target2 = total_charge_power if winner == 1 else 0 %}
+                {% else %}
+                  {# Beide groß genug: Normale Berechnung #}
+                  {% set target1 = t1_raw %}
+                  {% set target2 = t2_raw %}
+                {% endif %}
+
+
                 {% if target1 > lim1 and target2 < lim2 %}
                   {% set v2 = [lim2, target2 + target1 - lim1] | min | round(0) %}
                   {{ {'v1': lim1, 'v2': v2} }}
@@ -383,7 +400,7 @@ template:
             {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
 
             {% if (solar_today > load_today or solar_today == -1) and (ts >= t1130 and ts < b_set) %}               
-                {% set reserve = 1.2 %}
+                {% set reserve = 1.25 %}
                 {% set current_soc1 = states('sensor.venus_1_custom_soc') | float(20) %}
                 {% set current_soc2 = states('sensor.venus_2_custom_soc') | float(20) %}
                 {% set ziel_soc = states('sensor.dynamic_soc') | float(80) %}
@@ -432,9 +449,24 @@ template:
               {% if sum_w == 0 %}
                 {{ {'v1': 0, 'v2': 0} }}
               {% else %}
-                {% set v1 = [(w1 * total_discharge_power / sum_w) | round(0), 0] | max %}
-                {% set v2 = [(total_discharge_power - v1) | round(0), 0] | max %}
-                {{ {'v1': v1, 'v2': v2} }}
+                {% set t1_raw = [(w1 * total_discharge_power / sum_w) | round(0), 0] | max %}
+                {% set t2_raw = [(total_discharge_power - t1_raw) | round(0), 0] | max %}
+
+                {# Logik für die Schwellenwerte #}
+                {% if t1_raw < 250 and t2_raw < 250 %}
+                  {# Beide kleiner als 250: Zufällige Auswahl #}
+                  {# Wochentags-Logik: Montag=1, Dienstag=2, ... Sonntag=7 #}
+                  {# winner ist 0 bei geraden Tagen, 1 bei ungeraden Tagen #}
+                  {% set winner = now().isoweekday() % 2 %}
+                  {% set target1 = total_discharge_power if winner == 0 else 0 %}
+                  {% set target2 = total_discharge_power if winner == 1 else 0 %}
+                {% else %}
+                  {# Beide groß genug: Normale Berechnung #}
+                  {% set target1 = t1_raw %}
+                  {% set target2 = t2_raw %}
+                {% endif %}
+
+                {{ {'v1': target1, 'v2': target2} }}
               {% endif %}
             {% endif %}
 
