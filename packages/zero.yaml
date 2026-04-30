@@ -1,3 +1,4 @@
+# --- INPUT NUMBERS ---
 input_number:
   zero_ladung_stop_soc:
     name: "Zero Stop SoC"
@@ -26,6 +27,7 @@ input_number:
     unit_of_measurement: "A"
     icon: mdi:car-speed-limiter
 
+# --- TEMPLATES (SENSORS) ---
 template:
   - sensor:
       - name: "Warp3 Berechnete Leistung"
@@ -34,9 +36,10 @@ template:
         device_class: power
         state_class: measurement
         state: >
-          {% if is_state('binary_sensor.warp3_2ita_cable', 'on') and is_state('binary_sensor.warp3_2ita_charging', 'on') %}
-            {% set current = states('sensor.warp3_2ita_allowedcurrent') | float(0) %}
-            {{ (current * 235) | round(0) }}
+          {# Wir nutzen den Zielwert (globalcurrent), damit die Berechnung sofort reagiert #}
+          {% if is_state('binary_sensor.warp3_2ita_cable', 'on') %}
+            {% set current = states('number.warp3_2ita_globalcurrent') | float(0) %}
+            {{ (current * 230) | round(0) }}
           {% else %}
             0
           {% endif %}
@@ -44,30 +47,40 @@ template:
   - trigger:
       - platform: time_pattern
         seconds: "/30"
-      - platform: homeassistant
-        event: start
       - platform: state
-        entity_id: binary_sensor.warp3_2ita_cable
-        to: "on"
-        from: "off"
+        entity_id:
+          - sensor.warp3_2ita_powernow
+          - sensor.solarnet_leistung_vom_netz
+          - sensor.marstek_venus_1_ac_leistung
+          - sensor.marstek_venus_2_ac_leistung
     sensor:
       - name: "Zero Dynamischer Ladestrom"
         unique_id: zero_dynamischer_ladestrom
         unit_of_measurement: "A"
+        state_class: measurement
         state: >
           {% set cable_connected = is_state('binary_sensor.warp3_2ita_cable', 'on') %}
           {% if cable_connected %}
-            {% set pv = states('sensor.solarnet_pv_leistung') | float(0) %}
-            {% set haus = states('sensor.hausverbrauch_netto_watt') | float(0) %}
-            {% set wb_watt = states('sensor.warp3_berechnete_leistung') | float(0) %}
+            {% set charger_power = states('sensor.warp3_2ita_powernow') | float(0) %}
+            {% set power_from_net = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
+            {# Batterie lädt < 0 #}
+            {% set venus1 = states('sensor.marstek_venus_1_ac_leistung') | float(0) %}
+            {% set venus2 = states('sensor.marstek_venus_2_ac_leistung') | float(0) %}
+
+            {# Überschussberechnung: es fehlt noch die batterieleistung #}
+            {% set surplus = charger_power - power_from_net - venus1 - venus2 %}
+            {% set amps = (surplus / 230) | int(0) %}
             
-            {% set surplus = pv - (haus - wb_watt) %}
-            {% set amps = (surplus / 235) | round(0, 'floor') %}
-            {{ amps | clamp(6, 16) if amps >= 6 else 0 }}
+            {% if amps >= 6 %}
+              {{ amps | clamp(6, 16) }}
+            {% else %}
+              0
+            {% endif %}
           {% else %}
             0
           {% endif %}
 
+# --- AUTOMATIONS ---
 automation:
   - alias: "Zero: PV-Überschuss Laden Dynamisch"
     id: zero_pv_dynamic_charging
@@ -77,6 +90,12 @@ automation:
         entity_id: sensor.zero_dynamischer_ladestrom
       - platform: state
         entity_id: input_number.zero_manueller_ladestrom
+      - platform: state
+        entity_id: binary_sensor.warp3_2ita_cable
+        to: "on"
+      - platform: state # FIX 3: SOC-Trigger ergänzt
+        entity_id: sensor.zero_motorcycles_1037976_soc
+
     condition:
       - condition: state
         entity_id: binary_sensor.warp3_2ita_cable
@@ -84,25 +103,21 @@ automation:
 
     action:
       - variables:
-          # Variablen-Definition (Stelle sicher, dass diese Sensoren existieren)
           soc: "{{ states('sensor.zero_motorcycles_1037976_soc') | float(0) }}"
-          manual_amps: "{{ states('input_number.zero_manueller_ladestrom') | float(0) }}"
-          pv_amps: "{{ states('sensor.zero_dynamischer_ladestrom') | float(0) }}"
+          manual_amps: "{{ states('input_number.zero_manueller_ladestrom') | int(0) }}"
+          pv_amps: "{{ states('sensor.zero_dynamischer_ladestrom') | int(0) }}"
           stop_limit: "{{ states('input_number.zero_ladung_stop_soc') | float(100) }}"
-          start_limit: "{{ states('input_number.zero_ladung_start_soc') | float(50) }}"
           is_charging: "{{ is_state('binary_sensor.warp3_2ita_charging', 'on') }}"
-          current_wb_amps: "{{ states('number.warp3_2ita_globalcurrent') | float(0) }}"
+          current_wb_target: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
 
       - choose:
-          # --- MODUS A: MANUELLER LADESTROM ---
+          # --- MODUS A: MANUELLER LADESTROM (Priorität) ---
           - conditions:
               - "{{ manual_amps >= 6 }}"
-              - "{{ soc > 0 }}" # Sicherheitscheck: SoC darf nicht 0 sein
               - "{{ soc < stop_limit }}"
             sequence:
               - if:
-                  - condition: template
-                    value_template: "{{ manual_amps != current_wb_amps }}"
+                  - "{{ manual_amps != current_wb_target }}"
                 then:
                   - action: number.set_value
                     target:
@@ -110,27 +125,39 @@ automation:
                     data:
                       value: "{{ manual_amps }}"
               - if:
-                  - condition: template
-                    value_template: "{{ not is_charging }}"
+                  - "{{ not is_charging }}"
                 then:
                   - action: button.press
                     target:
                       entity_id: button.warp3_2ita_startcharge
 
-          # --- MODUS B: PV-AUTOMATIK ---
           - conditions:
-              - "{{ manual_amps < 6 }}"
-              - "{{ soc > 0 }}" # Sicherheitscheck: SoC darf nicht 0 sein
+              - "{{ manual_amps >= 6 }}"
+              - "{{ soc >= stop_limit }}"
+              - "{{ is_charging }}"
+            sequence:
+              - action: button.press
+                target:
+                  entity_id: button.warp3_2ita_stopcharge
+              - action: input_number.set_value
+                target:
+                  entity_id: input_number.zero_manueller_ladestrom
+                data:
+                  value: 0
+
+          # --- MODUS B: PV-AUTOMATIK (wenn manuell auf 0 steht) ---
+          - conditions:
+              - "{{ manual_amps == 0 }}"
+              - "{{ soc < stop_limit }}"
             sequence:
               - choose:
-                  # START / ANPASSEN
+                  # START oder ANPASSUNG
                   - conditions:
                       - "{{ pv_amps >= 6 }}"
-                      - "{{ (not is_charging and soc < start_limit) or (is_charging and soc < stop_limit) }}"
+                      - "{{ soc < stop_limit }}"
                     sequence:
                       - if:
-                          - condition: template
-                            value_template: "{{ pv_amps != current_wb_amps }}"
+                          - "{{ pv_amps != current_wb_target }}"
                         then:
                           - action: number.set_value
                             target:
@@ -138,14 +165,13 @@ automation:
                             data:
                               value: "{{ pv_amps }}"
                       - if:
-                          - condition: template
-                            value_template: "{{ not is_charging }}"
+                          - "{{ not is_charging }}"
                         then:
                           - action: button.press
                             target:
                               entity_id: button.warp3_2ita_startcharge
 
-                  # STOPP (SoC erreicht oder zu wenig Sonne)
+                  # STOPP (Limit erreicht oder zu wenig Sonne)
                   - conditions:
                       - "{{ is_charging }}"
                       - "{{ soc >= stop_limit or pv_amps < 6 }}"
@@ -154,7 +180,7 @@ automation:
                         target:
                           entity_id: button.warp3_2ita_stopcharge
 
-  - alias: "Zero Korrigiere manuellen Ladestrom"
+  - alias: "Zero: Korrigiere manuellen Ladestrom"
     id: zero_korrigiere_manuellen_ladestrom
     mode: restart
     trigger:
