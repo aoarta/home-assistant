@@ -27,9 +27,20 @@ rest_command:
     method: GET
 
 recorder:
-  purge_keep_days: 8
+  purge_keep_days: 366
   commit_interval: 60
   db_url: mysql://homeassistant:homeassistant@core-mariadb/homeassistant?charset=utf8mb4
+  include:
+    entities:
+      # dein täglicher PV-Produktionssensor:
+      - sensor.pv_forecast_weighted
+      - sensor.pv_forecast_weighted_morgen
+      - sensor.solar_forecast_ml_planungsprognose_p10_blend
+      - sensor.prognose_heute
+      - sensor.prognose_morgen
+      - sensor.prognose_ubermorgen
+      - sensor.pv_ertrag_heute_um
+
   exclude:
     entities:
       - automation.ups_grobregelung_laden_entladen
@@ -169,6 +180,9 @@ template:
       - platform: state
         entity_id:
           - input_number.manuelle_ladeleistung
+          - input_boolean.override_soc
+          - sensor.dynamic_soc_grenzen
+          - binary_sensor.batterie_wartung_erforderlich
           - sensor.pv_forecast_weighted
           - sensor.estimated_remaining_consumption
           - sensor.solar_zeit_logik
@@ -205,7 +219,7 @@ template:
             {% set load_today = states('sensor.estimated_remaining_consumption') | float(0) %}
 
             {% if (0.9 * solar_today) > (free_marstek + free_ups + load_today) or solar_today == -1 %}
-              {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
+              {% set ts = as_timestamp(now()) %} 
               {% set s_rise = state_attr('sensor.solar_zeit_logik', 'sun_rise') | float(0) %}
               {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
               {% set b_set = state_attr('sensor.solar_zeit_logik', 'b_set') | float(0) %}
@@ -245,4 +259,4 @@ template:
         attributes:
           v1_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('sensor.venus_1_last_full'))) / 86400) | int if has_value('sensor.venus_1_last_full') else '?' }}"
           v2_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('sensor.venus_2_last_full'))) / 86400) | int if has_value('sensor.venus_2_last_full') else '?' }}"
-          ups_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('sensor.ups_last_full'))) / 86400) | int if has_value('sensor.venus_2_last_full') else '?' }}"
+          ups_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('sensor.ups_last_full'))) / 86400) | int if has_value('sensor.ups_last_full') else '?' }}"

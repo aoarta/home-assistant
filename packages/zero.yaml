@@ -108,17 +108,17 @@ automation:
           pv_amps: "{{ states('sensor.zero_dynamischer_ladestrom') | int(0) }}"
           stop_limit: "{{ states('input_number.zero_ladung_stop_soc') | float(100) }}"
           start_limit: "{{ states('input_number.zero_ladung_start_soc') | float(100) }}"
-          is_charging: "{{ is_state('binary_sensor.warp3_2ita_charging', 'on') }}"
           current_wb_target: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
+          is_charging: "{{ is_state('binary_sensor.warp3_2ita_charging', 'on') | bool }}"
 
       - choose:
           # --- MODUS A: MANUELLER LADESTROM (Priorität) ---
           - conditions:
-              - "{{ manual_amps >= 6 }}"
-              - "{{ soc < stop_limit }}"
+              - "{{ manual_amps | int(0) >= 6 }}"
+              - "{{ soc | float(0) < stop_limit | float(100) }}"
             sequence:
               - if:
-                  - "{{ manual_amps != current_wb_target }}"
+                  - "{{ manual_amps | int(0) != current_wb_target | int(0) }}"
                 then:
                   - action: number.set_value
                     target:
