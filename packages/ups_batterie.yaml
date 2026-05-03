@@ -129,12 +129,12 @@ template:
           {% else %}
             {% set alt_wh = this.attributes.get('last_wh', 0) | float(0) %}
             
-            {% if (neu_wh - alt_wh) | abs > 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
+            {% if (neu_wh - alt_wh) | abs >= 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
               {% if hw_soc >= 100 %}
                 100
               {% else %}
-                {% set cap_wh = 2300 %}
-                {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
+                {# Kapazität = 2300 Wh #}
+                {% set calc_soc = 100 - ((neu_wh - reset_wh) / 2300 * 100) %}
                 
                 {# Begrenzt den Wert sauber zwischen 0 und 100 und rundet #}
                 {{ calc_soc | round(1) | clamp(0, 100) }}
@@ -193,9 +193,9 @@ template:
         device_class: energy
         state: >
           {% set total_kwh = 2.0 %} 
-          {% set soc = states('sensor.ups_soc') | float(-1) %}
+          {% set soc = states('sensor.ups_custom_soc') | float(-1) %}
           {{ (total_kwh * (1 - (soc / 100))) | round(2) if soc >= 0 else 0 }}
-        availability: "{{ is_number(states('sensor.ups_soc')) }}"
+        availability: "{{ is_number(states('sensor.ups_custom_soc')) }}"
 
   - sensor:
       - name: "Battery total charge power"
@@ -205,7 +205,7 @@ template:
         state: >
           {% set p1 = states('sensor.battery_charger_energy_power') | float(0) %}
           {% set p2 = states('sensor.battery_charger2_energy_power') | float(0) %}
-          {{ (p1 + p2) | round(1) }}
+          {{ (p1 + p2) | round(0) }}
 
       - name: "UPS AC Leistung"
         unique_id: ups_ac_leistung
@@ -215,7 +215,7 @@ template:
         state: >
           {% set charging = states('sensor.battery_total_charge_power') | float(0) %}
           {% set discharging = states('sensor.battery_inverter_energy_power') | float(0) %}
-          {{ (discharging - charging) | round(1) }}
+          {{ (discharging - charging) | round(0) }}
 
 ################################################################################
 # 4. AUTOMATIONEN
@@ -228,8 +228,8 @@ automation:
     trigger:
       - platform: state
         entity_id:
-          - sensor.target_discharge_distribution
-          - sensor.target_charge_distribution
+          - sensor.target_discharge_distribution_fast
+          - sensor.target_charge_distribution_fast
           - sensor.ups_custom_soc
           - sensor.ups_lowest_cell_stabil
           - sensor.ups_highest_cell_stabil
@@ -263,7 +263,7 @@ automation:
                 target: { entity_id: switch.battery_inverter_tasmota }
               - action: switch.turn_on
                 target: { entity_id: switch.battery_charger2 }
-                #
+
           # --- ENTLADEN STARTEN ---
           - conditions:
               - condition: template

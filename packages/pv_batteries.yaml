@@ -25,7 +25,6 @@ sensor:
       - filter: time_throttle
         window_size: "00:00:30" # Schreibt nur alle 30 Sekunden einen Wert in die DB
 
-  #666
   - platform: integration
     source: sensor.marstek_venus_1_ac_leistung # positiv ist entladen
     name: "Venus 1 Energiefluss Wh"
@@ -33,7 +32,6 @@ sensor:
     round: 0
     method: left
 
-  # 666
   - platform: integration
     source: sensor.marstek_venus_2_ac_leistung # positiv ist entladen
     name: "Venus 2 Energiefluss Wh"
@@ -103,8 +101,6 @@ template:
       - platform: state
         entity_id: sensor.venus_1_custom_soc
         to: "100.0"
-      - platform: time_pattern
-        minutes: "/5"
     sensor:
       - name: "Venus 1 SOC Reset Punkt"
         unique_id: venus_1_soc_reset_punkt
@@ -132,8 +128,6 @@ template:
       - platform: state
         entity_id: sensor.venus_2_custom_soc
         to: "100.0"
-      - platform: time_pattern
-        minutes: "/5"
     sensor:
       - name: "Venus 2 SOC Reset Punkt"
         unique_id: venus_2_soc_reset_punkt
@@ -177,15 +171,12 @@ template:
           {% else %}
             {% set alt_wh = this.attributes.get('last_wh', 0) | float(0) %}
             
-            {% if (neu_wh - alt_wh) | abs > 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
+            {% if (neu_wh - alt_wh) | abs >= 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
               {% if hw_soc >= 100 %}
                 100
               {% else %}
                 {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12) * 1000 %}
-                {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
-                
-                {# Begrenzt den Wert sauber zwischen 0 und 100 und rundet #}
-                {{ calc_soc | round(1) | clamp(0, 100) }}
+                {{ 100 - ((neu_wh - reset_wh) / cap_wh * 100) | round(1) | clamp(0, 100) }}
               {% endif %}
             {% else %}
               {{ this.state if this.state is defined else hw_soc }}
@@ -229,7 +220,7 @@ template:
           {% else %}
             {% set alt_wh = this.attributes.get('last_wh', 0) | float(0) %}
             
-            {% if (neu_wh - alt_wh) | abs > 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
+            {% if (neu_wh - alt_wh) | abs >= 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
               {% if hw_soc >= 100 %}
                 100
               {% else %}
@@ -267,15 +258,11 @@ template:
         device_class: energy
         state: >
           {% set cap1 = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12) %}
-          {% set soc1 = states('sensor.venus_1_custom_soc') | float(0) %}
-
           {% set cap2 = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.12) %}
+          {% set soc1 = states('sensor.venus_1_custom_soc') | float(0) %}
           {% set soc2 = states('sensor.venus_2_custom_soc') | float(0) %}
 
-          {% set free1 = cap1 * (1 - (soc1 / 100)) %}
-          {% set free2 = cap2 * (1 - (soc2 / 100)) %}
-
-          {{ (free1 + free2) | round(2) }}
+          {{ (cap1 * (1 - (soc1 / 100)) + cap2 * (1 - (soc2 / 100))) | round(2) }}
 
   - sensor:
       - name: "Battery SOC Total"
@@ -302,7 +289,8 @@ template:
           {# Der Sensor ist nur dann verfügbar, wenn mindestens eine Quelle Daten liefert #}
           {{ is_number(states('sensor.venus_1_custom_soc')) or 
               is_number(states('sensor.venus_2_custom_soc')) or
-              is_number(states('sensor.marstek_venus_1_batterie_ladezustand')) }}
+              is_number(states('sensor.marstek_venus_1_batterie_ladezustand')) or
+              is_number(states('sensor.marstek_venus_2_batterie_ladezustand')) }}
 
       - name: "Marstek Batterieleistung Gesamt"
         unique_id: marstek_batterieleistung_gesamt
@@ -313,7 +301,6 @@ template:
           {# Rohwerte einlesen und sicherheitshalber auf 0 setzen, falls ein Sensor offline ist #}
           {% set venus1 = states('sensor.marstek_venus_1_ac_leistung') | float(0) %}
           {% set venus2 = states('sensor.marstek_venus_2_ac_leistung') | float(0) %}
-
           {{ (venus1 + venus2) | round(0) }}
         availability: >
           {# Der Sensor ist nur verfügbar, wenn mindestens einer der Quellsensoren einen gültigen Wert liefert #}
@@ -325,10 +312,7 @@ template:
         device_class: power
         state_class: measurement
         state: >
-          {% set hausverbrauch = [0, -(states('sensor.hausverbrauch_netto_watt') | float(0))] | max %}
-          {% set raw_einspeisung = states('sensor.solarnet_leistung_netzeinspeisung') | float(0) %}
-          {#{% set raw_target = hausverbrauch + raw_einspeisung %}#}
-          {% set raw_target = hausverbrauch %}
+          {% set raw_target = [0, -(states('sensor.hausverbrauch_netto_watt') | float(0))] | max %}
           {% set last = this.state | float(0) %}
           {{ raw_target | round(0) if (raw_target - last) | abs > 15 else last }}
 
@@ -339,84 +323,71 @@ template:
             {% if manual > 0 %}
               {{ {'v1': manual, 'v2': manual} }}
             {% else %}
-              {% set total_charge_power = states('sensor.target_charge_distribution_fast') | float(0) %}
+              {% set total = states('sensor.target_charge_distribution_fast') | float(0) %}
               {% set dyn_soc = states('sensor.dynamic_soc') | float(50) %}
 
-              {#{% set s1_raw = states('sensor.marstek_venus_1_batterie_ladezustand') | float(100) %}#}
-              {% set s1_raw = states('sensor.venus_1_custom_soc') | float(100) %}
-              {% set s1 = 100 if not is_state('switch.marstek_venus1_modbus_rs485_steuermodus', 'on') else s1_raw %}
-
-              {#{% set s2_raw = states('sensor.marstek_venus_2_batterie_ladezustand') | float(100) %}#}
-              {% set s2_raw = states('sensor.venus_2_custom_soc') | float(100) %}
-              {% set s2 = 100 if not is_state('switch.marstek_venus2_modbus_rs485_steuermodus', 'on') else s2_raw %}              
+              {% set s1 = states('sensor.venus_1_custom_soc') | float(100)
+                    if is_state('switch.marstek_venus1_modbus_rs485_steuermodus', 'on') else 100 %}
+              {% set s2 = states('sensor.venus_2_custom_soc') | float(100)
+                    if is_state('switch.marstek_venus2_modbus_rs485_steuermodus', 'on') else 100 %}
 
               {% set limits = this.attributes.get('max_charge') %}
-              {% set lim1 = limits.v1 | int(0) if limits is not none else 2500 %}
-              {% set lim2 = limits.v2 | int(0) if limits is not none else 2500 %}
+              {% set lim1 = limits.v1 | int(1000) if limits is not none else 2500 %}
+              {% set lim2 = limits.v2 | int(1000) if limits is not none else 2500 %}
 
-              {% set w1, w2 = [0, dyn_soc - s1] | max, [0, dyn_soc - s2] | max %}
-              {% set sum_w = (w1 + w2) %}
+              {% set w1 = [dyn_soc - s1, 0] | max %}
+              {% set w2 = [dyn_soc - s2, 0] | max %}
+              {% set sum_w = w1 + w2 %}
 
               {% if sum_w == 0 %}
                 {{ {'v1': 0, 'v2': 0} }}
               {% else %}
-                {# Berechnung der ursprünglichen Werte #}
-                {% set t1_raw = [(w1 * total_charge_power / sum_w) | round(0), 0] | max %}
-                {% set t2_raw = [(total_charge_power - t1_raw) | round(0), 0] | max %}
+                {% set t1 = (w1 / sum_w * total) | round(0) | int %}
+                {% set t2 = (total - t1) | int %}
 
-                {# Logik für die Schwellenwerte #}
-                {% if t1_raw < 250 and t2_raw < 250 %}
-                  {# Beide kleiner als 250: Zufällige Auswahl #}
-                  {# Wochentags-Logik: Montag=1, Dienstag=2, ... Sonntag=7 #}
-                  {# winner ist 0 bei geraden Tagen, 1 bei ungeraden Tagen #}
-                  {% set winner = now().isoweekday() % 2 %}
-                  {% set target1 = total_charge_power if winner == 0 else 0 %}
-                  {% set target2 = total_charge_power if winner == 1 else 0 %}
-                {% else %}
-                  {# Beide groß genug: Normale Berechnung #}
-                  {% set target1 = t1_raw %}
-                  {% set target2 = t2_raw %}
+                {% if t1 < 250 and t2 < 250 %}
+                  {% set odd = (now().isoweekday() + now().hour) % 2 %}
+                  {% set t1 = total if odd == 0 else 0 %}
+                  {% set t2 = total if odd == 1 else 0 %}
                 {% endif %}
 
-
-                {% if target1 > lim1 and target2 < lim2 %}
-                  {% set v2 = [lim2, target2 + target1 - lim1] | min | round(0) %}
-                  {{ {'v1': lim1, 'v2': v2} }}
-                {% elif target1 < lim1 and target2 > lim2 %}
-                  {% set v1 = [lim1, target1 + target2 - lim2] | min | round(0) %}
-                  {{ {'v1': v1, 'v2': lim2} }}
-                {% elif target1 > lim1 and target2 > lim2 %}
+                {% if t1 > lim1 and t2 < lim2 %}
+                  {{ {'v1': lim1, 'v2': [lim2, t2 + t1 - lim1] | min | round(0)} }}
+                {% elif t1 < lim1 and t2 > lim2 %}
+                  {{ {'v1': [lim1, t1 + t2 - lim2] | min | round(0), 'v2': lim2} }}
+                {% elif t1 > lim1 and t2 > lim2 %}
                   {{ {'v1': lim1, 'v2': lim2} }}
                 {% else %}
-                  {{ {'v1': target1, 'v2': target2} }}
+                  {{ {'v1': t1, 'v2': t2} }}
                 {% endif %}
               {% endif %}
             {% endif %}
+
           max_charge: >
             {% set solar_today = states('sensor.pv_forecast_weighted') | float(-1) %}
             {% set load_today = states('sensor.estimated_remaining_consumption') | float(-1) %}
             {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
             {% set b_set = state_attr('sensor.solar_zeit_logik', 'b_set') | float(0) %}
             {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
+            {% set default = {'v1': 2500, 'v2': 2500} %}
 
-            {% if (solar_today > load_today or solar_today == -1) and (ts >= t1130 and ts < b_set) %}               
-                {% set reserve = 1.25 %}
-                {% set current_soc1 = states('sensor.venus_1_custom_soc') | float(20) %}
-                {% set current_soc2 = states('sensor.venus_2_custom_soc') | float(20) %}
-                {% set ziel_soc = states('sensor.dynamic_soc') | float(80) %}
-                {% if ziel_soc < 100 %}
-                {% set diff1 = (ziel_soc - current_soc1) | clamp(0, 100) %}
-                {% set diff2 = (ziel_soc - current_soc2) | clamp(0, 100) %}
-                {% set dauer = (b_set - ts) / 3600 %}
-                {% set korrigierte_dauer = dauer if dauer > 0.01 else 0.01 %}
-                {% set max_ladeleistung1 = [ (5120 * diff1 / 100 / korrigierte_dauer * reserve) | round(0), 2500 ] | min %}
-                {% set max_ladeleistung2 = [ (5120 * diff2 / 100 / korrigierte_dauer * reserve) | round(0), 2500 ] | min %}
-                {{ {'v1': max_ladeleistung1, 'v2': max_ladeleistung2} }}
+            {% if (solar_today > load_today or solar_today == -1) and (ts >= t1130 and ts < b_set) %}
+              {% set ziel_soc = states('sensor.dynamic_soc') | float(80) %}
+              {% if ziel_soc < 100 %}
+                {% set dauer = [(b_set - ts) / 3600, 0.01] | max %}
+                {% set diff1 = (ziel_soc - states('sensor.venus_1_custom_soc') | float(20)) | clamp(0, 100) %}
+                {% set diff2 = (ziel_soc - states('sensor.venus_2_custom_soc') | float(20)) | clamp(0, 100) %}
+                {# reserve = 1.25 #}
+                {% set fak = 5120 / 100 / dauer * 1.25 %}
+                {{ {
+                  'v1': [(diff1 * fak) | round(0), 2500] | min,
+                  'v2': [(diff2 * fak) | round(0), 2500] | min
+                } }}
               {% else %}
-                {{ {'v1': 2500, 'v2': 2500} }}
-              {% endif %}              
+                {{ default }}
+              {% endif %}
             {% else %}
-                {{ {'v1': 2500, 'v2': 2500} }}
+              {{ default }}
             {% endif %}
 
       - name: "Target Discharge Distribution fast"
@@ -424,49 +395,38 @@ template:
         device_class: power
         state_class: measurement
         state: >
-          {% set current_soc = states('sensor.battery_soc_total') | float(0) %}
-          {% set min_soc = state_attr('sensor.dynamic_soc_grenzen','min') | float(20) %}
           {% set hausverbrauch = [states('sensor.hausverbrauch_netto_watt') | float(0), 0] | max %}
-
           {% set last = this.state | float(0) %}
           {{ hausverbrauch | round(0) if (hausverbrauch - last) | abs > 15 else last }}
         attributes:
           discharge: >
-            {% set total_discharge_power = this.state | float(0) %}
+            {% set total = this.state | float(0) %}
+            {% set zero = {'v1': 0, 'v2': 0} %}
 
-            {% if total_discharge_power <= 0 %}
-                {{ {'v1': 0, 'v2': 0} }}
+            {% if total <= 0 %}
+              {{ zero }}
             {% else %}
-              {% set min_soc = state_attr('sensor.dynamic_soc_grenzen','min') | float(20) %}
-              {% set s1_raw = states('sensor.venus_1_custom_soc') | float(0) %}
-              {% set s1 = s1_raw if is_state('switch.marstek_venus1_modbus_rs485_steuermodus', 'on') else 0 %}
-              {% set s2_raw = states('sensor.venus_2_custom_soc') | float(0) %}
-              {% set s2 = s2_raw if is_state('switch.marstek_venus2_modbus_rs485_steuermodus', 'on') else 0 %}
+              {% set min_soc = state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) %}
+              {% set w1 = [states('sensor.venus_1_custom_soc') | float(0) - min_soc, 0] | max
+                          if is_state('switch.marstek_venus1_modbus_rs485_steuermodus', 'on') else 0 %}
+              {% set w2 = [states('sensor.venus_2_custom_soc') | float(0) - min_soc, 0] | max
+                          if is_state('switch.marstek_venus2_modbus_rs485_steuermodus', 'on') else 0 %}
+              {% set sum_w = w1 + w2 %}
 
-              {% set w1, w2 = [0, s1 - min_soc] | max, [0, s2 - min_soc] | max %}
-              {% set sum_w = (w1 + w2) %}
-              
               {% if sum_w == 0 %}
-                {{ {'v1': 0, 'v2': 0} }}
+                  {{ zero }}
               {% else %}
-                {% set t1_raw = [(w1 * total_discharge_power / sum_w) | round(0), 0] | max %}
-                {% set t2_raw = [(total_discharge_power - t1_raw) | round(0), 0] | max %}
+                {% set t1 = (w1 / sum_w * total) | round(0) | int %}
+                {% set t2 = (total - t1) | int %}
 
-                {# Logik für die Schwellenwerte #}
-                {% if t1_raw < 250 and t2_raw < 250 %}
-                  {# Beide kleiner als 250: Zufällige Auswahl #}
+                {% if t1 < 250 and t2 < 250 %}
+                  {# Beide kleiner als 250: wechselnde Auswahl #}
                   {# Wochentags-Logik: Montag=1, Dienstag=2, ... Sonntag=7 #}
-                  {# winner ist 0 bei geraden Tagen, 1 bei ungeraden Tagen #}
-                  {% set winner = now().isoweekday() % 2 %}
-                  {% set target1 = total_discharge_power if winner == 0 else 0 %}
-                  {% set target2 = total_discharge_power if winner == 1 else 0 %}
-                {% else %}
-                  {# Beide groß genug: Normale Berechnung #}
-                  {% set target1 = t1_raw %}
-                  {% set target2 = t2_raw %}
+                  {% set odd = (now().isoweekday() + now().hour) % 2 %}
+                  {% set t1 = total if odd == 0 else 0 %}
+                  {% set t2 = total if odd == 1 else 0 %}
                 {% endif %}
-
-                {{ {'v1': target1, 'v2': target2} }}
+                {{ {'v1': t1, 'v2': t2} }}
               {% endif %}
             {% endif %}
 
@@ -486,25 +446,24 @@ automation:
         value_template: "{{ is_number(trigger.to_state.state) }}"
     action:
       - variables:
-          # --- Werte für Venus 1 ---
-          v1_c_target: >
-            {% set v = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
-            {{ v.v1 | int(0) if v is not none else 0 }}
-          v1_d_target: >
-            {% set v = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
-            {{ v.v1 | int(0) if v is not none else 0 }}
-          v1_laden: "{{ [v1_c_target, 2500] | min if v1_c_target >= 20 else 0 }}"
-          v1_entladen: "{{ [v1_d_target, 2500] | min if v1_d_target >= 20 else 0 }}"
+          # --- Attribut-Objekte einmalig lesen ---
+          charge_attr: "{{ state_attr('sensor.target_charge_distribution_fast', 'charge') }}"
+          discharge_attr: "{{ state_attr('sensor.target_discharge_distribution_fast', 'discharge') }}"
+          # --- Venus 1 ---
+          v1_laden: >
+            {% set c = charge_attr.v1 | int(0) if charge_attr is not none else 0 %}
+            {{ [c, 2500] | min if c >= 20 else 0 }}
+          v1_entladen: >
+            {% set d = discharge_attr.v1 | int(0) if discharge_attr is not none else 0 %}
+            {{ [d, 2500] | min if d >= 20 else 0 }}
+          # --- Venus 2 ---
+          v2_laden: >
+            {% set c = charge_attr.v2 | int(0) if charge_attr is not none else 0 %}
+            {{ [c, 2500] | min if c >= 20 else 0 }}
+          v2_entladen: >
+            {% set d = discharge_attr.v2 | int(0) if discharge_attr is not none else 0 %}
+            {{ [d, 2500] | min if d >= 20 else 0 }}
 
-          # --- Werte für Venus 2 ---
-          v2_c_target: >
-            {% set v = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
-            {{ v.v2 | int(0) if v is not none else 0 }}
-          v2_d_target: >
-            {% set v = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
-            {{ v.v2 | int(0) if v is not none else 0 }}
-          v2_laden: "{{ [v2_c_target, 2500] | min if v2_c_target >= 20 else 0 }}"
-          v2_entladen: "{{ [v2_d_target, 2500] | min if v2_d_target >= 20 else 0 }}"
           # --- Modus Logik ---
           target_mode_v1: >
             {% if v1_laden >= 20 %} charge

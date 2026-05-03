@@ -3,30 +3,31 @@ utility_meter:
   pv_ertrag_heute_um:
     unique_id: pv_ertrag_heute_um
     source: sensor.pv_energy_total_realtime
-    name: "PV Ertrag Heute"
+    name: "PV Ertrag Heute UM"
     cycle: daily
 
   pv_ertrag_balkon_heute_um:
     unique_id: pv_ertrag_balkon_heute_um
     source: sensor.pv_energy_balkon_realtime
-    name: "PV Ertrag Balkon Heute"
+    name: "PV Ertrag Balkon Heute UM"
     cycle: daily
 
   pv_ertrag_dach_heute_um:
     unique_id: pv_ertrag_dach_heute_um
     source: sensor.dach_energie_clean
-    name: "PV Ertrag Dach Heute"
+    name: "PV Ertrag Dach Heute UM"
     cycle: daily
 
   hausverbrauch_heute_um:
     unique_id: hausverbrauch_heute_um
     source: sensor.hausverbrauch_energy
-    name: "Hausverbrauch Heute"
+    name: "Hausverbrauch Heute UM"
     cycle: daily
 
 sensor:
   - platform: filter
     name: "PV Energy Ertrag heute"
+    unique_id: pv_ertrag_heute
     entity_id: sensor.pv_ertrag_heute_um
     filters:
       - filter: range
@@ -45,6 +46,7 @@ sensor:
         upper_bound: 60 # Alles über 60 kWh pro Tag wird ignoriert
   - platform: filter
     name: "Hausverbrauch heute"
+    unique_id: hausverbrauch_heute
     entity_id: sensor.hausverbrauch_heute_um
     filters:
       - filter: range
@@ -63,15 +65,10 @@ template:
         state: >
           {% set val = states('sensor.balkon_inverter_energy_total') | float(none) %}
           {% set last = this.state | float(none) %}
-          {% if val is not none %}
-            {% if last is not none %}
-              {# Verhindert das Sinken des Wertes, aber erlaubt Initialisierung #}
-              {{ [val, last] | max }}
-            {% else %}
-              {{ val }}
-            {% endif %}
+          {% if last is not none %}
+            {{ [val, last] | max }}
           {% else %}
-            {{ last }}
+            {{ val }}
           {% endif %}
 
       - name: "Balkon Inverter 2 Clean"
@@ -83,15 +80,10 @@ template:
         state: >
           {% set val = states('sensor.balkon_inverter2_energy_total') | float(none) %}
           {% set last = this.state | float(none) %}
-          {% if val is not none %}
-            {% if last is not none %}
-              {# Verhindert das Sinken des Wertes, aber erlaubt Initialisierung #}
-              {{ [val, last] | max }}
-            {% else %}
-              {{ val }}
-            {% endif %}
+          {% if last is not none %}
+            {{ [val, last] | max }}
           {% else %}
-            {{ last }}
+            {{ val }}
           {% endif %}
 
       - name: "Garage Inverter Clean"
@@ -103,15 +95,10 @@ template:
         state: >
           {% set val = states('sensor.garage_inverter_energy_total') | float(none) %}
           {% set last = this.state | float(none) %}
-          {% if val is not none %}
-            {% if last is not none %}
-              {# Verhindert das Sinken des Wertes, aber erlaubt Initialisierung #}
-              {{ [val, last] | max }}
-            {% else %}
-              {{ val }}
-            {% endif %}
+          {% if last is not none %}
+            {{ [val, last] | max }}
           {% else %}
-            {{ last }}
+            {{ val }}
           {% endif %}
 
       - name: "PV Produktion Balkon Watt fast"
@@ -127,8 +114,7 @@ template:
           {% set s2 = states('sensor.balkon_inverter2_energy_power') | float(0) %}
           {% set s3 = states('sensor.garage_inverter_energy_power') | float(0) %}
           {# Nur addieren, was wirklich als Zahl vorliegt #}
-          {% set total = (s1|default(0) + s2|default(0) + s3|default(0)) %}
-          {{ total | round(0) }}
+          {{ (s1 + s2 + s3) | round(0) }}
 
       - name: "Dach Energie Clean"
         unique_id: dach_energie_clean
@@ -162,8 +148,7 @@ template:
           {% set s1 = states('sensor.zwicknagl_martin_leistung_ac') | float(0) %}
           {% set s2 = states('sensor.pv_produktion_balkon_watt_fast') | float(0) %}
           {# Nur addieren, was wirklich als Zahl vorliegt #}
-          {% set total = (s1|default(0) + s2|default(0)) %}
-          {{ total | round(0) }}
+          {{ (s1 + s2) | round(0) }}
 
   - trigger:
       - platform: time_pattern
