@@ -75,7 +75,7 @@ template:
       - name: "UPS SOC Reset Punkt"
         unique_id: ups_soc_reset_punkt
         unit_of_measurement: "Wh"
-        state: >
+        state: >-
           {% set current_energy = states('sensor.ups_energiefluss_wh') | float(0) %}
           {% set raw_last_reset = states('sensor.ups_soc_reset_punkt') %}
           {% set hw_soc = states('sensor.ups_soc') | float(0) %}
@@ -118,7 +118,7 @@ template:
         unique_id: ups_custom_soc
         unit_of_measurement: "%"
         device_class: battery
-        state: >
+        state: >-
           {% set hw_soc = states('sensor.ups_soc') | float(-1) %}
           {% set neu_wh = states('sensor.ups_energiefluss_wh') | float(none) %}
           {% set reset_wh = states('sensor.ups_soc_reset_punkt') | float(none) %}
@@ -144,7 +144,7 @@ template:
             {% endif %}
           {% endif %}
         attributes:
-          last_wh: >
+          last_wh: >-
             {% set hw_soc = states('sensor.ups_soc') | float(-1) %}
             {% set neu_wh = states('sensor.ups_energiefluss_wh') | float(none) %}
             {% set alt_wh = this.attributes.get('last_wh', neu_wh) | float(0) %}
@@ -191,7 +191,7 @@ template:
         unique_id: ups_free_capacity_kwh
         unit_of_measurement: "kWh"
         device_class: energy
-        state: >
+        state: >-
           {% set total_kwh = 2.0 %} 
           {% set soc = states('sensor.ups_custom_soc') | float(-1) %}
           {{ (total_kwh * (1 - (soc / 100))) | round(2) if soc >= 0 else 0 }}
@@ -202,7 +202,7 @@ template:
         unique_id: battery_total_charge_power
         unit_of_measurement: "W"
         device_class: power
-        state: >
+        state: >-
           {% set p1 = states('sensor.battery_charger_energy_power') | float(0) %}
           {% set p2 = states('sensor.battery_charger2_energy_power') | float(0) %}
           {{ (p1 + p2) | round(0) }}
@@ -212,7 +212,7 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        state: >
+        state: >-
           {% set charging = states('sensor.battery_total_charge_power') | float(0) %}
           {% set discharging = states('sensor.battery_inverter_energy_power') | float(0) %}
           {{ (discharging - charging) | round(0) }}
@@ -240,7 +240,7 @@ automation:
           # --- Wartungsmodus ein (mit Überladeschutz!)
           - conditions:
               - condition: template
-                value_template: >
+                value_template: >-
                   {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
                   {# Nur laden wenn Wartung aktiv UND Batterie noch nicht voll #}
                   {{ states('input_number.manuelle_ladeleistung') | float(0) >= 1000 
@@ -254,7 +254,7 @@ automation:
           # --- NOT-LADUNG (SOC zu niedrig) ---
           - conditions:
               - condition: template
-                value_template: >
+                value_template: >-
                   {% set soc = states('sensor.ups_custom_soc') | float(100) %}
                   {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(3.65) %}
                   {{ (soc <= 12 or low_cell < 2.95) and is_state('switch.battery_charger2', 'off') }}
@@ -267,7 +267,7 @@ automation:
           # --- ENTLADEN STARTEN ---
           - conditions:
               - condition: template
-                value_template: >
+                value_template: >-
                   {% set target_discharge = states('sensor.target_discharge_distribution_fast') | float(0) %}
                   {% set soc = states('sensor.ups_custom_soc') | float(0) %}
                   {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(3.3) %}
@@ -282,7 +282,7 @@ automation:
           # --- ENTLADEN STOPPEN ---
           - conditions:
               - condition: template
-                value_template: >
+                value_template: >-
                   {% set target_discharge = states('sensor.target_discharge_distribution_fast') | float(0) %}
                   {% set soc = states('sensor.ups_custom_soc') | float(0) %}
                   {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(2.8) %}
@@ -294,7 +294,7 @@ automation:
           # --- LADEN STOPPEN ---
           - conditions:
               - condition: template
-                value_template: >
+                value_template: >-
                   {% set target_charge = states('sensor.target_charge_distribution_fast') | float(0) %}
                   {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
                   {{ (target_charge < 100  or high_cell > 3.58) and (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
@@ -306,7 +306,7 @@ automation:
           # --- LADEN STARTEN
           - conditions:
               - condition: template
-                value_template: >
+                value_template: >-
                   {% set target_charge = states('sensor.target_charge_distribution_fast') | float(0) %}
                   {% set soc = states('sensor.ups_custom_soc') | float(100) %}
                   {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
@@ -337,7 +337,7 @@ automation:
         for: "00:00:03"
     condition:
       - condition: template
-        value_template: >
+        value_template: >-
           {{ is_state('switch.battery_inverter_tasmota', 'on') and 
              (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
     action:

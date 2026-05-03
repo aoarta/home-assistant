@@ -35,7 +35,7 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        state: >
+        state: >-
           {# Wir nutzen den Zielwert (globalcurrent), damit die Berechnung sofort reagiert #}
           {% if is_state('binary_sensor.warp3_2ita_cable', 'on') %}
             {% set current = states('number.warp3_2ita_globalcurrent') | float(0) %}
@@ -58,7 +58,7 @@ template:
         unique_id: zero_dynamischer_ladestrom
         unit_of_measurement: "A"
         state_class: measurement
-        state: >
+        state: >-
           {% set cable_connected = is_state('binary_sensor.warp3_2ita_cable', 'on') %}
           {% if cable_connected %}
             {% set charger_power = states('sensor.warp3_2ita_powernow') | float(0) %}
@@ -88,13 +88,19 @@ automation:
     trigger:
       - platform: state
         entity_id: sensor.zero_dynamischer_ladestrom
+        for:
+          seconds: 5 # Entschärfung bei Schwanzungen
       - platform: state
         entity_id: input_number.zero_manueller_ladestrom
       - platform: state
+        entity_id: sensor.zero_motorcycles_1037976_soc
+        for:
+          seconds: 10 # SOC ändert sich langsam
+      - platform: state
         entity_id: binary_sensor.warp3_2ita_cable
         to: "on"
-      - platform: state # FIX 3: SOC-Trigger ergänzt
-        entity_id: sensor.zero_motorcycles_1037976_soc
+      - platform: time_pattern
+        minutes: "/2" # Fallback: alle 30 s prüfen
 
     condition:
       - condition: state
@@ -133,8 +139,8 @@ automation:
                       entity_id: button.warp3_2ita_startcharge
 
           - conditions:
-              - "{{ manual_amps >= 6 }}"
-              - "{{ soc >= stop_limit }}"
+              - "{{ manual_amps | int(0) >= 6 }}"
+              - "{{ soc | int(0) >= stop_limit | int(0) }}"
               - "{{ is_charging }}"
             sequence:
               - action: button.press
@@ -148,18 +154,18 @@ automation:
 
           # --- MODUS B: PV-AUTOMATIK (wenn manuell auf 0 steht) ---
           - conditions:
-              - "{{ manual_amps == 0 }}"
-              - "{{ soc < stop_limit }}"
-              - "{{ is_charging or soc < start_limit }}"
+              - "{{ manual_amps | int(0) == 0 }}"
+              - "{{ soc | int(0) < stop_limit | int(0)}}"
+              - "{{ is_charging or soc | int(0) < start_limit | int(0) }}"
             sequence:
               - choose:
                   # START oder ANPASSUNG
                   - conditions:
-                      - "{{ pv_amps >= 6 }}"
-                      - "{{ soc < stop_limit }}"
+                      - "{{ pv_amps | int(0) >= 6 }}"
+                      - "{{ soc | int(0) < stop_limit | int(0) }}"
                     sequence:
                       - if:
-                          - "{{ pv_amps != current_wb_target }}"
+                          - "{{ pv_amps | int(0) != current_wb_target | int(0) }}"
                         then:
                           - action: number.set_value
                             target:
@@ -176,7 +182,7 @@ automation:
                   # STOPP (Limit erreicht oder zu wenig Sonne)
                   - conditions:
                       - "{{ is_charging }}"
-                      - "{{ soc >= stop_limit or pv_amps < 6 }}"
+                      - "{{ soc | int(0) >= stop_limit | int(0) or pv_amps | int(0) < 6 }}"
                     sequence:
                       - action: button.press
                         target:

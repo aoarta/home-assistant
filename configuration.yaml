@@ -127,7 +127,7 @@ template:
       - name: "Solar Zeit-Logik"
         unique_id: solar_zeit_logik
         availability: "{{ state_attr('sun.sun', 'next_setting') is not none }}"
-        state: >
+        state: >-
           {% set ts = as_timestamp(now()) %}
           {% set ss = as_timestamp(state_attr('sun.sun', 'next_setting')) | default(0) %}
           {% set sr = as_timestamp(state_attr('sun.sun', 'next_rising')) | default(0) %}
@@ -139,22 +139,20 @@ template:
           sun_rise: "{{ as_timestamp(state_attr('sun.sun', 'next_rising')) - 86400 if as_timestamp(state_attr('sun.sun', 'next_rising')) > as_timestamp(now()) else as_timestamp(state_attr('sun.sun', 'next_rising')) }}"
           sun_set: "{{ as_timestamp(state_attr('sun.sun', 'next_setting')) - 86400 if as_timestamp(state_attr('sun.sun', 'next_setting')) > as_timestamp(now().replace(hour=23, minute=59)) else as_timestamp(state_attr('sun.sun', 'next_setting')) }}"
           t1130: "{{ as_timestamp(now().replace(hour=11, minute=30, second=0, microsecond=0)) }}"
-          b_set: >
+          b_set: >-
             {% set ss = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
             {{ (ss - 86400 if ss > as_timestamp(now().replace(hour=23, minute=59)) else ss) - 4*3600 }}
 
       - name: "Dynamic SOC Grenzen"
         unique_id: dynamic_soc_grenzen
         unit_of_measurement: "%"
-        state: >
-          {% set soc = states('sensor.battery_soc_total') %}
-          {{ soc if is_number(soc) else this.state | default(0) }}
+        state: "OK"
         attributes:
-          min: "5"
+          min: "10"
           low: "{{ 100.1 if is_state('input_boolean.override_soc', 'on') else 60 }}"
           mid: "{{ 100.1 if is_state('input_boolean.override_soc', 'on') else 80 }}"
           max: "100.1"
-          high: >
+          high: >-
             {% if is_state('input_boolean.override_soc', 'on') %}
               100.1
             {% else %}
@@ -167,7 +165,7 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        state: >
+        state: >-
           {% set venus1 = states('sensor.marstek_venus_1_ac_leistung') | float(0) %}
           {% set venus2 = states('sensor.marstek_venus_2_ac_leistung') | float(0) %}
           {% set ups = states('sensor.ups_ac_leistung') | float(0) %}
@@ -193,7 +191,7 @@ template:
       - name: "PV Speicher Bilanz Heute"
         unique_id: voraussichtlicher_bedarf_heute
         unit_of_measurement: "kWh"
-        state: >
+        state: >-
           {% set free_m = states('sensor.marstek_free_capacity_kwh') %}
           {% set free_u = states('sensor.ups_free_capacity_kwh') %}
           {% set load = states('sensor.estimated_remaining_consumption') %}
@@ -207,7 +205,7 @@ template:
       - name: "Dynamic SOC"
         unique_id: dynamic_soc
         unit_of_measurement: "%"
-        state: >
+        state: >-
           {% if states('input_number.manuelle_ladeleistung') | float(0) > 0 %}
             100.1
           {% elif is_state('binary_sensor.batterie_wartung_erforderlich', 'on') %}
@@ -244,7 +242,7 @@ template:
   - binary_sensor:
       - name: "Batterie Wartung Erforderlich"
         unique_id: batterie_wartung_erforderlich
-        state: >
+        state: >-
           {% set v1_last = states('sensor.venus_1_last_full') %}
           {% set v2_last = states('sensor.venus_2_last_full') %}
           {% set ups_last = states('sensor.ups_last_full') %}

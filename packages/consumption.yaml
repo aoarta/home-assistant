@@ -30,7 +30,7 @@ sensor:
 
   - platform: filter
     name: "Solarnet Leistung vom Netz 5 min Durchschnitt"
-    unique_id: solarnet_leistung_vom_netzt_5min_avg
+    unique_id: solarnet_leistung_vom_netz_5min_avg
     entity_id: sensor.solarnet_leistung_vom_netz
     filters:
       - filter: time_simple_moving_average
@@ -90,10 +90,10 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        availability: >
+        availability: >-
           {{ has_value('sensor.solarnet_leistung_vom_netz') and
              has_value('sensor.marstek_batterieleistung_gesamt') }}
-        state: >
+        state: >-
           {{ (states('sensor.solarnet_leistung_vom_netz') | float(0)
             + states('sensor.marstek_batterieleistung_gesamt') | float(0)) | round(0) }}
 
@@ -108,7 +108,7 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        state: >
+        state: >-
           {% set fast = states('sensor.average_consumption_last_1h_fast') %}
           {% if is_number(fast) %}
             {{ fast | float(0) }}
@@ -131,7 +131,7 @@ template:
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total
-        state: >
+        state: >-
           {% set watt = states('sensor.average_consumption_last_1h') | float(none) %}
           {% set sun_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(none) %}
           {% set now_ts = as_timestamp(now()) %}
@@ -145,7 +145,7 @@ template:
             0.0
           {% endif %}
         attributes:
-          verbleibende_zeit_h: >
+          verbleibende_zeit_h: >-
             {% set sun_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
             {% set now_ts = as_timestamp(now()) %}
             {{ ((sun_set - now_ts) / 3600) | round(2) if sun_set > now_ts else 0 }}

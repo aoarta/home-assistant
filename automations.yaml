@@ -17,7 +17,6 @@
   triggers:
     - trigger: homeassistant
       event: start
-  conditions: []
   actions:
     - action: shell_command.optimize_cpu
       metadata: {}
@@ -45,10 +44,10 @@
 - alias: "Batterie Wartung: Nachtladung erzwingen"
   id: batterie_wartung_nachtladung
   triggers:
-    - platform: sun
+    - trigger: sun
       event: sunset
       offset: "00:05:00"
-    - platform: state
+    - trigger: state
       entity_id: binary_sensor.batterie_wartung_erforderlich
       to: "on"
   conditions:
@@ -67,7 +66,7 @@
 - alias: "Batterie Wartung: Beenden wenn voll"
   id: batterie_wartung_beenden
   triggers:
-    - platform: state
+    - trigger: state
       entity_id:
         - sensor.marstek_venus_1_batterie_ladezustand
         - sensor.marstek_venus_2_batterie_ladezustand
@@ -78,7 +77,7 @@
       above: 999
       below: 1001
     - condition: template
-      value_template: >
+      value_template: >-
         {{ states('sensor.marstek_venus_1_batterie_ladezustand') | int(0) >= 100 and
           states('sensor.marstek_venus_2_batterie_ladezustand') | int(0) >= 100 }}
   actions:
@@ -95,14 +94,14 @@
   id: soc_override_weekly_control
   triggers:
     - trigger: time
-      at: "00:03:00"
+      at: "03:00:00"
     - trigger: homeassistant
       event: start
   actions:
     - choose:
         - conditions:
             - condition: template
-              value_template: >
+              value_template: >-
                 {% set threshold = 5 * 86400 %}
                 {% set now_ts = as_timestamp(now()) %}
                 {% set ages = [

@@ -62,7 +62,7 @@ template:
         device_class: energy
         state_class: total_increasing
         availability: "{{ is_number(states('sensor.balkon_inverter_energy_total')) }}"
-        state: >
+        state: >-
           {% set val = states('sensor.balkon_inverter_energy_total') | float(none) %}
           {% set last = this.state | float(none) %}
           {% if last is not none %}
@@ -77,7 +77,7 @@ template:
         device_class: energy
         state_class: total_increasing
         availability: "{{ is_number(states('sensor.balkon_inverter2_energy_total')) }}"
-        state: >
+        state: >-
           {% set val = states('sensor.balkon_inverter2_energy_total') | float(none) %}
           {% set last = this.state | float(none) %}
           {% if last is not none %}
@@ -92,7 +92,7 @@ template:
         device_class: energy
         state_class: total_increasing
         availability: "{{ is_number(states('sensor.garage_inverter_energy_total')) }}"
-        state: >
+        state: >-
           {% set val = states('sensor.garage_inverter_energy_total') | float(none) %}
           {% set last = this.state | float(none) %}
           {% if last is not none %}
@@ -105,11 +105,11 @@ template:
         unique_id: pv_produktion_balkon_watt_fast
         unit_of_measurement: "W"
         device_class: power
-        availability: >
+        availability: >-
           {{ is_number(states('sensor.balkon_inverter_energy_power')) or 
              is_number(states('sensor.balkon_inverter2_energy_power')) or
              is_number(states('sensor.garage_inverter_energy_power')) }}
-        state: >
+        state: >-
           {% set s1 = states('sensor.balkon_inverter_energy_power') | float(0) %}
           {% set s2 = states('sensor.balkon_inverter2_energy_power') | float(0) %}
           {% set s3 = states('sensor.garage_inverter_energy_power') | float(0) %}
@@ -122,7 +122,7 @@ template:
         device_class: energy
         state_class: total_increasing
         availability: "{{ is_number(states('sensor.zwicknagl_martin_energie_gesamt')) }}"
-        state: >
+        state: >-
           {% set raw = states('sensor.zwicknagl_martin_energie_gesamt') | float(none) %}
           {% set last = this.state | float(none) %}
           {% if raw is not none %}
@@ -141,10 +141,10 @@ template:
         unique_id: pv_produktion_watt_fast
         unit_of_measurement: "W"
         device_class: power
-        availability: >
+        availability: >-
           {{ is_number(states('sensor.zwicknagl_martin_leistung_ac')) and 
              is_number(states('sensor.pv_produktion_balkon_watt_fast')) }}
-        state: >
+        state: >-
           {% set s1 = states('sensor.zwicknagl_martin_leistung_ac') | float(0) %}
           {% set s2 = states('sensor.pv_produktion_balkon_watt_fast') | float(0) %}
           {# Nur addieren, was wirklich als Zahl vorliegt #}
@@ -160,11 +160,11 @@ template:
         device_class: energy
         state_class: total_increasing
         #zeilen: Summiert die oben erstellten "Clean" Sensoren
-        availability: >
+        availability: >-
           {{ is_number(states('sensor.balkon_inverter_1_clean')) and 
              is_number(states('sensor.balkon_inverter_2_clean')) and
              is_number(states('sensor.garage_inverter_clean')) }}
-        state: >
+        state: >-
           {% set s1 = states('sensor.balkon_inverter_1_clean') | float(0) %}
           {% set s2 = states('sensor.balkon_inverter_2_clean') | float(0) %}
           {% set s3 = states('sensor.garage_inverter_clean') | float(0) %}
@@ -176,10 +176,10 @@ template:
         device_class: energy
         state_class: total_increasing
         #zeilen: Dach + Balkon Gesamt
-        availability: >
+        availability: >-
           {{ is_number(states('sensor.dach_energie_clean')) and 
              is_number(states('sensor.pv_energy_balkon_realtime')) }}
-        state: >
+        state: >-
           {% set dach = states('sensor.dach_energie_clean') | float(0) %}
           {% set balkon = states('sensor.pv_energy_balkon_realtime') | float(0) %}
           {{ (dach + balkon) | round(2) }}
@@ -189,5 +189,5 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        state: >
+        state: >-
           {{ states('sensor.pv_produktion_watt_fast') | float(0) | round(0) }}
