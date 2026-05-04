@@ -154,10 +154,10 @@ template:
           max: "100.1"
           high: >-
             {% if is_state('input_boolean.override_soc', 'on') %}
-              100.1
+              101
             {% else %}
               {% set morgen = states('sensor.pv_forecast_weighted_morgen') | float(0) %}
-              {{ 85 if morgen > 30 else 100.2 }}
+              {{ 85 if morgen > 30 else 103 }}
             {% endif %}
 
       - name: "Batterieleistung gesamt"
@@ -207,9 +207,9 @@ template:
         unit_of_measurement: "%"
         state: >-
           {% if states('input_number.manuelle_ladeleistung') | float(0) > 0 %}
-            100.1
+            110
           {% elif is_state('binary_sensor.batterie_wartung_erforderlich', 'on') %}
-            100.2
+            120
           {% else %}
             {% set solar_today = states('sensor.pv_forecast_weighted') | float(-1) %}
             {% set free_marstek = states('sensor.marstek_free_capacity_kwh') | float(0) %}
@@ -235,7 +235,7 @@ template:
                 {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
               {% endif %}
             {% else %}
-              100.3
+              130
             {% endif %}
           {% endif %}
 

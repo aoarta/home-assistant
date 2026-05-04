@@ -46,7 +46,7 @@
   triggers:
     - trigger: sun
       event: sunset
-      offset: "00:05:00"
+      offset: "00:05:00" # hier am abend oder in der nacht starten
     - trigger: state
       entity_id: binary_sensor.batterie_wartung_erforderlich
       to: "on"
