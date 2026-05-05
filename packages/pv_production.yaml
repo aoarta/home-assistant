@@ -18,12 +18,6 @@ utility_meter:
     name: "PV Ertrag Dach Heute UM"
     cycle: daily
 
-  hausverbrauch_heute_um:
-    unique_id: hausverbrauch_heute_um
-    source: sensor.hausverbrauch_energy
-    name: "Hausverbrauch Heute UM"
-    cycle: daily
-
 sensor:
   - platform: filter
     name: "PV Energy Ertrag heute"

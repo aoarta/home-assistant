@@ -1,3 +1,10 @@
+utility_meter:
+  hausverbrauch_heute_um:
+    unique_id: hausverbrauch_heute_um
+    source: sensor.hausverbrauch_energy
+    name: "Hausverbrauch Heute UM"
+    cycle: daily
+
 sensor:
   - platform: integration
     source: sensor.hausverbrauch_netto_watt
@@ -149,3 +156,45 @@ template:
             {% set sun_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
             {% set now_ts = as_timestamp(now()) %}
             {{ ((sun_set - now_ts) / 3600) | round(2) if sun_set > now_ts else 0 }}
+
+      - name: "PV Speicher Bilanz Heute"
+        unique_id: expected_need_today # Verbrauch und Speicherung
+        unit_of_measurement: "kWh"
+        state: >-
+          {% set free_m = states('sensor.marstek_free_capacity_kwh') %}
+          {% set free_u = states('sensor.ups_free_capacity_kwh') %}
+          {% set load = states('sensor.estimated_remaining_consumption') %}
+
+          {% if is_number(free_m) and is_number(free_u) and is_number(load) %}
+            {{ (free_m|float + free_u|float + load|float) | round(1) }}
+          {% else %}
+            {{ this.state | default(0) }}
+          {% endif %}
+
+  - trigger:
+      - platform: time
+        at: "23:45:00"
+      - platform: homeassistant
+        event: start
+    sensor:
+      - name: "Hausverbrauch Gestern 23:45"
+        unique_id: hausverbrauch_gestern_2345
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        state: >-
+          {% if trigger.platform == 'time' %}
+            {% set aktuell = states('sensor.hausverbrauch_heute_um') | float(none) %}
+            {% set alt = this.state | float(none) %}
+            {% if aktuell is not none and alt is not none %}
+              {{ (0.9 * aktuell + 0.1 * alt) | round(2) }}
+            {% elif aktuell is not none %}
+              {{ aktuell | round(2) }}
+            {% else %}
+              {{ this.state | default(0.0) }}
+            {% endif %}
+          {% elif this.state is defined and is_number(this.state) %}
+            {{ this.state }}
+          {% else %}
+            {{ states('sensor.hausverbrauch_heute_um') | float(10.0) }}
+          {% endif %}

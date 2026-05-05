@@ -435,12 +435,11 @@ template:
             {% set default = {'v1': 2500, 'v2': 2500} %}
 
             {% set solar_today = states('sensor.pv_forecast_weighted') | float(-1) %}
-            {% set load_today = states('sensor.estimated_remaining_consumption') | float(-1) %}
             {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
             {% set b_set = state_attr('sensor.solar_zeit_logik', 'b_set') | float(0) %}
             {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
 
-            {% if (solar_today > load_today or solar_today == -1) and (ts >= t1130 and ts < b_set) %}
+            {% if ts >= t1130 and ts < b_set %}
               {% set ziel_soc = states('sensor.dynamic_soc') | float(80) %}
               {% if ziel_soc < 100 %}
                 {% set dauer = [(b_set - ts) / 3600, 0.01] | max %}
