@@ -228,13 +228,11 @@ automation:
     trigger:
       - platform: state
         entity_id:
-          - sensor.target_discharge_distribution_fast
-          - sensor.target_charge_distribution_fast
           - sensor.ups_custom_soc
           - sensor.ups_lowest_cell_stabil
           - sensor.ups_highest_cell_stabil
           - binary_sensor.batterie_wartung_erforderlich
-          - sensor.zwicknagl_martin_leistung_ac
+          - sensor.hausverbrauch_netto_stabil
     action:
       - choose:
           # --- Wartungsmodus ein (mit Überladeschutz!)
@@ -268,10 +266,10 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {% set target_discharge = states('sensor.target_discharge_distribution_fast') | float(0) %}
+                  {% set hausverbrauch = states('sensor.hausverbrauch_netto_stabil') | float(0) %}
                   {% set soc = states('sensor.ups_custom_soc') | float(0) %}
                   {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(3.3) %}
-                  {{ target_discharge > 180 and soc > 25 and low_cell > 3.1 and is_state('switch.battery_inverter_tasmota', 'off') }}
+                  {{ hausverbrauch > -180 and soc > 25 and low_cell > 3.1 and is_state('switch.battery_inverter_tasmota', 'off') }}
             sequence:
               - action: switch.turn_off
                 target:
@@ -283,10 +281,10 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {% set target_discharge = states('sensor.target_discharge_distribution_fast') | float(0) %}
+                  {% set hausverbrauch = states('sensor.hausverbrauch_netto_stabil') | float(0) %}
                   {% set soc = states('sensor.ups_custom_soc') | float(0) %}
                   {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(2.8) %}
-                  {{ (target_discharge < 20 or soc <= 20 or low_cell < 3.0) and is_state('switch.battery_inverter_tasmota', 'on') }}
+                  {{ (hausverbrauch < -20 or soc <= 20 or low_cell < 3.0) and is_state('switch.battery_inverter_tasmota', 'on') }}
             sequence:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
@@ -295,9 +293,9 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {% set target_charge = states('sensor.target_charge_distribution_fast') | float(0) %}
+                  {% set hausverbrauch = states('sensor.hausverbrauch_netto_stabil') | float(0) %}
                   {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
-                  {{ (target_charge < 100  or high_cell > 3.58) and (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
+                  {{ (hausverbrauch > -100 or high_cell > 3.58) and (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
             sequence:
               - action: switch.turn_off
                 target:
@@ -307,11 +305,10 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {% set target_charge = states('sensor.target_charge_distribution_fast') | float(0) %}
+                  {% set hausverbrauch = states('sensor.hausverbrauch_netto_stabil') | float(0) %}
                   {% set soc = states('sensor.ups_custom_soc') | float(100) %}
                   {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
-                  {% set pv_leistung_ac = states('sensor.zwicknagl_martin_leistung_ac') | float(0) %}
-                  {{ target_charge > 820 and soc < 96 and high_cell < 3.42 and pv_leistung_ac > 820 
+                  {{ hausverbrauch < -820 and soc < 96 and high_cell < 3.42 
                       and is_state('switch.battery_inverter_tasmota', 'off') }}
 
             sequence:
@@ -319,7 +316,7 @@ automation:
                 target: { entity_id: switch.battery_charger }
               - if:
                   - condition: template
-                    value_template: "{{ states('sensor.target_charge_distribution_fast') | float(0) > 1200 and states('sensor.ups_custom_soc') | float(0) < 99 }}"
+                    value_template: "{{ states('sensor.hausverbrauch_netto_stabil') | float(0) < -1200 and states('sensor.ups_custom_soc') | float(0) < 99 }}"
                 then:
                   - delay: "00:00:01"
                   - action: switch.turn_on

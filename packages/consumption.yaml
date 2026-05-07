@@ -104,6 +104,16 @@ template:
           {{ (states('sensor.solarnet_leistung_vom_netz') | float(0)
             + states('sensor.marstek_batterieleistung_gesamt') | float(0)) | round(0) }}
 
+  - sensor:
+      - name: "Hausverbrauch Netto Stabil"
+        unique_id: hausverbrauch_netto_stabil
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        availability: "{{ has_value('sensor.hausverbrauch_netto_watt') }}"
+        state: >-
+          {{ ((states('sensor.hausverbrauch_netto_watt') | float(0) / 15) | int) * 15 }}
+
   - trigger:
       - platform: state
         entity_id: sensor.average_consumption_last_1h_fast # ✓ Fix: aktualisiert laufend

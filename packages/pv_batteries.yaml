@@ -258,8 +258,6 @@ template:
           {{ (cap1 * (1 - (soc1 / 100)) + cap2 * (1 - (soc2 / 100))) | round(2) }}
 
   - trigger:
-      - platform: time_pattern
-        seconds: "/10"
       - platform: homeassistant
         event: start
       - platform: state
@@ -268,6 +266,9 @@ template:
           - input_boolean.override_soc
           - sensor.dynamic_soc
           - sensor.dynamic_soc_grenzen
+          - sensor.hausverbrauch_netto_stabil
+          - sensor.venus_1_custom_soc
+          - sensor.venus_2_custom_soc
         for:
           seconds: 3
     sensor:
@@ -276,11 +277,7 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        state: >-
-          {% set raw_target = [0, -(states('sensor.hausverbrauch_netto_watt') | float(0))] | max %}
-          {% set last = this.state | float(0) %}
-          {{ raw_target | round(0) if (raw_target - last) | abs > 15 else last }}
-
+        state: "OK"
         attributes:
           # Wir speichern das Ergebnis direkt als Objekt (Map), nicht als JSON-String
           charge: >-
@@ -335,10 +332,7 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        state: >-
-          {% set hausverbrauch = [states('sensor.hausverbrauch_netto_watt') | float(0), 0] | max %}
-          {% set last = this.state | float(0) %}
-          {{ hausverbrauch | round(0) if (hausverbrauch - last) | abs > 15 else last }}
+        state: "OK"
         attributes:
           discharge: >-
             {# Inline statt this.state, um den aktuellen Wert zu haben und kein LAG zu vermeiden #}
@@ -446,9 +440,12 @@ template:
                 {% set fak = 5120 / 100 / dauer * 1.25 %}
                 {% set soc1 = states('sensor.venus_1_custom_soc') | float(20) %}
                 {% set soc2 = states('sensor.venus_2_custom_soc') | float(20) %}
+                {% set raw1 = [((ziel_soc - soc1) | clamp(0,100) * fak) | round(0), 2500] | min %}
+                {% set raw2 = [((ziel_soc - soc2) | clamp(0,100) * fak) | round(0), 2500] | min %}
+
                 {{ {
-                  'v1': [((ziel_soc - soc1) | clamp(0,100) * fak) | round(0), 2500] | min,
-                  'v2': [((ziel_soc - soc2) | clamp(0,100) * fak) | round(0), 2500] | min
+                  'v1': [raw1, 200] | max if raw1 > 0 else 0,
+                  'v2': [raw2, 200] | max if raw2 > 0 else 0
                 } }}
               {% else %}
                 {{ default }}
@@ -460,54 +457,73 @@ template:
 automation:
   - alias: "Sende Lade und Entladebefehle an Hardware (Optimiert)"
     id: "sende_batterie_targets_v2"
-    mode: queued
-    max: 3
+    mode: restart
+    #max: 3
     trigger:
       - platform: state
-        entity_id:
-          - sensor.target_charge_distribution_fast
-          - sensor.target_discharge_distribution_fast
-          - input_boolean.override_soc
+        entity_id: sensor.hausverbrauch_netto_stabil
+      - platform: state
+        entity_id: sensor.target_charge_distribution_fast
+      - platform: state
+        entity_id: sensor.target_discharge_distribution_fast
+      - platform: state
+        entity_id: input_boolean.override_soc
         for:
-          seconds: 3 # Beruhigungszeit, um Hardware-Stress zu reduzieren
+          seconds: 3
     action:
+      - delay: # ← Debounce: wartet ob noch mehr Trigger kommen
+          milliseconds: 500
+
       - variables:
-          calc: >-
+          v1_laden: >-
+            {% set c = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
+            {% set c = c if c is mapping else {} %}
+            {% set c1 = c.v1 | default(0) | int(0) %}
+            {{ [c1, 2500] | min if c1 >= 20 else 0 }}
+
+          v1_entladen: >-
             {% set c = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
             {% set d = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
-
-            {# Sicherstellen, dass c und d existieren und Objekte sind #}
             {% set c = c if c is mapping else {} %}
             {% set d = d if d is mapping else {} %}
-
             {% set c1 = c.v1 | default(0) | int(0) %}
             {% set d1 = d.v1 | default(0) | int(0) %}
+            {{ [d1, 2500] | min if d1 >= 20 and c1 < 20 else 0 }}
+
+          v2_laden: >-
+            {% set c = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
+            {% set c = c if c is mapping else {} %}
+            {% set c2 = c.v2 | default(0) | int(0) %}
+            {{ [c2, 2500] | min if c2 >= 20 else 0 }}
+
+          v2_entladen: >-
+            {% set c = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
+            {% set d = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
+            {% set c = c if c is mapping else {} %}
+            {% set d = d if d is mapping else {} %}
             {% set c2 = c.v2 | default(0) | int(0) %}
             {% set d2 = d.v2 | default(0) | int(0) %}
+            {{ [d2, 2500] | min if d2 >= 20 and c2 < 20 else 0 }}
 
-            {% set l1 = [c1, 2500] | min if c1 >= 20 else 0 %}
-            {% set e1 = [d1, 2500] | min if d1 >= 20 and c1 < 20 else 0 %}
-            {% set l2 = [c2, 2500] | min if c2 >= 20 else 0 %}
-            {% set e2 = [d2, 2500] | min if d2 >= 20 and c2 < 20 else 0 %}
+          target_mode_v1: >-
+            {% set c = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
+            {% set d = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
+            {% set c = c if c is mapping else {} %}
+            {% set d = d if d is mapping else {} %}
+            {% set c1 = c.v1 | default(0) | int(0) %}
+            {% set d1 = d.v1 | default(0) | int(0) %}
+            {% if c1 >= 20 %}charge{% elif d1 >= 20 %}discharge{% else %}stop{% endif %}
 
-            {{ {
-              "v1_laden": l1,
-              "v1_entladen": e1,
-              "v2_laden": l2,
-              "v2_entladen": e2,
-              "mode_v1": "charge" if l1 >= 20 else ("discharge" if e1 >= 20 else "stop"),
-              "mode_v2": "charge" if l2 >= 20 else ("discharge" if e2 >= 20 else "stop")
-            } }}
+          target_mode_v2: >-
+            {% set c = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
+            {% set d = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
+            {% set c = c if c is mapping else {} %}
+            {% set d = d if d is mapping else {} %}
+            {% set c2 = c.v2 | default(0) | int(0) %}
+            {% set d2 = d.v2 | default(0) | int(0) %}
+            {% if c2 >= 20 %}charge{% elif d2 >= 20 %}discharge{% else %}stop{% endif %}
 
-          # Die endgültigen Variablen greifen sauber auf das Dictionary zu
-          v1_laden: "{{ calc.v1_laden }}"
-          v1_entladen: "{{ calc.v1_entladen }}"
-          v2_laden: "{{ calc.v2_laden }}"
-          v2_entladen: "{{ calc.v2_entladen }}"
-          target_mode_v1: "{{ calc.mode_v1 }}"
-          target_mode_v2: "{{ calc.mode_v2 }}"
-
-      - sequence:
+      - parallel:
           # --- Venus 1 komplett ---
           - sequence:
               - if:
@@ -518,13 +534,13 @@ automation:
                     target: { entity_id: select.marstek_venus_1_force_mode }
                     data: { option: "{{ target_mode_v1 }}" }
                   - delay:
-                      milliseconds: 300 # Kurze Pause für die Verarbeitung
+                      milliseconds: 200 # Kurze Pause für die Verarbeitung
               - action: number.set_value
                 target:
                   { entity_id: number.marstek_venus_1_ladeleistung_einstellen }
                 data: { value: "{{ v1_laden }}" }
               - delay:
-                  milliseconds: 300
+                  milliseconds: 200
               - action: number.set_value
                 target:
                   {
@@ -533,10 +549,12 @@ automation:
                 data: { value: "{{ v1_entladen }}" }
 
           - delay:
-              milliseconds: 300
+              milliseconds: 10
 
           # --- Venus 2 komplett ---
           - sequence:
+              - delay:
+                  milliseconds: 150 # start venus 2 a tad later
               - if:
                   - condition: template
                     value_template: "{{ states('select.marstek_venus_2_force_mode') != target_mode_v2 }}"
@@ -545,13 +563,13 @@ automation:
                     target: { entity_id: select.marstek_venus_2_force_mode }
                     data: { option: "{{ target_mode_v2 }}" }
                   - delay:
-                      milliseconds: 300 # Kurze Pause für die Verarbeitung
+                      milliseconds: 200 # Kurze Pause für die Verarbeitung
               - action: number.set_value
                 target:
                   { entity_id: number.marstek_venus_2_ladeleistung_einstellen }
                 data: { value: "{{ v2_laden }}" }
               - delay:
-                  milliseconds: 300
+                  milliseconds: 200
               - action: number.set_value
                 target:
                   {
