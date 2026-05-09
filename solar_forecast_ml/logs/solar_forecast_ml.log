@@ -11500,3 +11500,886 @@
 2026-05-09 11:41:23 - custom_components.solar_forecast_ml.data.data_weather_expert_blender - DEBUG - BrightSky: Saved 18 hours to DB
 2026-05-09 11:41:24 - custom_components.solar_forecast_ml.data.data_weather_expert_blender - DEBUG - PirateWeather: Saved 48 hours to DB
 2026-05-09 11:41:24 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Pipeline: Expert sources: wttr.in: OK, Bright Sky: OK, Pirate Weather: OK
+2026-05-09 11:45:22 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Pipeline: Corrected forecast exists - skip bootstrap
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Pipeline: Scheduled weather update triggered
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Pipeline: Refreshing all weather sources...
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_open_meteo_client - INFO - Loaded 96 hours from database into Open-Meteo cache
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_open_meteo_client - DEBUG - Open-Meteo: Using existing DB data (still fresh)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - DEBUG - Pipeline: Open-Meteo data available (source=database_cache, status=ok, age=5.26449260388889)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Pipeline: Expert sources: wttr.in: OK, Bright Sky: OK, Pirate Weather: OK
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - INFO - Loaded 3 dates from weather_cache_open_meteo (RAW)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-09 hour 0: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-09 hour 1: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-09 hour 2: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-09 hour 3: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-09 hour 4: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - DEBUG - Pipeline: Tracked actual weather - temp=18.6C, clouds=10%
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-09 hour 5: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 6: 2.0 W/m² (cloud_cover=34%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 7: 83.0 W/m² (cloud_cover=26%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 8: 225.0 W/m² (cloud_cover=25%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 9: 396.0 W/m² (cloud_cover=25%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 10: 561.0 W/m² (cloud_cover=20%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=10: clouds=22.0%, solar=479.1 -> 402.8 W/m², floor=0.150
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 11: 669.0 W/m² (cloud_cover=20%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=11: clouds=21.7%, solar=571.3 -> 441.1 W/m², floor=0.150
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 12: 714.0 W/m² (cloud_cover=30%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=12: clouds=32.5%, solar=609.8 -> 358.1 W/m², floor=0.150
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 13: 711.0 W/m² (cloud_cover=32%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=13: clouds=35.1%, solar=607.2 -> 333.1 W/m², floor=0.150
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 14: 662.0 W/m² (cloud_cover=37%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=14: clouds=39.8%, solar=565.3 -> 282.5 W/m², floor=0.150
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 15: 576.0 W/m² (cloud_cover=46%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=15: clouds=50.2%, solar=491.9 -> 196.8 W/m², floor=0.090
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 16: 493.0 W/m² (cloud_cover=34%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=16: clouds=36.6%, solar=421.0 -> 199.1 W/m², floor=0.090
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 17: 436.0 W/m² (cloud_cover=31%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=17: clouds=33.4%, solar=372.3 -> 138.5 W/m², floor=0.090
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 18: 367.0 W/m² (cloud_cover=36%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=18: clouds=39.0%, solar=313.4 -> 72.4 W/m², floor=0.150
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 19: 252.0 W/m² (cloud_cover=24%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=19: clouds=26.3%, solar=215.2 -> 53.0 W/m², floor=0.150
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 20: 111.0 W/m² (cloud_cover=21%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-09 hour 21: 11.0 W/m² (cloud_cover=21%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-09 hour 22: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-09 hour 23: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-10 hour 0: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-10 hour 1: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-10 hour 2: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-10 hour 3: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-10 hour 4: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-10 hour 5: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 6: 2.0 W/m² (cloud_cover=26%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 7: 83.0 W/m² (cloud_cover=34%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 8: 211.0 W/m² (cloud_cover=40%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 9: 350.0 W/m² (cloud_cover=32%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 10: 487.0 W/m² (cloud_cover=42%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=10: clouds=45.7%, solar=415.9 -> 251.2 W/m², floor=0.100
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 11: 608.0 W/m² (cloud_cover=49%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=11: clouds=53.0%, solar=519.2 -> 236.2 W/m², floor=0.100
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 12: 701.0 W/m² (cloud_cover=55%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=12: clouds=59.9%, solar=598.7 -> 207.2 W/m², floor=0.100
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 13: 738.0 W/m² (cloud_cover=66%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=13: clouds=72.2%, solar=630.3 -> 158.8 W/m², floor=0.100
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 14: 701.0 W/m² (cloud_cover=70%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=14: clouds=75.7%, solar=598.7 -> 138.0 W/m², floor=0.100
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 15: 607.0 W/m² (cloud_cover=65%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=15: clouds=71.2%, solar=518.4 -> 129.5 W/m², floor=0.100
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 16: 488.0 W/m² (cloud_cover=74%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=16: clouds=80.3%, solar=416.8 -> 83.3 W/m², floor=0.100
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 17: 358.0 W/m² (cloud_cover=76%)
+2026-05-09 12:00:00 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=17: clouds=82.3%, solar=305.7 -> 52.4 W/m², floor=0.100
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 18: 232.0 W/m² (cloud_cover=75%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=18: clouds=81.9%, solar=198.1 -> 30.8 W/m², floor=0.090
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 19: 131.0 W/m² (cloud_cover=76%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=19: clouds=82.1%, solar=111.9 -> 17.6 W/m², floor=0.070
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 20: 57.0 W/m² (cloud_cover=75%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-10 hour 21: 6.0 W/m² (cloud_cover=74%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-10 hour 22: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-10 hour 23: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-11 hour 0: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-11 hour 1: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-11 hour 2: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-11 hour 3: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-11 hour 4: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-11 hour 5: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 6: 3.0 W/m² (cloud_cover=79%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 7: 77.0 W/m² (cloud_cover=81%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=7: clouds=87.9%, solar=65.8 -> 39.5 W/m², floor=0.090
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 8: 204.0 W/m² (cloud_cover=73%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=8: clouds=79.9%, solar=174.2 -> 78.7 W/m², floor=0.100
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 9: 359.0 W/m² (cloud_cover=70%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=9: clouds=76.2%, solar=306.6 -> 114.7 W/m², floor=0.150
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 10: 492.0 W/m² (cloud_cover=63%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=10: clouds=68.1%, solar=420.2 -> 160.7 W/m², floor=0.150
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 11: 519.0 W/m² (cloud_cover=46%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=11: clouds=50.3%, solar=443.2 -> 249.6 W/m², floor=0.150
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 12: 449.0 W/m² (cloud_cover=71%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=12: clouds=77.2%, solar=383.4 -> 146.8 W/m², floor=0.090
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 13: 371.0 W/m² (cloud_cover=66%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=13: clouds=72.0%, solar=316.8 -> 159.6 W/m², floor=0.090
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 14: 354.0 W/m² (cloud_cover=73%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=14: clouds=79.3%, solar=302.3 -> 128.6 W/m², floor=0.090
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 15: 355.0 W/m² (cloud_cover=75%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=15: clouds=81.7%, solar=303.2 -> 105.2 W/m², floor=0.090
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 16: 328.0 W/m² (cloud_cover=66%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=16: clouds=72.0%, solar=280.1 -> 98.6 W/m², floor=0.090
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 17: 261.0 W/m² (cloud_cover=64%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=17: clouds=69.4%, solar=222.9 -> 68.1 W/m², floor=0.090
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 18: 183.0 W/m² (cloud_cover=78%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=18: clouds=84.9%, solar=156.3 -> 29.2 W/m², floor=0.080
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 19: 112.0 W/m² (cloud_cover=73%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=19: clouds=79.2%, solar=95.6 -> 19.0 W/m², floor=0.070
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 20: 51.0 W/m² (cloud_cover=76%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Weather coherence cap hour=20: clouds=82.9%, solar=43.6 -> 0.3 W/m², floor=0.070
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Using Open-Meteo GHI for 2026-05-11 hour 21: 6.0 W/m² (cloud_cover=84%)
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-11 hour 22: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - DEBUG - Fallback calculation for 2026-05-11 hour 23: 0.0 * 0.050 = 0.0 W/m²
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_corrector - INFO - Created corrected forecast: 72 hours written to weather_forecast
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Pipeline: Corrected forecast updated
+2026-05-09 12:00:01 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Pipeline: Weather update SUCCESS
+2026-05-09 12:05:00 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - DEBUG - Executing hourly update
+2026-05-09 12:05:00 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - DEBUG - Panel group actuals for hour 11: {'Gruppe 1': 5.57, 'Gruppe 2': 0.31}
+2026-05-09 12:05:00 - custom_components.solar_forecast_ml.production.production_morning_routine - DEBUG - Panel group actuals updated for 2026-05-09_11: 2 groups
+2026-05-09 12:05:00 - custom_components.solar_forecast_ml.production.production_morning_routine - DEBUG - Shadow detection for 2026-05-09_11: none (1.5%)
+2026-05-09 12:05:00 - custom_components.solar_forecast_ml.data.data_weather_kalman - DEBUG - Kalman update: residual=257.9, bias=76.3, K=0.296, P=73.9, R_eff=250.0, updates=1
+2026-05-09 12:05:00 - custom_components.solar_forecast_ml.sensors.sensor_base - WARNING - ConservativePlanningForecastSensor: failed to fetch TFS quantiles: Cannot connect to host 127.0.0.1:8780 ssl:default [Connect call failed ('127.0.0.1', 8780)]
+2026-05-09 12:10:36 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Forecast using database: 72 hours across 3 days
+2026-05-09 12:10:36 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Collected external sensor data: {'temperature': 19.2, 'humidity': 51.0, 'wind_speed': 0.0, 'rain': 0.0, 'pressure': 1019.2, 'solar_radiation': 701.0, 'lux': None}
+2026-05-09 12:10:36 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Creating forecast (AI + Physics)...
+2026-05-09 12:10:36 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Lag-Feature 'production_yesterday' = 35.35 kWh (from DB: 2026-05-08)
+2026-05-09 12:10:36 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Physics+LSTM blend active
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.982, tfs=0.000, ai=2.849->0.933, max=0.933
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, diffuse_share=0.64, physics=0.838, tfs=0.000, ai=2.530->0.796, max=0.796
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=71.2%, ghi_ratio=0.20, confidence=0.595->0.208
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, diffuse_share=0.67, physics=0.640, tfs=0.000, ai=2.037->0.608, max=0.608
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, diffuse_share=0.73, physics=0.538, tfs=0.000, ai=6.299->0.511, max=0.511
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, confidence=0.506->0.177
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, diffuse_share=0.78, physics=0.389, tfs=0.000, ai=5.908->0.370, max=0.370
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=6, regime=strong, clouds=85.7%, ghi_ratio=n/a, confidence=0.416->0.208
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=7, regime=severe, clouds=87.9%, ghi_ratio=0.17, confidence=0.506->0.177
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, confidence=0.506->0.177
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, diffuse_share=0.72, physics=0.532, tfs=0.000, ai=0.800->0.505, max=0.505
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, confidence=0.595->0.208
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, diffuse_share=0.64, physics=0.844, tfs=0.000, ai=1.032->0.802, max=0.802
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, confidence=0.651->0.326
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, diffuse_share=0.59, physics=2.169, tfs=0.000, ai=2.664->2.277, max=2.277
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, diffuse_share=0.65, physics=1.212, tfs=0.000, ai=3.616->1.152, max=1.152
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.846, tfs=0.000, ai=3.249->0.803, max=0.803
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, confidence=0.700->0.245
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, diffuse_share=0.66, physics=0.643, tfs=0.000, ai=2.798->0.611, max=0.611
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, diffuse_share=0.68, physics=2.277, tfs=0.000, ai=2.506->2.164, max=2.164
+2026-05-09 12:10:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, confidence=0.595->0.208
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, diffuse_share=0.61, physics=0.759, tfs=0.000, ai=2.269->0.721, max=0.721
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, confidence=0.422->0.135
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, diffuse_share=0.66, physics=0.673, tfs=0.000, ai=7.020->0.639, max=0.639
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, diffuse_share=0.79, physics=0.387, tfs=0.000, ai=6.516->0.367, max=0.367
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Skipping hourly predictions for locked dates: 2026-05-09, 2026-05-10, 2026-05-11
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - INFO - Forecast complete: Today=25.16 kWh, Tomorrow=20.97 kWh, Day After=16.11 kWh, Method=AI + Physics
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping today forecast storage - locked by morning routine
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping tomorrow forecast storage - locked by morning routine
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping day_after_tomorrow forecast storage - locked by morning routine
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecast generated: today=25.16 kWh, tomorrow=20.97 kWh, method=AI + Physics, hourly_entries=72
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.production.production_history - DEBUG - Peak time calculation: Using stored hourly production data
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping today forecast update - locked by morning routine
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping tomorrow forecast update - locked by morning routine
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping day_after_tomorrow forecast update - locked by morning routine
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecasts saved to database (respecting locks)
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.coordinator - DEBUG - Hourly predictions cache refreshed: 24 today, 24 tomorrow, 24 day_after
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.coordinator - DEBUG - Finished fetching solar_forecast_ml data in 1.625 seconds (success: True)
+2026-05-09 12:10:38 - custom_components.solar_forecast_ml.sensors.sensor_base - WARNING - ConservativePlanningForecastSensor: failed to fetch TFS quantiles: Cannot connect to host 127.0.0.1:8780 ssl:default [Connect call failed ('127.0.0.1', 8780)]
+2026-05-09 12:30:00 - custom_components.solar_forecast_ml.production.production_adaptive_forecast - INFO - === Adaptive Forecast Check ===
+2026-05-09 12:30:00 - custom_components.solar_forecast_ml.production.production_adaptive_forecast - INFO - Time: 12:30:00
+2026-05-09 12:30:00 - custom_components.solar_forecast_ml.production.production_adaptive_forecast - INFO - Collecting analysis data...
+2026-05-09 12:30:00 - custom_components.solar_forecast_ml.production.production_adaptive_forecast - INFO - Morning analysis (05:45-12:30): Actual=18.04 kWh, Predicted=12.88 kWh, Deviation=+40% (+5.16 kWh)
+2026-05-09 12:30:00 - custom_components.solar_forecast_ml.production.production_adaptive_forecast - INFO - Criterion 1: Daily forecast=25.79 kWh, Dynamic threshold=2.58 kWh, Deviation=5.16 kWh
+2026-05-09 12:30:00 - custom_components.solar_forecast_ml.production.production_adaptive_forecast - INFO - Criterion 2 (No special situation): MET
+2026-05-09 12:30:00 - custom_components.solar_forecast_ml.production.production_adaptive_forecast - INFO - Criterion 3 (>= 3h until sunset): MET (8.1h)
+2026-05-09 12:30:00 - custom_components.solar_forecast_ml.production.production_adaptive_forecast - DEBUG - Weather data freshness: last_updated=2026-05-09T10:00:00+02:00, age=2.5h, fresh=True
+2026-05-09 12:30:00 - custom_components.solar_forecast_ml.production.production_adaptive_forecast - INFO - Criterion 4 (Fresh weather data): MET (06:00 UTC)
+2026-05-09 12:30:00 - custom_components.solar_forecast_ml.production.production_adaptive_forecast - INFO - Criterion 5 (Cloud cover diff > 25pp): NOT MET - Morning=38%, Current=35% (-3pp)
+2026-05-09 12:30:00 - custom_components.solar_forecast_ml.production.production_adaptive_forecast - INFO - == Result: NO CORRECTION ==
+2026-05-09 12:30:00 - custom_components.solar_forecast_ml.production.production_adaptive_forecast - INFO - Reason: Weather data nearly unchanged (Diff: -3pp)
+2026-05-09 12:40:22 - custom_components.solar_forecast_ml.forecast.forecast_weather - DEBUG - Background forecast update starting...
+2026-05-09 12:40:22 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Force update - fetching from Open-Meteo API...
+2026-05-09 12:40:22 - custom_components.solar_forecast_ml.data.data_open_meteo_client - INFO - Loaded 96 hours from database into Open-Meteo cache
+2026-05-09 12:40:22 - custom_components.solar_forecast_ml.data.data_open_meteo_client - DEBUG - Open-Meteo: Using existing DB data (still fresh)
+2026-05-09 12:40:22 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Force update successful: 96 hours
+2026-05-09 12:40:22 - custom_components.solar_forecast_ml.forecast.forecast_weather - DEBUG - Background update complete: 96 hours
+2026-05-09 12:40:37 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Forecast using database: 72 hours across 3 days
+2026-05-09 12:40:37 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Collected external sensor data: {'temperature': 19.6, 'humidity': 52.0, 'wind_speed': 7.9, 'rain': 0.0, 'pressure': 1018.7, 'solar_radiation': 713.0, 'lux': None}
+2026-05-09 12:40:37 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Creating forecast (AI + Physics)...
+2026-05-09 12:40:37 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Lag-Feature 'production_yesterday' = 35.35 kWh (from DB: 2026-05-08)
+2026-05-09 12:40:37 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Physics+LSTM blend active
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.982, tfs=0.000, ai=2.849->0.933, max=0.933
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, diffuse_share=0.64, physics=0.838, tfs=0.000, ai=2.530->0.796, max=0.796
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=71.2%, ghi_ratio=0.20, confidence=0.595->0.208
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, diffuse_share=0.67, physics=0.640, tfs=0.000, ai=2.037->0.608, max=0.608
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, diffuse_share=0.73, physics=0.538, tfs=0.000, ai=6.299->0.511, max=0.511
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, confidence=0.506->0.177
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, diffuse_share=0.78, physics=0.389, tfs=0.000, ai=5.908->0.370, max=0.370
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=6, regime=strong, clouds=85.7%, ghi_ratio=n/a, confidence=0.416->0.208
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=7, regime=severe, clouds=87.9%, ghi_ratio=0.17, confidence=0.506->0.177
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, confidence=0.506->0.177
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, diffuse_share=0.72, physics=0.532, tfs=0.000, ai=0.800->0.505, max=0.505
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, confidence=0.595->0.208
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, diffuse_share=0.64, physics=0.844, tfs=0.000, ai=1.032->0.802, max=0.802
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, confidence=0.651->0.326
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, diffuse_share=0.59, physics=2.169, tfs=0.000, ai=2.664->2.277, max=2.277
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, diffuse_share=0.65, physics=1.212, tfs=0.000, ai=3.616->1.152, max=1.152
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.846, tfs=0.000, ai=3.249->0.803, max=0.803
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, confidence=0.700->0.245
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, diffuse_share=0.66, physics=0.643, tfs=0.000, ai=2.798->0.611, max=0.611
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, diffuse_share=0.68, physics=2.277, tfs=0.000, ai=2.506->2.164, max=2.164
+2026-05-09 12:40:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, confidence=0.595->0.208
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, diffuse_share=0.61, physics=0.759, tfs=0.000, ai=2.269->0.721, max=0.721
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, confidence=0.422->0.135
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, diffuse_share=0.66, physics=0.673, tfs=0.000, ai=7.020->0.639, max=0.639
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, diffuse_share=0.79, physics=0.387, tfs=0.000, ai=6.516->0.367, max=0.367
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Skipping hourly predictions for locked dates: 2026-05-09, 2026-05-10, 2026-05-11
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - INFO - Forecast complete: Today=25.16 kWh, Tomorrow=20.97 kWh, Day After=16.11 kWh, Method=AI + Physics
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping today forecast storage - locked by morning routine
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping tomorrow forecast storage - locked by morning routine
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping day_after_tomorrow forecast storage - locked by morning routine
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecast generated: today=25.16 kWh, tomorrow=20.97 kWh, method=AI + Physics, hourly_entries=72
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.production.production_history - DEBUG - Peak time calculation: Using stored hourly production data
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping today forecast update - locked by morning routine
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping tomorrow forecast update - locked by morning routine
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping day_after_tomorrow forecast update - locked by morning routine
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecasts saved to database (respecting locks)
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.coordinator - DEBUG - Hourly predictions cache refreshed: 24 today, 24 tomorrow, 24 day_after
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.coordinator - DEBUG - Finished fetching solar_forecast_ml data in 1.611 seconds (success: True)
+2026-05-09 12:40:39 - custom_components.solar_forecast_ml.sensors.sensor_base - WARNING - ConservativePlanningForecastSensor: failed to fetch TFS quantiles: Cannot connect to host 127.0.0.1:8780 ssl:default [Connect call failed ('127.0.0.1', 8780)]
+2026-05-09 13:00:00 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - DEBUG - Pipeline: Tracked actual weather - temp=19.5C, clouds=33%
+2026-05-09 13:05:00 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - DEBUG - Executing hourly update
+2026-05-09 13:05:00 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - DEBUG - Panel group actuals for hour 12: {'Gruppe 1': 5.83, 'Gruppe 2': 0.63}
+2026-05-09 13:05:00 - custom_components.solar_forecast_ml.production.production_morning_routine - DEBUG - Panel group actuals updated for 2026-05-09_12: 2 groups
+2026-05-09 13:05:00 - custom_components.solar_forecast_ml.production.production_morning_routine - DEBUG - Shadow detection for 2026-05-09_12: none (0.0%)
+2026-05-09 13:05:00 - custom_components.solar_forecast_ml.data.data_weather_kalman - DEBUG - Kalman update: residual=-131.1, bias=26.5, K=0.240, P=60.0, R_eff=250.0, updates=2
+2026-05-09 13:05:00 - custom_components.solar_forecast_ml.sensors.sensor_base - WARNING - ConservativePlanningForecastSensor: failed to fetch TFS quantiles: Cannot connect to host 127.0.0.1:8780 ssl:default [Connect call failed ('127.0.0.1', 8780)]
+2026-05-09 13:10:38 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Forecast using database: 72 hours across 3 days
+2026-05-09 13:10:38 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Collected external sensor data: {'temperature': 19.1, 'humidity': 52.0, 'wind_speed': 0.4, 'rain': 0.0, 'pressure': 1018.4, 'solar_radiation': 222.0, 'lux': None}
+2026-05-09 13:10:38 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Creating forecast (AI + Physics)...
+2026-05-09 13:10:38 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Lag-Feature 'production_yesterday' = 35.35 kWh (from DB: 2026-05-08)
+2026-05-09 13:10:38 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Physics+LSTM blend active
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.982, tfs=0.000, ai=2.849->0.933, max=0.933
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, diffuse_share=0.64, physics=0.838, tfs=0.000, ai=2.530->0.796, max=0.796
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=71.2%, ghi_ratio=0.20, confidence=0.595->0.208
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, diffuse_share=0.67, physics=0.640, tfs=0.000, ai=2.037->0.608, max=0.608
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, diffuse_share=0.73, physics=0.538, tfs=0.000, ai=6.299->0.511, max=0.511
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, confidence=0.506->0.177
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, diffuse_share=0.78, physics=0.389, tfs=0.000, ai=5.908->0.370, max=0.370
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=6, regime=strong, clouds=85.7%, ghi_ratio=n/a, confidence=0.416->0.208
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=7, regime=severe, clouds=87.9%, ghi_ratio=0.17, confidence=0.506->0.177
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, confidence=0.506->0.177
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, diffuse_share=0.72, physics=0.532, tfs=0.000, ai=0.800->0.505, max=0.505
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, confidence=0.595->0.208
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, diffuse_share=0.64, physics=0.844, tfs=0.000, ai=1.032->0.802, max=0.802
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, confidence=0.651->0.326
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, diffuse_share=0.59, physics=2.169, tfs=0.000, ai=2.664->2.277, max=2.277
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, diffuse_share=0.65, physics=1.212, tfs=0.000, ai=3.616->1.152, max=1.152
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.846, tfs=0.000, ai=3.249->0.803, max=0.803
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, confidence=0.700->0.245
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, diffuse_share=0.66, physics=0.643, tfs=0.000, ai=2.798->0.611, max=0.611
+2026-05-09 13:10:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, diffuse_share=0.68, physics=2.277, tfs=0.000, ai=2.506->2.164, max=2.164
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, confidence=0.595->0.208
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, diffuse_share=0.61, physics=0.759, tfs=0.000, ai=2.269->0.721, max=0.721
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, confidence=0.422->0.135
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, diffuse_share=0.66, physics=0.673, tfs=0.000, ai=7.020->0.639, max=0.639
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, diffuse_share=0.79, physics=0.387, tfs=0.000, ai=6.516->0.367, max=0.367
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Skipping hourly predictions for locked dates: 2026-05-09, 2026-05-10, 2026-05-11
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - INFO - Forecast complete: Today=25.16 kWh, Tomorrow=20.97 kWh, Day After=16.11 kWh, Method=AI + Physics
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping today forecast storage - locked by morning routine
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping tomorrow forecast storage - locked by morning routine
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping day_after_tomorrow forecast storage - locked by morning routine
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecast generated: today=25.16 kWh, tomorrow=20.97 kWh, method=AI + Physics, hourly_entries=72
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.production.production_history - DEBUG - Peak time calculation: Using stored hourly production data
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping today forecast update - locked by morning routine
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping tomorrow forecast update - locked by morning routine
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping day_after_tomorrow forecast update - locked by morning routine
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecasts saved to database (respecting locks)
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.coordinator - DEBUG - Hourly predictions cache refreshed: 24 today, 24 tomorrow, 24 day_after
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.coordinator - DEBUG - Finished fetching solar_forecast_ml data in 1.663 seconds (success: True)
+2026-05-09 13:10:40 - custom_components.solar_forecast_ml.sensors.sensor_base - WARNING - ConservativePlanningForecastSensor: failed to fetch TFS quantiles: Cannot connect to host 127.0.0.1:8780 ssl:default [Connect call failed ('127.0.0.1', 8780)]
+2026-05-09 13:40:22 - custom_components.solar_forecast_ml.forecast.forecast_weather - DEBUG - Background forecast update starting...
+2026-05-09 13:40:22 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Force update - fetching from Open-Meteo API...
+2026-05-09 13:40:24 - custom_components.solar_forecast_ml.data.data_open_meteo_client - INFO - Saved 72 hours to weather_cache_open_meteo table (RAW)
+2026-05-09 13:40:24 - custom_components.solar_forecast_ml.data.data_open_meteo_client - INFO - Fetched 72 hours from Open-Meteo (GHI: 0 - 720 W/m2)
+2026-05-09 13:40:24 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Force update successful: 72 hours
+2026-05-09 13:40:24 - custom_components.solar_forecast_ml.forecast.forecast_weather - DEBUG - Background update complete: 72 hours
+2026-05-09 13:40:40 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Forecast using database: 72 hours across 3 days
+2026-05-09 13:40:40 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Collected external sensor data: {'temperature': 18.9, 'humidity': 51.0, 'wind_speed': 0.0, 'rain': 0.0, 'pressure': 1018.2, 'solar_radiation': 182.0, 'lux': None}
+2026-05-09 13:40:40 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Creating forecast (AI + Physics)...
+2026-05-09 13:40:40 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Lag-Feature 'production_yesterday' = 35.35 kWh (from DB: 2026-05-08)
+2026-05-09 13:40:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Physics+LSTM blend active
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.982, tfs=0.000, ai=2.849->0.933, max=0.933
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, diffuse_share=0.64, physics=0.838, tfs=0.000, ai=2.530->0.796, max=0.796
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=71.2%, ghi_ratio=0.20, confidence=0.595->0.208
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, diffuse_share=0.67, physics=0.640, tfs=0.000, ai=2.037->0.608, max=0.608
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, diffuse_share=0.73, physics=0.538, tfs=0.000, ai=6.299->0.511, max=0.511
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, confidence=0.506->0.177
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, diffuse_share=0.78, physics=0.389, tfs=0.000, ai=5.908->0.370, max=0.370
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=6, regime=strong, clouds=85.7%, ghi_ratio=n/a, confidence=0.416->0.208
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=7, regime=severe, clouds=87.9%, ghi_ratio=0.17, confidence=0.506->0.177
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, confidence=0.506->0.177
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, diffuse_share=0.72, physics=0.532, tfs=0.000, ai=0.800->0.505, max=0.505
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, confidence=0.595->0.208
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, diffuse_share=0.64, physics=0.844, tfs=0.000, ai=1.032->0.802, max=0.802
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, confidence=0.651->0.326
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, diffuse_share=0.59, physics=2.169, tfs=0.000, ai=2.664->2.277, max=2.277
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, diffuse_share=0.65, physics=1.212, tfs=0.000, ai=3.616->1.152, max=1.152
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.846, tfs=0.000, ai=3.249->0.803, max=0.803
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, confidence=0.700->0.245
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, diffuse_share=0.66, physics=0.643, tfs=0.000, ai=2.798->0.611, max=0.611
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, diffuse_share=0.68, physics=2.277, tfs=0.000, ai=2.506->2.164, max=2.164
+2026-05-09 13:40:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, confidence=0.595->0.208
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, diffuse_share=0.61, physics=0.759, tfs=0.000, ai=2.269->0.721, max=0.721
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, confidence=0.422->0.135
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, diffuse_share=0.66, physics=0.673, tfs=0.000, ai=7.020->0.639, max=0.639
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, diffuse_share=0.79, physics=0.387, tfs=0.000, ai=6.516->0.367, max=0.367
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Skipping hourly predictions for locked dates: 2026-05-09, 2026-05-10, 2026-05-11
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - INFO - Forecast complete: Today=25.16 kWh, Tomorrow=20.97 kWh, Day After=16.11 kWh, Method=AI + Physics
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping today forecast storage - locked by morning routine
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping tomorrow forecast storage - locked by morning routine
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping day_after_tomorrow forecast storage - locked by morning routine
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecast generated: today=25.16 kWh, tomorrow=20.97 kWh, method=AI + Physics, hourly_entries=72
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.production.production_history - DEBUG - Peak time calculation: Using stored hourly production data
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping today forecast update - locked by morning routine
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping tomorrow forecast update - locked by morning routine
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping day_after_tomorrow forecast update - locked by morning routine
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecasts saved to database (respecting locks)
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.coordinator - DEBUG - Hourly predictions cache refreshed: 24 today, 24 tomorrow, 24 day_after
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.coordinator - DEBUG - Finished fetching solar_forecast_ml data in 1.617 seconds (success: True)
+2026-05-09 13:40:42 - custom_components.solar_forecast_ml.sensors.sensor_base - WARNING - ConservativePlanningForecastSensor: failed to fetch TFS quantiles: Cannot connect to host 127.0.0.1:8780 ssl:default [Connect call failed ('127.0.0.1', 8780)]
+2026-05-09 14:00:00 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - DEBUG - Pipeline: Tracked actual weather - temp=20.6C, clouds=40%
+2026-05-09 14:05:00 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - DEBUG - Executing hourly update
+2026-05-09 14:05:00 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - DEBUG - Panel group actuals for hour 13: {'Gruppe 1': 2.35, 'Gruppe 2': 0.38}
+2026-05-09 14:05:00 - custom_components.solar_forecast_ml.production.production_morning_routine - DEBUG - Panel group actuals updated for 2026-05-09_13: 2 groups
+2026-05-09 14:05:00 - custom_components.solar_forecast_ml.production.production_morning_routine - DEBUG - Shadow detection for 2026-05-09_13: heavy (56.8%)
+2026-05-09 14:05:00 - custom_components.solar_forecast_ml.data.data_weather_kalman - DEBUG - Kalman update: residual=-114.1, bias=-2.5, K=0.206, P=51.6, R_eff=250.0, updates=3
+2026-05-09 14:05:00 - custom_components.solar_forecast_ml.sensors.sensor_base - WARNING - ConservativePlanningForecastSensor: failed to fetch TFS quantiles: Cannot connect to host 127.0.0.1:8780 ssl:default [Connect call failed ('127.0.0.1', 8780)]
+2026-05-09 14:10:41 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Forecast using database: 72 hours across 3 days
+2026-05-09 14:10:41 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Collected external sensor data: {'temperature': 19.7, 'humidity': 50.0, 'wind_speed': 0.0, 'rain': 0.0, 'pressure': 1017.9, 'solar_radiation': 202.0, 'lux': None}
+2026-05-09 14:10:41 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Creating forecast (AI + Physics)...
+2026-05-09 14:10:41 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Lag-Feature 'production_yesterday' = 35.35 kWh (from DB: 2026-05-08)
+2026-05-09 14:10:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Physics+LSTM blend active
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.982, tfs=0.000, ai=2.849->0.933, max=0.933
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, diffuse_share=0.64, physics=0.838, tfs=0.000, ai=2.530->0.796, max=0.796
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=71.2%, ghi_ratio=0.20, confidence=0.595->0.208
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, diffuse_share=0.67, physics=0.640, tfs=0.000, ai=2.037->0.608, max=0.608
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, diffuse_share=0.73, physics=0.538, tfs=0.000, ai=6.299->0.511, max=0.511
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, confidence=0.506->0.177
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, diffuse_share=0.78, physics=0.389, tfs=0.000, ai=5.908->0.370, max=0.370
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=6, regime=strong, clouds=85.7%, ghi_ratio=n/a, confidence=0.416->0.208
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=7, regime=severe, clouds=87.9%, ghi_ratio=0.17, confidence=0.506->0.177
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, confidence=0.506->0.177
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, diffuse_share=0.72, physics=0.532, tfs=0.000, ai=0.800->0.505, max=0.505
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, confidence=0.595->0.208
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, diffuse_share=0.64, physics=0.844, tfs=0.000, ai=1.032->0.802, max=0.802
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, confidence=0.651->0.326
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, diffuse_share=0.59, physics=2.169, tfs=0.000, ai=2.664->2.277, max=2.277
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, diffuse_share=0.65, physics=1.212, tfs=0.000, ai=3.616->1.152, max=1.152
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.846, tfs=0.000, ai=3.249->0.803, max=0.803
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, confidence=0.700->0.245
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, diffuse_share=0.66, physics=0.643, tfs=0.000, ai=2.798->0.611, max=0.611
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, diffuse_share=0.68, physics=2.277, tfs=0.000, ai=2.506->2.164, max=2.164
+2026-05-09 14:10:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, confidence=0.595->0.208
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, diffuse_share=0.61, physics=0.759, tfs=0.000, ai=2.269->0.721, max=0.721
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, confidence=0.422->0.135
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, diffuse_share=0.66, physics=0.673, tfs=0.000, ai=7.020->0.639, max=0.639
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, diffuse_share=0.79, physics=0.387, tfs=0.000, ai=6.516->0.367, max=0.367
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Skipping hourly predictions for locked dates: 2026-05-09, 2026-05-10, 2026-05-11
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - INFO - Forecast complete: Today=25.16 kWh, Tomorrow=20.97 kWh, Day After=16.11 kWh, Method=AI + Physics
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping today forecast storage - locked by morning routine
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping tomorrow forecast storage - locked by morning routine
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping day_after_tomorrow forecast storage - locked by morning routine
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecast generated: today=25.16 kWh, tomorrow=20.97 kWh, method=AI + Physics, hourly_entries=72
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.production.production_history - DEBUG - Peak time calculation: Using stored hourly production data
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping today forecast update - locked by morning routine
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping tomorrow forecast update - locked by morning routine
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping day_after_tomorrow forecast update - locked by morning routine
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecasts saved to database (respecting locks)
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.coordinator - DEBUG - Hourly predictions cache refreshed: 24 today, 24 tomorrow, 24 day_after
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.coordinator - DEBUG - Finished fetching solar_forecast_ml data in 1.624 seconds (success: True)
+2026-05-09 14:10:43 - custom_components.solar_forecast_ml.sensors.sensor_base - WARNING - ConservativePlanningForecastSensor: failed to fetch TFS quantiles: Cannot connect to host 127.0.0.1:8780 ssl:default [Connect call failed ('127.0.0.1', 8780)]
+2026-05-09 14:40:24 - custom_components.solar_forecast_ml.forecast.forecast_weather - DEBUG - Background forecast update starting...
+2026-05-09 14:40:24 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Force update - fetching from Open-Meteo API...
+2026-05-09 14:40:24 - custom_components.solar_forecast_ml.data.data_open_meteo_client - INFO - Loaded 96 hours from database into Open-Meteo cache
+2026-05-09 14:40:24 - custom_components.solar_forecast_ml.data.data_open_meteo_client - DEBUG - Open-Meteo: Using existing DB data (still fresh)
+2026-05-09 14:40:24 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Force update successful: 96 hours
+2026-05-09 14:40:24 - custom_components.solar_forecast_ml.forecast.forecast_weather - DEBUG - Background update complete: 96 hours
+2026-05-09 14:40:42 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Forecast using database: 72 hours across 3 days
+2026-05-09 14:40:42 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Collected external sensor data: {'temperature': 20.4, 'humidity': 49.0, 'wind_speed': 0.0, 'rain': 0.0, 'pressure': 1018.0, 'solar_radiation': 264.0, 'lux': None}
+2026-05-09 14:40:42 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Creating forecast (AI + Physics)...
+2026-05-09 14:40:42 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Lag-Feature 'production_yesterday' = 35.35 kWh (from DB: 2026-05-08)
+2026-05-09 14:40:42 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Physics+LSTM blend active
+2026-05-09 14:40:43 - custom_components.solar_forecast_ml.coordinator - DEBUG - Finished fetching solar_forecast_ml data in 0.580 seconds (success: False)
+2026-05-09 14:40:43 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Background forecast update task cancelled
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml - INFO - File logging enabled (non-blocking): /config/solar_forecast_ml/logs/solar_forecast_ml.log
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.core.core_dependency_handler - INFO - Checking dependencies...
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.core.core_dependency_handler - DEBUG - [OK] numpy is functional (Version: 2.3.2)
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.core.core_dependency_handler - DEBUG - [OK] aiofiles is functional
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.core.core_dependency_handler - INFO - [OK] All dependencies are present
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.services.service_notification - DEBUG - NotificationService instance created
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.services.service_notification - INFO - [OK] NotificationService successfully initialized
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.services.service_notification - INFO - [OK] NotificationService created successfully
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml - DEBUG - NotificationService created and stored in hass.data
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.core.core_coordinator_init_helpers - INFO - Panel groups configured: 2 groups, total 9.90 kWp
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.core.core_coordinator_init_helpers - INFO - Inverter clipping enabled: max 8.50 kW
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_manager - INFO - DataManager created - awaiting initialize()
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - SensorDataCollector initialized with centralized sensor mapping.
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.production.production_history - INFO - ProductionCalculator initialized (Database mode)
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.production.production_tracker - INFO - ProductionTimeCalculator initialized with LOCAL time and persistence
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - INFO - ForecastOrchestrator initialized with 2 panel groups.
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_shadow_detection - INFO - ShadowDetector initialized (V16.2.0: Pattern Learning Enabled)
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.production.production_adaptive_forecast - DEBUG - AdaptiveForecastEngine initialized
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_daily_summaries - DEBUG - DailySummariesHandler initialized with database backend
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_weather_kalman - INFO - WeatherKalmanTracker initialized: Q=5.0, R=50.0
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.ai.ai_weather_mlp - INFO - TinyWeatherMLP initialized: 8 -> 16 -> 8 -> 1 (289 params)
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - DEBUG - ScheduledTasksManager initialized
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.services.service_error_handler - INFO - ErrorHandlingService initialized.
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.coordinator - DEBUG - SolarForecastMLCoordinator V26.0.0 initialized
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_manager - INFO - DataManager: Running startup initializer...
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_startup_initializer - INFO - ============================================================
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_startup_initializer - INFO - STARTUP INITIALIZER - Creating critical pre-async components
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_startup_initializer - INFO - ============================================================
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_startup_initializer - DEBUG - Created/verified 4 directories
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_startup_initializer - INFO - Directory structure ready
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_startup_initializer - DEBUG - Database schema initialized
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_startup_initializer - INFO - Database ready
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_startup_initializer - INFO - ============================================================
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_startup_initializer - INFO - STARTUP INITIALIZER complete - database ready
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_startup_initializer - INFO - ============================================================
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_state_handler - DEBUG - DataStateHandler initialized
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_manager - INFO - DataManager: Connecting to database...
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.db_manager - DEBUG - Database schema already exists, running migrations only
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.db_manager - INFO - Backfilled clean daily summary evaluation for 3 days
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.db_manager - INFO - Database connected: DELETE mode, 60s busy_timeout, IMMEDIATE transactions, write serialization enabled: /config/solar_forecast_ml/solar_forecast.db
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_manager - INFO - DataManager initialized successfully
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.data.data_state_handler - DEBUG - Loaded expected daily production: 25.79 kWh
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.coordinator - INFO - Resolving startup data from DB (non-blocking)...
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.core.core_startup_data_resolver - INFO - Startup: Weather data loaded from DB (2 hours)
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.core.core_startup_data_resolver - INFO - Startup: Astronomy data loaded from DB
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Sensor 'sensor.wetterstation_aussentemperatur' is unavailable or has an invalid state: Not found
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Sensor 'sensor.wetterstation_luftfeuchtigkeit' is unavailable or has an invalid state: Not found
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Sensor 'sensor.wetterstation_windgeschwindigkeit' is unavailable or has an invalid state: Not found
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Sensor 'sensor.wetterstation_regenrate' is unavailable or has an invalid state: Not found
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Sensor 'sensor.wetterstation_luftdruck' is unavailable or has an invalid state: Not found
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Sensor 'sensor.wetterstation_solarstrahlung' is unavailable or has an invalid state: Not found
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Collected external sensor data: {'temperature': None, 'humidity': None, 'wind_speed': None, 'rain': None, 'pressure': None, 'solar_radiation': None, 'lux': None}
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.core.core_startup_data_resolver - INFO - Startup: External sensors not yet available, starting background retry
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.coordinator - INFO - Startup data available: source=DB-Weather+DB-Astro, weather=True, astro=True, sensors=False
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.coordinator - INFO - Solar Forecast Coordinator basic setup complete - starting background initialization
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.coordinator - INFO - Background initialization started
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.ai.ai_predictor - INFO - AIPredictor initialized: 2 groups, 9.90 kWp total, max_kwh_per_hour=5.94
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.ai.ai_dni_tracker - INFO - DniTracker initialized
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.ai.ai_seasonal - INFO - SeasonalAdjuster initialized
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.ai.ai_dni_tracker - INFO - DNI tracker loaded from database
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.ai.ai_seasonal - INFO - Seasonal factors loaded from database
+2026-05-09 14:41:26 - custom_components.solar_forecast_ml.ai.ai_feature_engineering - INFO - FeatureEngineer initialized: 30 features
+2026-05-09 14:41:27 - custom_components.solar_forecast_ml.sensor - INFO - Setting up sensors V26.0.0: Diagnostic Mode=Enabled, Hourly Sensor=Disabled, evcc Forecast=Disabled
+2026-05-09 14:41:27 - custom_components.solar_forecast_ml.sensors.sensor_system_status - INFO - System Status Sensor initialized
+2026-05-09 14:41:27 - custom_components.solar_forecast_ml.sensor - INFO - Diagnostic mode enabled - Adding 15 advanced diagnostic sensors.
+2026-05-09 14:41:27 - custom_components.solar_forecast_ml.sensor - INFO - Shadow Detection enabled - Adding 3 shadow detection sensors
+2026-05-09 14:41:27 - custom_components.solar_forecast_ml.sensor - INFO - Drift Detection enabled - Adding 1 drift detection sensors
+2026-05-09 14:41:27 - custom_components.solar_forecast_ml.sensors.sensor_diagnostic - DEBUG - Astronomy cache not loaded - cannot calculate next production start
+2026-05-09 14:41:27 - custom_components.solar_forecast_ml.sensors.sensor_diagnostic - DEBUG - Astronomy cache not loaded - cannot calculate next production start
+2026-05-09 14:41:27 - custom_components.solar_forecast_ml.sensors.sensor_shadow_detection - DEBUG - No hourly predictions cache available in coordinator
+2026-05-09 14:41:27 - custom_components.solar_forecast_ml.sensors.sensor_shadow_detection - DEBUG - No hourly predictions cache available in coordinator
+2026-05-09 14:41:27 - custom_components.solar_forecast_ml.sensor - INFO - Successfully added 46 total sensors.
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.ai.ai_tiny_lstm - INFO - TinyLSTM V3.0: input=33, layers=(48,24), seq=24, outputs=2, heads=4
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.ai.ai_tiny_ridge - INFO - TinyRidge initialized: input=33, seq=24, flat_size=792, outputs=2
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.ai.ai_predictor - INFO - Models initialized: 33 features, 2 outputs, 2 groups, layers=2, heads=4
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.ai.ai_tiny_ridge - INFO - TinyRidge weights loaded: outputs=2, samples=31, alpha=10.0, accuracy=1.000
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.ai.ai_predictor - INFO - Ridge weights loaded: 31 samples
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.ai.ai_tiny_lstm - INFO - Weights loaded: layers=(48,24), outputs=2, heads=4
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.ai.ai_predictor - INFO - LSTM weights loaded: 31 samples
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.ai.ai_predictor - INFO - Dual-model weights loaded: 31 samples, active=tiny_lstm, R²=1.000, RMSE=0.003kWh
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.physics.physics_calibrator - INFO - PhysicsCalibrator initialized with database storage
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.sensors.sensor_base - WARNING - ConservativePlanningForecastSensor: failed to fetch TFS quantiles: Cannot connect to host 127.0.0.1:8780 ssl:default [Connect call failed ('127.0.0.1', 8780)]
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.physics.physics_calibrator - DEBUG - Loaded calibration config: 2 groups, 13 bucket factors
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.physics.physics_calibrator - INFO - PhysicsCalibrator loaded calibration for 2 groups: ['Gruppe 1', 'Gruppe 2']
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.coordinator - INFO - PhysicsCalibrator initialized for self-learning corrections
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.astronomy.astronomy_cache - INFO - Panel groups configured: 2 groups
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.coordinator - INFO - AstronomyCache: Panel groups set (2 groups)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.astronomy.astronomy_cache - INFO - Astronomy Cache initialized: lat=47.5151248, lon=12.0896913, tz=Europe/Berlin, elev=520m
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Weather Data Pipeline Manager initialized
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - INFO - Initializing forecast strategies...
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_strategy_base.rule_based - DEBUG - Strategy 'rule_based' initialized.
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - INFO - Physics+ML Strategy: 2 panel groups configured
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - INFO - Physics+ML Strategy: Local AI available
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - INFO - Forecast strategy initialized with local AI
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - PhysicsCalibrator stored, will connect when PanelGroupCalculator is created
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.coordinator - INFO - PhysicsCalibrator passed to RuleBasedStrategy - self-learning physics corrections enabled
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.coordinator - INFO - DriftMonitor initialized
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.astronomy.astronomy_cache_manager - DEBUG - Loaded 9 days + 216 hourly entries of astronomy data into cache
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.astronomy.astronomy_cache_manager - DEBUG - Astronomy cache manager initialized from database
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Setting up Weather Data Pipeline Manager...
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_open_meteo_client - INFO - OpenMeteoClient initialized (lat=47.5151, lon=12.0897)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_actual_tracker - INFO - WeatherActualTracker initialized
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_precision - INFO - WeatherPrecisionTracker initialized with sensors: ['temp', 'solar_radiation_wm2', 'humidity', 'wind', 'rain', 'pressure']
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_expert_blender - INFO - WeatherExpertBlender initialized with 5 experts
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_open_meteo_client - INFO - Loaded 96 hours from database into Open-Meteo cache
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_expert_blender - DEBUG - Loaded expert weights from database
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Open-Meteo client initialized (lat=47.5151, lon=12.0897)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Weather Expert Blender initialized with 5 active experts
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_expert_blender - INFO - WeatherExpertLearner initialized
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_visibility_learner - INFO - VisibilityLearner initialized (solar_radiation_sensor=configured)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_visibility_learner - DEBUG - VisibilityLearner loaded from DB: below=4, above=1
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_visibility_learner - DEBUG - Loaded fog weights from DB: {'bright_sky': 0.5, 'ecmwf_layers': 0.05, 'open_meteo': 0.1, 'pirate_weather': 0.3, 'wttr_in': 0.05}
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_visibility_learner - DEBUG - Loaded fog_light weights from DB: {'bright_sky': 0.4, 'ecmwf_layers': 0.1, 'open_meteo': 0.15, 'pirate_weather': 0.25, 'wttr_in': 0.1}
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_expert_blender - DEBUG - VisibilityLearner connected to WeatherExpertBlender
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_expert_blender - DEBUG - VisibilityLearner connected to WeatherExpertLearner
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - VisibilityLearner initialized (active=True)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_corrector - INFO - WeatherForecastCorrector initialized
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Weather Data Pipeline Manager setup complete
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_corrector - INFO - WeatherForecastCorrector: Kalman tracker attached
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_open_meteo_client - INFO - OpenMeteoClient initialized (lat=47.5151, lon=12.0897)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - WeatherService initialized - Open-Meteo (lat=47.5151, lon=12.0897)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.ai.ai_drift_monitor - INFO - DriftMonitor initialized with 3 scopes
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO - Weather MLP: not trained yet, using static factors
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_open_meteo_client - INFO - Loaded 96 hours from database into Open-Meteo cache
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_open_meteo_client - INFO - Loaded 96 hours from database into Open-Meteo cache
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_open_meteo_client - DEBUG - Open-Meteo: Using existing DB data (still fresh)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Loaded 96 hours from Open-Meteo
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Weather Service initialized (Open-Meteo with in-memory cache)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Starting Weather Data Pipeline...
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Pipeline: Startup Open-Meteo refresh scheduled (1min delay)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Pipeline: Bootstrap corrected forecast scheduled (5min delay)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Scheduled: Open-Meteo update (3x daily: 06:00, 12:00, 18:00)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Scheduled: Hourly weather tracking (every hour at :00)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Scheduled: Daily corrected forecast (00:20 with weather refresh)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Weather Data Pipeline started (7 scheduled listeners)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.coordinator - INFO - Weather Data Pipeline started successfully
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.coordinator - INFO - [SENSOR_INIT] HA still starting - scheduling sensor initialization for after startup
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO - Astronomy cache refresh scheduled for 00:20 daily
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO - Early morning forecast scheduled for 00:30 daily
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO - End-of-day task scheduled for 23:30 daily
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO - Operational reforecast scheduler armed for minute-based mode checks
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO - Adaptive forecast check scheduled at 12:30
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - DEBUG - All dynamic task times already passed for today
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.coordinator - DEBUG - Drift status cache loaded from DB: critical
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - DEBUG - Predictions exist for 2026-05-09 (24 hours) - no catch-up to protect existing data
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO - ============================================================
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO - All scheduled tasks registered successfully:
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO -   • Hourly update: Every hour at :05
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO -   • Midnight task: Daily at 00:10
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO -   • Astronomy cache refresh: Daily at 00:20
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO -   • Early morning forecast: Daily at 00:30
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO -   • End-of-day: Daily at 23:30
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO -   • Operational reforecast mode checks: Every minute at :00
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO -   • Adaptive forecast: Daily at 12:30
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO -   • Dynamic morning tasks: Sunrise-based (Weather blend, Corrected forecast, Final forecast)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO -   Total listeners: 7
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.production.production_scheduled_tasks - INFO - ============================================================
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Forecast using database: 72 hours across 3 days
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Collected external sensor data: {'temperature': 20.4, 'humidity': 49.0, 'wind_speed': 0.0, 'rain': 0.0, 'pressure': 1018.0, 'solar_radiation': 264.0, 'lux': None}
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Creating forecast (AI + Physics)...
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Lag-Feature 'production_yesterday' = 35.35 kWh (from DB: 2026-05-08)
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Physics+LSTM blend active
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Physics engine initialized
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.physics.panel_group_calculator - INFO - Panel groups updated: 2 groups, total 9.90 kWp
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.physics.panel_group_calculator - DEBUG - PanelGroupCalculator initialized with 2 groups, total 9.90 kWp, albedo=0.20, sys_eff=0.90
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - INFO - PanelGroupCalculator initialized: 2 groups, 9.90 kWp
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.physics.panel_group_calculator - INFO - PhysicsCalibrator attached to PanelGroupCalculator
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - INFO - PhysicsCalibrator connected to PanelGroupCalculator for self-learning
+2026-05-09 14:41:28 - custom_components.solar_forecast_ml.coordinator - INFO - Solar Forecast Coordinator fully initialized (AI-Ready, 9.9 kWp)
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.982, tfs=0.000, ai=2.849->0.933, max=0.933
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, diffuse_share=0.64, physics=0.838, tfs=0.000, ai=2.530->0.796, max=0.796
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=71.2%, ghi_ratio=0.20, confidence=0.595->0.208
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, diffuse_share=0.67, physics=0.640, tfs=0.000, ai=2.037->0.608, max=0.608
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, diffuse_share=0.73, physics=0.538, tfs=0.000, ai=6.299->0.511, max=0.511
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, confidence=0.506->0.177
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml - DEBUG - V16 Migration: No 'Default' panel group found - data already clean
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, diffuse_share=0.78, physics=0.389, tfs=0.000, ai=5.908->0.370, max=0.370
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=6, regime=strong, clouds=85.7%, ghi_ratio=n/a, confidence=0.416->0.208
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=7, regime=severe, clouds=87.9%, ghi_ratio=0.17, confidence=0.506->0.177
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, confidence=0.506->0.177
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, diffuse_share=0.72, physics=0.532, tfs=0.000, ai=0.800->0.505, max=0.505
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, confidence=0.595->0.208
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, diffuse_share=0.64, physics=0.844, tfs=0.000, ai=1.032->0.802, max=0.802
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, confidence=0.651->0.326
+2026-05-09 14:41:29 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, diffuse_share=0.59, physics=2.169, tfs=0.000, ai=2.664->2.277, max=2.277
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, diffuse_share=0.65, physics=1.212, tfs=0.000, ai=3.616->1.152, max=1.152
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.846, tfs=0.000, ai=3.249->0.803, max=0.803
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, confidence=0.700->0.245
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, diffuse_share=0.66, physics=0.643, tfs=0.000, ai=2.798->0.611, max=0.611
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, diffuse_share=0.68, physics=2.277, tfs=0.000, ai=2.506->2.164, max=2.164
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, confidence=0.595->0.208
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, diffuse_share=0.61, physics=0.759, tfs=0.000, ai=2.269->0.721, max=0.721
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, confidence=0.422->0.135
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, diffuse_share=0.66, physics=0.673, tfs=0.000, ai=7.020->0.639, max=0.639
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, diffuse_share=0.79, physics=0.387, tfs=0.000, ai=6.516->0.367, max=0.367
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Skipping hourly predictions for locked dates: 2026-05-09, 2026-05-10, 2026-05-11
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - INFO - Forecast complete: Today=25.16 kWh, Tomorrow=20.97 kWh, Day After=16.11 kWh, Method=AI + Physics
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping today forecast storage - locked by morning routine
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping tomorrow forecast storage - locked by morning routine
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping day_after_tomorrow forecast storage - locked by morning routine
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecast generated: today=25.16 kWh, tomorrow=20.97 kWh, method=AI + Physics, hourly_entries=72
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.production.production_history - DEBUG - Peak time calculation: Using stored hourly production data
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping today forecast update - locked by morning routine
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping tomorrow forecast update - locked by morning routine
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping day_after_tomorrow forecast update - locked by morning routine
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecasts saved to database (respecting locks)
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.coordinator - DEBUG - Hourly predictions cache refreshed: 24 today, 24 tomorrow, 24 day_after
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.coordinator - DEBUG - Finished fetching solar_forecast_ml data in 2.938 seconds (success: True)
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.sensors.sensor_system_status - DEBUG - Status updated: event=initialization, status=success, state=ok
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.sensors.sensor_system_status - INFO - System Status Sensor successfully added to Home Assistant
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.services.service_notification - DEBUG - Notification notify_startup disabled by option
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml - DEBUG - Startup notification triggered
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.services.service_extra_features - INFO - Extra features sync: 2 features found (grid_price_monitor, sfml_stats)
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.services.service_extra_features - INFO - Extra feature 'grid_price_monitor' is up-to-date (v20.0.0)
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.services.service_extra_features - INFO - Extra feature 'sfml_stats' is up-to-date (v26.0.0)
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml - INFO - 
+╔═════════════════════════════════════════════════════════════╗
+║  Solar Forecast ML — Sarpeidion AI & DB-Version             ║
+║  Mode: Hybrid-KI (Full Features)                            ║
+║  "Logic is the beginning of wisdom, not the end." — Spock   ║
+╚═════════════════════════════════════════════════════════════╝
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml.sensors.sensor_base - WARNING - ConservativePlanningForecastSensor: failed to fetch TFS quantiles: Cannot connect to host 127.0.0.1:8780 ssl:default [Connect call failed ('127.0.0.1', 8780)]
+2026-05-09 14:41:30 - custom_components.solar_forecast_ml - DEBUG - Panel Group Migration: no changes detected
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.astronomy.astronomy_cache - INFO - Astronomy Cache initialized: lat=47.5151248, lon=12.0896913, tz=Europe/Berlin, elev=520m
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.astronomy.astronomy_cache - INFO - Panel groups configured: 2 groups
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.services.service_astronomy - INFO - AstronomyCache: Panel groups configured (2 groups)
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.services.service_astronomy - INFO - Astronomy services initialized: lat=47.5151248, lon=12.0896913, tz=Europe/Berlin, elev=520m
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.services.service_astronomy - INFO - Astronomy cache already exists in database, skipping auto-build
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.services.service_astronomy - INFO - Max peaks already in database, skipping auto-extraction
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.astronomy.astronomy_cache_manager - DEBUG - Loaded 9 days + 216 hourly entries of astronomy data into cache
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.astronomy.astronomy_cache_manager - DEBUG - Astronomy cache manager initialized from database
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.services.service_astronomy - INFO - Astronomy cache loaded into memory for fast access
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.services.service_registry - DEBUG - Registered 16 services
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml - DEBUG - Services registered successfully
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Forecast using database: 72 hours across 3 days
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Collected external sensor data: {'temperature': 20.0, 'humidity': 51.0, 'wind_speed': 0.0, 'rain': 0.0, 'pressure': 1018.0, 'solar_radiation': 296.0, 'lux': None}
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Creating forecast (AI + Physics)...
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Lag-Feature 'production_yesterday' = 35.35 kWh (from DB: 2026-05-08)
+2026-05-09 14:41:31 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Physics+LSTM blend active
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.982, tfs=0.000, ai=2.849->0.933, max=0.933
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, diffuse_share=0.64, physics=0.838, tfs=0.000, ai=2.530->0.796, max=0.796
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=71.2%, ghi_ratio=0.20, confidence=0.595->0.208
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, diffuse_share=0.67, physics=0.640, tfs=0.000, ai=2.037->0.608, max=0.608
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, diffuse_share=0.73, physics=0.538, tfs=0.000, ai=6.299->0.511, max=0.511
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, confidence=0.506->0.177
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, diffuse_share=0.78, physics=0.389, tfs=0.000, ai=5.908->0.370, max=0.370
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=6, regime=strong, clouds=85.7%, ghi_ratio=n/a, confidence=0.416->0.208
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=7, regime=severe, clouds=87.9%, ghi_ratio=0.17, confidence=0.506->0.177
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, confidence=0.506->0.177
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, diffuse_share=0.72, physics=0.532, tfs=0.000, ai=0.800->0.505, max=0.505
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, confidence=0.595->0.208
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, diffuse_share=0.64, physics=0.844, tfs=0.000, ai=1.032->0.802, max=0.802
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, confidence=0.651->0.326
+2026-05-09 14:41:32 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, diffuse_share=0.59, physics=2.169, tfs=0.000, ai=2.664->2.277, max=2.277
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, diffuse_share=0.65, physics=1.212, tfs=0.000, ai=3.616->1.152, max=1.152
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.846, tfs=0.000, ai=3.249->0.803, max=0.803
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, confidence=0.700->0.245
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, diffuse_share=0.66, physics=0.643, tfs=0.000, ai=2.798->0.611, max=0.611
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, diffuse_share=0.68, physics=2.277, tfs=0.000, ai=2.506->2.164, max=2.164
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, confidence=0.595->0.208
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, diffuse_share=0.61, physics=0.759, tfs=0.000, ai=2.269->0.721, max=0.721
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, confidence=0.422->0.135
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, diffuse_share=0.66, physics=0.673, tfs=0.000, ai=7.020->0.639, max=0.639
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, diffuse_share=0.79, physics=0.387, tfs=0.000, ai=6.516->0.367, max=0.367
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Skipping hourly predictions for locked dates: 2026-05-09, 2026-05-10, 2026-05-11
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - INFO - Forecast complete: Today=25.16 kWh, Tomorrow=20.97 kWh, Day After=16.11 kWh, Method=AI + Physics
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping today forecast storage - locked by morning routine
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping tomorrow forecast storage - locked by morning routine
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping day_after_tomorrow forecast storage - locked by morning routine
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecast generated: today=25.16 kWh, tomorrow=20.97 kWh, method=AI + Physics, hourly_entries=72
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.production.production_history - DEBUG - Peak time calculation: Using stored hourly production data
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping today forecast update - locked by morning routine
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping tomorrow forecast update - locked by morning routine
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping day_after_tomorrow forecast update - locked by morning routine
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecasts saved to database (respecting locks)
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.coordinator - DEBUG - Hourly predictions cache refreshed: 24 today, 24 tomorrow, 24 day_after
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.coordinator - DEBUG - Finished fetching solar_forecast_ml data in 1.845 seconds (success: True)
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml - INFO - First data refresh completed successfully
+2026-05-09 14:41:33 - custom_components.solar_forecast_ml.sensors.sensor_base - WARNING - ConservativePlanningForecastSensor: failed to fetch TFS quantiles: Cannot connect to host 127.0.0.1:8780 ssl:default [Connect call failed ('127.0.0.1', 8780)]
+2026-05-09 14:41:36 - custom_components.solar_forecast_ml - INFO - Starting JSON migration in background...
+2026-05-09 14:41:36 - custom_components.solar_forecast_ml.data.json_migration - INFO - JSON migration already completed - skipping
+2026-05-09 14:41:36 - custom_components.solar_forecast_ml - DEBUG - JSON Migration: No data to migrate
+2026-05-09 14:41:37 - custom_components.solar_forecast_ml.coordinator - INFO - [SENSOR_INIT] Home Assistant fully started - beginning sensor initialization
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.data.data_io - DEBUG - DataManagerIO initialized with DatabaseManager
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.data.data_panel_group_sensor_reader - DEBUG - PanelGroupSensorReader initialized with 2 groups
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.data.data_panel_group_sensor_reader - DEBUG - Loaded panel group sensor state: 2 groups
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.coordinator - INFO - Panel groups configuration: 2 groups
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.coordinator - DEBUG -   Group 0: name=Gruppe 1, energy_sensor=sensor.pv_ertrag_dach_heute
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.coordinator - DEBUG -   Group 1: name=Gruppe 2, energy_sensor=sensor.pv_ertrag_balkon_heute
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.coordinator - INFO - Panel group sensor reader initialized: 2 energy sensors validated
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.coordinator - INFO - Panel group sensor validation scheduled (background task)
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.production.production_tracker - INFO - [PRODUCTION_TRACKER] start_tracking called with power_entity=sensor.pv_produktion_watt_fast
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.production.production_tracker - INFO - [PRODUCTION_TRACKER] Power entity found: sensor.pv_produktion_watt_fast = 2487
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.production.production_tracker - INFO - Loaded production time state: accumulated=0.18h, active=True, start_time=2026-05-09T06:06:13.607747+02:00
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.production.production_tracker - INFO - [OK] Restored production time state: accumulated=0.18h, active=True
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.production.production_tracker - INFO - Synced production time: duration=31557s (08:45:57)
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.production.production_tracker - INFO - [PRODUCTION_TRACKER] State listener registered for sensor.pv_produktion_watt_fast
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.production.production_tracker - INFO - Production time tracking started for sensor.pv_produktion_watt_fast
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Forecast using database: 72 hours across 3 days
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Collected external sensor data: {'temperature': 20.0, 'humidity': 51.0, 'wind_speed': 0.0, 'rain': 0.0, 'pressure': 1018.0, 'solar_radiation': 296.0, 'lux': None}
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Creating forecast (AI + Physics)...
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Lag-Feature 'production_yesterday' = 35.35 kWh (from DB: 2026-05-08)
+2026-05-09 14:41:39 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Physics+LSTM blend active
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.982, tfs=0.000, ai=2.849->0.933, max=0.933
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, diffuse_share=0.64, physics=0.838, tfs=0.000, ai=2.530->0.796, max=0.796
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=71.2%, ghi_ratio=0.20, confidence=0.595->0.208
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, diffuse_share=0.67, physics=0.640, tfs=0.000, ai=2.037->0.608, max=0.608
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, diffuse_share=0.73, physics=0.538, tfs=0.000, ai=6.299->0.511, max=0.511
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, confidence=0.506->0.177
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, diffuse_share=0.78, physics=0.389, tfs=0.000, ai=5.908->0.370, max=0.370
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=6, regime=strong, clouds=85.7%, ghi_ratio=n/a, confidence=0.416->0.208
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=7, regime=severe, clouds=87.9%, ghi_ratio=0.17, confidence=0.506->0.177
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, confidence=0.506->0.177
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, diffuse_share=0.72, physics=0.532, tfs=0.000, ai=0.800->0.505, max=0.505
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, confidence=0.595->0.208
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, diffuse_share=0.64, physics=0.844, tfs=0.000, ai=1.032->0.802, max=0.802
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, confidence=0.651->0.326
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, diffuse_share=0.59, physics=2.169, tfs=0.000, ai=2.664->2.277, max=2.277
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, diffuse_share=0.65, physics=1.212, tfs=0.000, ai=3.616->1.152, max=1.152
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.846, tfs=0.000, ai=3.249->0.803, max=0.803
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, confidence=0.700->0.245
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, diffuse_share=0.66, physics=0.643, tfs=0.000, ai=2.798->0.611, max=0.611
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, diffuse_share=0.68, physics=2.277, tfs=0.000, ai=2.506->2.164, max=2.164
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, confidence=0.595->0.208
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, diffuse_share=0.61, physics=0.759, tfs=0.000, ai=2.269->0.721, max=0.721
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, confidence=0.422->0.135
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, diffuse_share=0.66, physics=0.673, tfs=0.000, ai=7.020->0.639, max=0.639
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 14:41:40 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, diffuse_share=0.79, physics=0.387, tfs=0.000, ai=6.516->0.367, max=0.367
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Skipping hourly predictions for locked dates: 2026-05-09, 2026-05-10, 2026-05-11
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - INFO - Forecast complete: Today=25.16 kWh, Tomorrow=20.97 kWh, Day After=16.11 kWh, Method=AI + Physics
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping today forecast storage - locked by morning routine
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping tomorrow forecast storage - locked by morning routine
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping day_after_tomorrow forecast storage - locked by morning routine
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecast generated: today=25.16 kWh, tomorrow=20.97 kWh, method=AI + Physics, hourly_entries=72
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.production.production_history - DEBUG - Peak time calculation: Using stored hourly production data
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping today forecast update - locked by morning routine
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping tomorrow forecast update - locked by morning routine
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping day_after_tomorrow forecast update - locked by morning routine
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecasts saved to database (respecting locks)
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.coordinator - DEBUG - Hourly predictions cache refreshed: 24 today, 24 tomorrow, 24 day_after
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.coordinator - DEBUG - Finished fetching solar_forecast_ml data in 1.647 seconds (success: True)
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.coordinator - INFO - [SENSOR_INIT] Delayed sensor initialization completed
+2026-05-09 14:41:41 - custom_components.solar_forecast_ml.sensors.sensor_base - WARNING - ConservativePlanningForecastSensor: failed to fetch TFS quantiles: Cannot connect to host 127.0.0.1:8780 ssl:default [Connect call failed ('127.0.0.1', 8780)]
+2026-05-09 14:41:56 - custom_components.solar_forecast_ml.core.core_startup_data_resolver - DEBUG - Sensor retry attempt 1/5
+2026-05-09 14:41:56 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Collected external sensor data: {'temperature': 20.0, 'humidity': 51.0, 'wind_speed': 0.0, 'rain': 0.0, 'pressure': 1018.0, 'solar_radiation': 296.0, 'lux': None}
+2026-05-09 14:41:56 - custom_components.solar_forecast_ml.core.core_startup_data_resolver - INFO - External sensors became available after 1 retries
+2026-05-09 14:41:56 - custom_components.solar_forecast_ml.coordinator - INFO - External sensors now available - triggering data refresh
+2026-05-09 14:41:56 - custom_components.solar_forecast_ml.core.core_startup_data_resolver - DEBUG - Updated DB with sensor data for hour 14
+2026-05-09 14:41:56 - custom_components.solar_forecast_ml.forecast.forecast_weather - INFO - Forecast using database: 72 hours across 3 days
+2026-05-09 14:41:56 - custom_components.solar_forecast_ml.sensors.sensor_data_collector - DEBUG - Collected external sensor data: {'temperature': 20.0, 'humidity': 51.0, 'wind_speed': 0.0, 'rain': 0.0, 'pressure': 1018.0, 'solar_radiation': 296.0, 'lux': None}
+2026-05-09 14:41:56 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Creating forecast (AI + Physics)...
+2026-05-09 14:41:56 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Lag-Feature 'production_yesterday' = 35.35 kWh (from DB: 2026-05-08)
+2026-05-09 14:41:56 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Physics+LSTM blend active
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.2%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.982, tfs=0.000, ai=2.849->0.933, max=0.933
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=75.7%, ghi_ratio=0.19, diffuse_share=0.64, physics=0.838, tfs=0.000, ai=2.530->0.796, max=0.796
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=71.2%, ghi_ratio=0.20, confidence=0.595->0.208
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=80.3%, ghi_ratio=0.16, diffuse_share=0.67, physics=0.640, tfs=0.000, ai=2.037->0.608, max=0.608
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=82.3%, ghi_ratio=0.14, diffuse_share=0.73, physics=0.538, tfs=0.000, ai=6.299->0.511, max=0.511
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, confidence=0.506->0.177
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=81.9%, ghi_ratio=0.15, diffuse_share=0.78, physics=0.389, tfs=0.000, ai=5.908->0.370, max=0.370
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=6, regime=strong, clouds=85.7%, ghi_ratio=n/a, confidence=0.416->0.208
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=7, regime=severe, clouds=87.9%, ghi_ratio=0.17, confidence=0.506->0.177
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, confidence=0.506->0.177
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=8, regime=severe, clouds=79.9%, ghi_ratio=0.20, diffuse_share=0.72, physics=0.532, tfs=0.000, ai=0.800->0.505, max=0.505
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, confidence=0.595->0.208
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=9, regime=severe, clouds=76.2%, ghi_ratio=0.24, diffuse_share=0.64, physics=0.844, tfs=0.000, ai=1.032->0.802, max=0.802
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, confidence=0.651->0.326
+2026-05-09 14:41:57 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=10, regime=strong, clouds=68.1%, ghi_ratio=0.26, diffuse_share=0.59, physics=2.169, tfs=0.000, ai=2.664->2.277, max=2.277
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, confidence=0.700->0.245
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=12, regime=severe, clouds=77.2%, ghi_ratio=0.19, diffuse_share=0.65, physics=1.212, tfs=0.000, ai=3.616->1.152, max=1.152
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, confidence=0.700->0.245
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=13, regime=severe, clouds=72.0%, ghi_ratio=0.20, diffuse_share=0.61, physics=0.846, tfs=0.000, ai=3.249->0.803, max=0.803
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, confidence=0.700->0.245
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=14, regime=severe, clouds=79.3%, ghi_ratio=0.17, diffuse_share=0.66, physics=0.643, tfs=0.000, ai=2.798->0.611, max=0.611
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, confidence=0.595->0.208
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=15, regime=severe, clouds=81.7%, ghi_ratio=0.16, diffuse_share=0.68, physics=2.277, tfs=0.000, ai=2.506->2.164, max=2.164
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, confidence=0.595->0.208
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=16, regime=severe, clouds=72.0%, ghi_ratio=0.19, diffuse_share=0.61, physics=0.759, tfs=0.000, ai=2.269->0.721, max=0.721
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, confidence=0.422->0.135
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=17, regime=severe, clouds=69.4%, ghi_ratio=0.18, diffuse_share=0.66, physics=0.673, tfs=0.000, ai=7.020->0.639, max=0.639
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI confidence: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, confidence=0.506->0.177
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Bad-weather AI cap: hour=18, regime=severe, clouds=84.9%, ghi_ratio=0.14, diffuse_share=0.79, physics=0.387, tfs=0.000, ai=6.516->0.367, max=0.367
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_rule_based_strategy - DEBUG - Skipping hourly predictions for locked dates: 2026-05-09, 2026-05-10, 2026-05-11
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - INFO - Forecast complete: Today=25.16 kWh, Tomorrow=20.97 kWh, Day After=16.11 kWh, Method=AI + Physics
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping today forecast storage - locked by morning routine
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping tomorrow forecast storage - locked by morning routine
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.forecast.forecast_orchestrator - DEBUG - Skipping day_after_tomorrow forecast storage - locked by morning routine
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecast generated: today=25.16 kWh, tomorrow=20.97 kWh, method=AI + Physics, hourly_entries=72
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.production.production_history - DEBUG - Peak time calculation: Using stored hourly production data
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping today forecast update - locked by morning routine
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping tomorrow forecast update - locked by morning routine
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Skipping day_after_tomorrow forecast update - locked by morning routine
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.core.core_coordinator_update_helpers - DEBUG - Forecasts saved to database (respecting locks)
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.coordinator - DEBUG - Hourly predictions cache refreshed: 24 today, 24 tomorrow, 24 day_after
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.coordinator - DEBUG - Finished fetching solar_forecast_ml data in 1.671 seconds (success: True)
+2026-05-09 14:41:58 - custom_components.solar_forecast_ml.sensors.sensor_base - WARNING - ConservativePlanningForecastSensor: failed to fetch TFS quantiles: Cannot connect to host 127.0.0.1:8780 ssl:default [Connect call failed ('127.0.0.1', 8780)]
+2026-05-09 14:42:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Pipeline: Fetching weather data from Open-Meteo...
+2026-05-09 14:42:28 - custom_components.solar_forecast_ml.data.data_open_meteo_client - INFO - Loaded 96 hours from database into Open-Meteo cache
+2026-05-09 14:42:28 - custom_components.solar_forecast_ml.data.data_open_meteo_client - DEBUG - Open-Meteo: Using existing DB data (still fresh)
+2026-05-09 14:42:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Pipeline: Open-Meteo startup refresh SUCCESS
+2026-05-09 14:42:28 - custom_components.solar_forecast_ml.data.data_weather_expert_blender - DEBUG - WttrIn: Using existing DB data (still fresh)
+2026-05-09 14:42:28 - custom_components.solar_forecast_ml.data.data_weather_expert_blender - DEBUG - BrightSky: Using existing DB data (still fresh)
+2026-05-09 14:42:28 - custom_components.solar_forecast_ml.data.data_weather_expert_blender - DEBUG - PirateWeather: Using existing DB data (still fresh)
+2026-05-09 14:42:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Pipeline: Expert sources: wttr.in: OK, Bright Sky: OK, Pirate Weather: OK
+2026-05-09 14:46:28 - custom_components.solar_forecast_ml.data.data_weather_pipeline_manager - INFO - Pipeline: Corrected forecast exists - skip bootstrap

@@ -37,25 +37,25 @@ sensor:
     round: 0
     method: left
 
-  - platform: filter
-    name: "Target Charge Distribution"
-    unique_id: target_charge_distribution
-    entity_id: sensor.target_charge_distribution_fast
-    scan_interval: 300
-    filters:
-      - filter: time_simple_moving_average
-        window_size: "00:05:00"
-        precision: 1
+#  - platform: filter
+#    name: "Target Charge Distribution"
+#    unique_id: target_charge_distribution
+#    entity_id: sensor.target_charge_distribution_fast
+#    scan_interval: 300
+#    filters:
+#      - filter: time_simple_moving_average
+#        window_size: "00:05:00"
+#        precision: 1
 
-  - platform: filter
-    name: "Target Discharge Distribution"
-    unique_id: target_discharge_distribution
-    entity_id: sensor.target_discharge_distribution_fast
-    scan_interval: 300
-    filters:
-      - filter: time_simple_moving_average
-        window_size: "00:05:00"
-        precision: 1
+#  - platform: filter
+#    name: "Target Discharge Distribution"
+#    unique_id: target_discharge_distribution
+#    entity_id: sensor.target_discharge_distribution_fast
+#    scan_interval: 300
+#    filters:
+#      - filter: time_simple_moving_average
+#        window_size: "00:05:00"
+#        precision: 1
 
 ################################################################################
 ################################################################################
@@ -116,7 +116,7 @@ template:
           {# Sync auf HW-SOC wenn Batterie fast leer #}          
           {% if hw_soc < 15 %}
             {{ current_energy - (hw_soc / 100 * capacity) }}
-          {% elif hw_soc == 100 %}
+          {% elif hw_soc >= 100 %}
             {# Bei 100% nehmen wir den kleineren Wert (da Energiefluss beim Laden sinkt/negativ ist) #}
             {{ [current_energy, last_reset] | min }}
           {% elif current_energy < last_reset %}
@@ -147,7 +147,7 @@ template:
           {# Sync auf HW-SOC wenn Batterie fast leer #}          
           {% if hw_soc < 15 %}
             {{ current_energy - (hw_soc / 100 * capacity) }}
-          {% elif hw_soc == 100 %}
+          {% elif hw_soc >= 100 %}
             {# Bei 100% nehmen wir den kleineren Wert (da Energiefluss beim Laden sinkt/negativ ist) #}
             {{ [current_energy, last_reset] | min }}
           {% elif current_energy < last_reset %}
@@ -402,27 +402,7 @@ template:
         unique_id: max_charge_limits
         unit_of_measurement: "W"
         state_class: measurement
-        state: >-
-          {% set default = {'v1': 2500, 'v2': 2500} %}
-          {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
-          {% set b_set = state_attr('sensor.solar_zeit_logik', 'b_set') | float(0) %}
-          {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
-          {% set ziel_soc = states('sensor.dynamic_soc') | float(80) %}
-
-          {% if ts >= t1130 and ts < b_set and ziel_soc < 100 %}
-            {% set capacity = state_attr('sensor.zentrale_parameter', 'venus_capacity_wh') | float(5120) %}
-            {% set dauer = [(b_set - ts) / 3600, 0.01] | max %}
-            {% set fak = capacity / 100 / dauer * 1.25 %}
-            {% set soc1 = states('sensor.venus_1_custom_soc') | float(20) %}
-            {% set soc2 = states('sensor.venus_2_custom_soc') | float(20) %}
-            {% set raw1 = [((ziel_soc - soc1) | clamp(0,100) * fak) | round(0), 2500] | min %}
-            {% set raw2 = [((ziel_soc - soc2) | clamp(0,100) * fak) | round(0), 2500] | min %}
-            {% set l1 = [raw1, 200] | max if raw1 > 0 else 0 %}
-            {% set l2 = [raw2, 200] | max if raw2 > 0 else 0 %}
-            {{ [l1, l2] | max }}
-          {% else %}
-            2500
-          {% endif %}
+        state: "{{ now() }}"
         attributes:
           limits: >-
             {% set default = {'v1': 2500, 'v2': 2500} %}
@@ -447,6 +427,7 @@ template:
               {{ default }}
             {% endif %}
 
+  # für Dashboard
   - sensor:
       - name: "Battery SOC Total"
         unique_id: battery_soc_total

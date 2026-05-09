@@ -57,38 +57,38 @@ sensor:
       - filter: throttle
         window_size: 300
 
-  - platform: filter
-    name: "Garage Inverter 5min Average"
-    unique_id: garage_inverter_5min_avg
-    entity_id: sensor.garage_inverter_energy_power
-    filters:
-      - filter: time_simple_moving_average
-        window_size: "00:05:00"
-        precision: 0
-      - filter: throttle
-        window_size: 300
+#  - platform: filter
+#    name: "Garage Inverter 5min Average"
+#    unique_id: garage_inverter_5min_avg
+#    entity_id: sensor.garage_inverter_energy_power
+#    filters:
+#      - filter: time_simple_moving_average
+#        window_size: "00:05:00"
+#        precision: 0
+#      - filter: throttle
+#        window_size: 300
 
-  - platform: filter
-    name: "Balkon Inverter 5min Average"
-    unique_id: balkon_inverter_5min_avg
-    entity_id: sensor.balkon_inverter_energy_power
-    filters:
-      - filter: time_simple_moving_average
-        window_size: "00:05:00"
-        precision: 0
-      - filter: throttle
-        window_size: 300
+#  - platform: filter
+#    name: "Balkon Inverter 5min Average"
+#    unique_id: balkon_inverter_5min_avg
+#    entity_id: sensor.balkon_inverter_energy_power
+#    filters:
+#      - filter: time_simple_moving_average
+#        window_size: "00:05:00"
+#        precision: 0
+#      - filter: throttle
+#        window_size: 300
 
-  - platform: filter
-    name: "Balkon Inverter 2 5min Average"
-    unique_id: balkon_inverter2_5min_avg
-    entity_id: sensor.balkon_inverter2_energy_power
-    filters:
-      - filter: time_simple_moving_average
-        window_size: "00:05:00"
-        precision: 0
-      - filter: throttle
-        window_size: 300
+#  - platform: filter
+#    name: "Balkon Inverter 2 5min Average"
+#    unique_id: balkon_inverter2_5min_avg
+#    entity_id: sensor.balkon_inverter2_energy_power
+#    filters:
+#      - filter: time_simple_moving_average
+#        window_size: "00:05:00"
+#        precision: 0
+#      - filter: throttle
+#        window_size: 300
 
 template:
   - sensor:

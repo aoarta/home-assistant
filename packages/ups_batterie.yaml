@@ -19,7 +19,7 @@ sensor:
     entity_id: sensor.ups_ac_leistung
     filters:
       - filter: lowpass
-        time_constant: 5
+        time_constant: 3
         precision: 0
       - filter: time_throttle
         window_size: "00:00:30"
@@ -238,6 +238,7 @@ automation:
           - sensor.ups_highest_cell_stabil
           - binary_sensor.batterie_wartung_erforderlich
           - sensor.solarnet_leistung_vom_netz
+          - sensor.ups_ac_leistung
     action:
       - choose:
           # --- Wartungsmodus ein (mit Überladeschutz!)
@@ -301,14 +302,16 @@ automation:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
 
+          #### hier noch einbauen, wenn die ladeleistung unter 20W sinkt, dann ausschalten
           # --- LADEN STOPPEN ---
           - conditions:
               - condition: template
                 value_template: >-
                   {% set leistung_vom_netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
+                  {% set ladeleistung = states('sensor.ups_ac_leistung') | float(0) %}
                   {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
                   {% set max_voltage = state_attr('sensor.zentrale_parameter', 'lfp_max_voltage') | float(3.60) %}                  
-                  {{ (leistung_vom_netz > -100 or high_cell > max_voltage) and (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
+                  {{ ladeleistung > -40 or (leistung_vom_netz > -100 or high_cell > max_voltage) and (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
             sequence:
               - action: switch.turn_off
                 target:
@@ -326,7 +329,6 @@ automation:
 
                   {{ leistung_vom_netz < -820 and soc < 96 and high_cell < max_voltage - hysteresis
                       and is_state('switch.battery_inverter_tasmota', 'off') }}
-
             sequence:
               - action: switch.turn_on
                 target: { entity_id: switch.battery_charger }

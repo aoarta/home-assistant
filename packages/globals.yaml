@@ -15,5 +15,3 @@ template:
           ups_capacity_wh: 2500
           override_soc_days: 6
           battery_care_days: 7
-
-          kalman_lernrate: 0.05

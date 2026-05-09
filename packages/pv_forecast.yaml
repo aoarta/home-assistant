@@ -11,13 +11,12 @@
 # 1. INPUTS & PARAMETER
 ################################################################################
 input_number:
-
   pv_forecast_bias_korrekturfaktor:
     name: "Forecast Bias Korrekturfaktor"
     min: 0.5
-    max: 1.5      # FIX: war 100 – Kalman klemmt auf [0.6, 1.4], max 1.5 ist sinnvoll
+    max: 1.5 # FIX: war 100 – Kalman klemmt auf [0.6, 1.4], max 1.5 ist sinnvoll
     initial: 1.00
-    step: 0.0001  # FIX: war 0.001 bei max 100 – jetzt passend zu max 1.5
+    step: 0.0001 # FIX: war 0.001 bei max 100 – jetzt passend zu max 1.5
 
   # --- Kalman P-Werte (Bias) ---
   pv_kalman_p_bias:
@@ -36,35 +35,35 @@ input_number:
     name: "Kalman Score Solcast"
     min: 0
     max: 15
-    initial: 1.0  # FIX: war 0.25 (normiertes Gewicht) – passt nicht zum obs-Raum
+    initial: 1.0 # FIX: war 0.25 (normiertes Gewicht) – passt nicht zum obs-Raum
     step: 0.001
 
   pv_kalman_score_solarprognose:
     name: "Kalman Score Solarprognose"
     min: 0
     max: 15
-    initial: 1.0  # FIX: war 0.15
+    initial: 1.0 # FIX: war 0.15
     step: 0.001
 
   pv_kalman_score_forecastsolar:
     name: "Kalman Score ForecastSolar"
     min: 0
     max: 15
-    initial: 1.0  # FIX: war 0.15
+    initial: 1.0 # FIX: war 0.15
     step: 0.001
 
   pv_kalman_score_openmeteo:
     name: "Kalman Score OpenMeteo"
     min: 0
     max: 15
-    initial: 1.0  # FIX: war 0.45
+    initial: 1.0 # FIX: war 0.45
     step: 0.001
 
   pv_kalman_score_ml:
     name: "Kalman Score ML"
     min: 0
     max: 15
-    initial: 0.0  # FIX: war 0.001 – 0.0 = kein Einfluss bis echter Lernschritt
+    initial: 0.2 # FIX: war 0.001 – 0.0 = kein Einfluss bis echter Lernschritt
     step: 0.001
 
   # --- Kalman P-Werte (Unsicherheit der Score-Schätzung) ---
@@ -210,7 +209,6 @@ sensor:
 # 3. TEMPLATE SENSOREN
 ################################################################################
 template:
-
   # --- TRIGGER-BASIERTE SPEICHER-SENSOREN (Überleben Neustart) ---
   - trigger:
       - platform: time_pattern
@@ -508,7 +506,6 @@ template:
 # 4. AUTOMATISIERUNGEN
 ################################################################################
 automation:
-
   # ---------------------------------------------------------------------------
   - alias: "PV: API Daten gezielt mehrmals täglich holen"
     id: pv_fetch_api_data_updates
@@ -539,7 +536,7 @@ automation:
         target:
           entity_id: input_number.pv_prognose_festwert_heute
         data:
-          value: "{{ states('sensor.pv_forecast_weighted') | float(0) }}"
+          value: "{{ (states('sensor.pv_forecast_weighted') | float(0) / states('input_number.pv_forecast_bias_korrekturfaktor') | float(1)) }}"
       # Einzelwerte jedes Providers als Morgens-Referenz sichern
       - repeat:
           for_each:
@@ -567,26 +564,25 @@ automation:
       real: "{{ states('sensor.pv_ertrag_heute') | float(0) }}"
       forecast_heute: "{{ states('input_number.pv_prognose_festwert_heute') | float(0) }}"
       # Kalman-Rauschparameter
-      Q_bias: 0.001   # Prozessrauschen Bias
-      R_bias: 0.04    # Messrauschen Bias
-      Q_w: 0.005      # Prozessrauschen Gewichte
-      R_w: 0.1        # Messrauschen Gewichte
+      Q_bias: 0.001 # Prozessrauschen Bias
+      R_bias: 0.04 # Messrauschen Bias
+      Q_w: 0.005 # Prozessrauschen Gewichte
+      R_w: 0.1 # Messrauschen Gewichte
 
     actions:
-
       # ── 1. BIAS – Kalman Update ─────────────────────────────────────────────
       - if:
           - condition: template
             value_template: "{{ forecast_heute > 2 and real > 0 }}"
         then:
           - variables:
-              bias_alt:    "{{ states('input_number.pv_forecast_bias_korrekturfaktor') | float(1.0) }}"
-              P_bias_alt:  "{{ states('input_number.pv_kalman_p_bias') | float(0.02) }}"
+              bias_alt: "{{ states('input_number.pv_forecast_bias_korrekturfaktor') | float(1.0) }}"
+              P_bias_alt: "{{ states('input_number.pv_kalman_p_bias') | float(0.02) }}"
               messung_bias: "{{ real / forecast_heute }}"
               P_bias_pred: "{{ P_bias_alt + Q_bias }}"
-              K_bias:      "{{ P_bias_pred / (P_bias_pred + R_bias) }}"
-              bias_neu:    "{{ (bias_alt + K_bias * (messung_bias - bias_alt)) | clamp(0.6, 1.4) | round(4) }}"
-              P_bias_neu:  "{{ ((1 - K_bias) * P_bias_pred) | clamp(0.0001, 1.0) | round(5) }}"
+              K_bias: "{{ P_bias_pred / (P_bias_pred + R_bias) }}"
+              bias_neu: "{{ (bias_alt + K_bias * (messung_bias - bias_alt)) | clamp(0.6, 1.4) | round(4) }}"
+              P_bias_neu: "{{ ((1 - K_bias) * P_bias_pred) | clamp(0.0001, 1.0) | round(5) }}"
           - action: input_number.set_value
             target:
               entity_id: input_number.pv_forecast_bias_korrekturfaktor
@@ -638,8 +634,9 @@ automation:
                 - variables:
                     saved_forecast: "{{ states(repeat.item.save_entity) | float(-1) }}"
                     obs_val: >-
-                      {% if saved_forecast > 0 %}
-                        {{ 1.0 / ((saved_forecast - real) | abs + 0.1) }}
+                      {% if saved_forecast > 0 and real > 1 %}
+                        {% set rel_err = ((saved_forecast - real) | abs) / real %}
+                        {{ 1.0 / (rel_err * 10 + 0.1) }}
                       {% else %}
                         -1
                       {% endif %}
@@ -650,13 +647,15 @@ automation:
                       value_template: "{{ obs_val | float(-1) >= 0 }}"
                   then:
                     - variables:
-                        score_alt: "{{ states('input_number.pv_kalman_score_' ~ repeat.item.id) | float(1.0) }}"
-                        P_alt:     "{{ states('input_number.pv_kalman_p_' ~ repeat.item.id) | float(0.1) }}"
-                        P_pred:    "{{ P_alt + Q_w }}"
-                        K:         "{{ P_pred / (P_pred + R_w) }}"
+                        # decay der scores: 0.987^(28Tage) = 69%
+                        score_alt: "{{ states('input_number.pv_kalman_score_' ~ repeat.item.id) | float(1.0) * 0.987 }}"
+
+                        P_alt: "{{ states('input_number.pv_kalman_p_' ~ repeat.item.id) | float(0.1) }}"
+                        P_pred: "{{ P_alt + Q_w }}"
+                        K: "{{ P_pred / (P_pred + R_w) }}"
                         # FIX: | max(0.0001) – Score kann nicht negativ werden
                         score_neu: "{{ ([score_alt + K * (obs_val | float(0) - score_alt), 0.0001] | max) | round(5) }}"
-                        P_neu:     "{{ ((1 - K) * P_pred) | clamp(0.0001, 1.0) | round(5) }}"
+                        P_neu: "{{ ((1 - K) * P_pred) | clamp(0.0001, 1.0) | round(5) }}"
                     - action: input_number.set_value
                       target:
                         entity_id: "input_number.pv_kalman_score_{{ repeat.item.id }}"
