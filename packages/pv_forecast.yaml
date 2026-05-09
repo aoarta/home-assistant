@@ -560,8 +560,7 @@ automation:
       - trigger: time
         at: "23:55:00"
     variables:
-      # HINWEIS: Sensorname ggf. anpassen (war früher sensor.pv_ertrag_heute_um)
-      real: "{{ states('sensor.pv_ertrag_heute') | float(0) }}"
+      real: "{{ states('sensor.pv_ertrag_heute_um') | float(0) }}"
       forecast_heute: "{{ states('input_number.pv_prognose_festwert_heute') | float(0) }}"
       # Kalman-Rauschparameter
       Q_bias: 0.001 # Prozessrauschen Bias
@@ -573,12 +572,12 @@ automation:
       # ── 1. BIAS – Kalman Update ─────────────────────────────────────────────
       - if:
           - condition: template
-            value_template: "{{ forecast_heute > 2 and real > 0 }}"
+            value_template: "{{ forecast_heute | float(0) > 2 and real | float(0) > 0 }}"
         then:
           - variables:
               bias_alt: "{{ states('input_number.pv_forecast_bias_korrekturfaktor') | float(1.0) }}"
               P_bias_alt: "{{ states('input_number.pv_kalman_p_bias') | float(0.02) }}"
-              messung_bias: "{{ real / forecast_heute }}"
+              messung_bias: "{{ real | float(0) / forecast_heute | float(0) }}"
               P_bias_pred: "{{ P_bias_alt + Q_bias }}"
               K_bias: "{{ P_bias_pred / (P_bias_pred + R_bias) }}"
               bias_neu: "{{ (bias_alt + K_bias * (messung_bias - bias_alt)) | clamp(0.6, 1.4) | round(4) }}"
@@ -599,12 +598,12 @@ automation:
         target:
           entity_id: input_number.pv_prognose_von_gestern
         data:
-          value: "{{ forecast_heute }}"
+          value: "{{ forecast_heute | float(0) }}"
       - action: input_number.set_value
         target:
           entity_id: input_number.pv_reale_ernte_von_gestern
         data:
-          value: "{{ real | round(1) }}"
+          value: "{{ real | float(0) | round(1) }}"
 
       # ── 3. PROVIDER-GEWICHTE – Kalman Update ────────────────────────────────
       # obs = 1 / (|Morgens-Prognose - reale Ernte| + 0.1)
@@ -614,7 +613,7 @@ automation:
       # um Probleme mit Template-Auswertung in verschachtelten Blöcken zu vermeiden.
       - if:
           - condition: template
-            value_template: "{{ real > 1.0 }}"
+            value_template: "{{ real | float(0) > 1.0 }}"
         then:
           - repeat:
               for_each:
@@ -634,8 +633,8 @@ automation:
                 - variables:
                     saved_forecast: "{{ states(repeat.item.save_entity) | float(-1) }}"
                     obs_val: >-
-                      {% if saved_forecast > 0 and real > 1 %}
-                        {% set rel_err = ((saved_forecast - real) | abs) / real %}
+                      {% if saved_forecast > 0 and real | float(0) > 1 %}
+                        {% set rel_err = ((saved_forecast - real | float(0)) | abs) / real | float(0) %}
                         {{ 1.0 / (rel_err * 10 + 0.1) }}
                       {% else %}
                         -1
