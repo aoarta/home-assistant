@@ -62,13 +62,13 @@ template:
         entity_id: sensor.ups_highest_cell_stabil
         above: 3.5
         for: "00:00:10"
-      - platform: state
+      - platform: numeric_state
         entity_id: sensor.ups_soc
-        to: "100.0"
+        above: "99.9"
         for: "00:01:00"
-      - platform: state
+      - platform: numeric_state
         entity_id: sensor.ups_custom_soc
-        to: "100.0"
+        above: "99.9"
       - platform: time_pattern
         minutes: "/5"
     sensor:
@@ -80,10 +80,16 @@ template:
           {% set raw_last_reset = states('sensor.ups_soc_reset_punkt') %}
           {% set hw_soc = states('sensor.ups_soc') | float(0) %}
           {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(0) %}
+          {% set lfp_max_voltage = state_attr('sensor.zentrale_parameter', 'lfp_max_voltage') | float(3.60) %}          
+          {% set capacity = state_attr('sensor.zentrale_parameter', 'ups_capacity_wh') | float(2200) %}
 
           {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
+
+          {# Sync auf HW-SOC wenn Batterie fast leer #}          
+          {% if hw_soc < 15 %}
+            {{ current_energy - (hw_soc / 100 * capacity) }}
           {# Reset wenn HW-SOC 100 oder Zelle voll #}
-          {% if hw_soc >= 100 or high_cell >= 3.5 %}
+          {% elif hw_soc >= 100 or high_cell >= lfp_max_voltage %}
             {{ [current_energy, last_reset] | min }}
           {% elif current_energy < last_reset %}
             {{ current_energy }}
@@ -92,18 +98,15 @@ template:
           {% endif %}
 
   - trigger:
-      - platform: state
+      - platform: numeric_state
         entity_id: sensor.ups_custom_soc
-        to: "100"
-        for: "00:01:00"
-      - platform: state
-        entity_id: sensor.ups_soc
-        to: "100.0"
-        for: "00:02:00"
+        above: "99.9"
+        for: "00:00:05"
     sensor:
       - name: "UPS Last Full"
         unique_id: ups_last_full_timestamp
         device_class: timestamp
+        availability: "{{ is_number(states('sensor.ups_custom_soc')) }}"
         state: "{{ now() }}"
 
   - trigger:
@@ -133,8 +136,8 @@ template:
               {% if hw_soc >= 100 %}
                 100
               {% else %}
-                {# Kapazität = 2300 Wh #}
-                {% set calc_soc = 100 - ((neu_wh - reset_wh) / 2300 * 100) %}
+                {% set capacity = state_attr('sensor.zentrale_parameter', 'ups_capacity_wh') | float(2200) %}
+                {% set calc_soc = 100 - ((neu_wh - reset_wh) / capacity * 100) %}
                 
                 {# Begrenzt den Wert sauber zwischen 0 und 100 und rundet #}
                 {{ calc_soc | round(1) | clamp(0, 100) }}
@@ -192,7 +195,9 @@ template:
         unit_of_measurement: "kWh"
         device_class: energy
         state: >-
-          {% set total_kwh = 2.0 %} 
+          {% set capacity = state_attr('sensor.zentrale_parameter', 'ups_capacity_wh') | float(2200) %}
+          {% set total_kwh = capacity / 1000 %} 
+
           {% set soc = states('sensor.ups_custom_soc') | float(-1) %}
           {{ (total_kwh * (1 - (soc / 100))) | round(2) if soc >= 0 else 0 }}
         availability: "{{ is_number(states('sensor.ups_custom_soc')) }}"
@@ -232,7 +237,7 @@ automation:
           - sensor.ups_lowest_cell_stabil
           - sensor.ups_highest_cell_stabil
           - binary_sensor.batterie_wartung_erforderlich
-          - sensor.hausverbrauch_netto_stabil
+          - sensor.solarnet_leistung_vom_netz
     action:
       - choose:
           # --- Wartungsmodus ein (mit Überladeschutz!)
@@ -240,9 +245,11 @@ automation:
               - condition: template
                 value_template: >-
                   {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
+                  {% set max_voltage = state_attr('sensor.zentrale_parameter', 'lfp_max_voltage') | float(3.60) %}
+
                   {# Nur laden wenn Wartung aktiv UND Batterie noch nicht voll #}
                   {{ states('input_number.manuelle_ladeleistung') | float(0) >= 1000 
-                     and high_cell < 3.55 }}
+                     and high_cell < max_voltage }}
             sequence:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
@@ -254,8 +261,9 @@ automation:
               - condition: template
                 value_template: >-
                   {% set soc = states('sensor.ups_custom_soc') | float(100) %}
-                  {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(3.65) %}
-                  {{ (soc <= 12 or low_cell < 2.95) and is_state('switch.battery_charger2', 'off') }}
+                  {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(2.9) %}
+                  {% set min_voltage = state_attr('sensor.zentrale_parameter', 'lfp_min_voltage') | float(2.9) %}
+                  {{ (soc <= 12 or low_cell < min_voltage) and is_state('switch.battery_charger2', 'off') }}
             sequence:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
@@ -266,10 +274,13 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {% set hausverbrauch = states('sensor.hausverbrauch_netto_stabil') | float(0) %}
+                  {% set leistung_vom_netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
                   {% set soc = states('sensor.ups_custom_soc') | float(0) %}
-                  {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(3.3) %}
-                  {{ hausverbrauch > -180 and soc > 25 and low_cell > 3.1 and is_state('switch.battery_inverter_tasmota', 'off') }}
+                  {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(2.9) %}
+                  {% set lfp_min_voltage = state_attr('sensor.zentrale_parameter', 'lfp_min_voltage') | float(0.2) %}                  
+                  {% set hysteresis = state_attr('sensor.zentrale_parameter', 'lfp_hysteresis') | float(0.2) %}                  
+
+                  {{ leistung_vom_netz > 170 and soc > 25 and low_cell > lfp_min_voltage + hysteresis and is_state('switch.battery_inverter_tasmota', 'off') }}
             sequence:
               - action: switch.turn_off
                 target:
@@ -281,10 +292,11 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {% set hausverbrauch = states('sensor.hausverbrauch_netto_stabil') | float(0) %}
+                  {% set leistung_vom_netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
                   {% set soc = states('sensor.ups_custom_soc') | float(0) %}
                   {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(2.8) %}
-                  {{ (hausverbrauch < -20 or soc <= 20 or low_cell < 3.0) and is_state('switch.battery_inverter_tasmota', 'on') }}
+                  {% set min_voltage = state_attr('sensor.zentrale_parameter', 'lfp_min_voltage') | float(2.9) %}                  
+                  {{ (leistung_vom_netz < 140 or soc <= 20 or low_cell < min_voltage) and is_state('switch.battery_inverter_tasmota', 'on') }}
             sequence:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
@@ -293,9 +305,10 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {% set hausverbrauch = states('sensor.hausverbrauch_netto_stabil') | float(0) %}
+                  {% set leistung_vom_netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
                   {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
-                  {{ (hausverbrauch > -100 or high_cell > 3.58) and (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
+                  {% set max_voltage = state_attr('sensor.zentrale_parameter', 'lfp_max_voltage') | float(3.60) %}                  
+                  {{ (leistung_vom_netz > -100 or high_cell > max_voltage) and (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
             sequence:
               - action: switch.turn_off
                 target:
@@ -305,10 +318,13 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {% set hausverbrauch = states('sensor.hausverbrauch_netto_stabil') | float(0) %}
+                  {% set leistung_vom_netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
                   {% set soc = states('sensor.ups_custom_soc') | float(100) %}
-                  {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
-                  {{ hausverbrauch < -820 and soc < 96 and high_cell < 3.42 
+                  {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.60) %}
+                  {% set max_voltage = state_attr('sensor.zentrale_parameter', 'lfp_max_voltage') | float(3.60) %}                  
+                  {% set hysteresis = state_attr('sensor.zentrale_parameter', 'lfp_hysteresis') | float(0.2) %}                  
+
+                  {{ leistung_vom_netz < -820 and soc < 96 and high_cell < max_voltage - hysteresis
                       and is_state('switch.battery_inverter_tasmota', 'off') }}
 
             sequence:
@@ -316,7 +332,7 @@ automation:
                 target: { entity_id: switch.battery_charger }
               - if:
                   - condition: template
-                    value_template: "{{ states('sensor.hausverbrauch_netto_stabil') | float(0) < -1200 and states('sensor.ups_custom_soc') | float(0) < 99 }}"
+                    value_template: "{{ states('sensor.solarnet_leistung_vom_netz') | float(0) < -1200 and states('sensor.ups_custom_soc') | float(0) < 99 }}"
                 then:
                   - delay: "00:00:01"
                   - action: switch.turn_on
@@ -324,6 +340,7 @@ automation:
 
   - alias: "Sicherheitsabschaltung: Charger und Inverter gleichzeitig"
     id: safety_simultaneous_power
+    mode: single
     trigger:
       - platform: state
         entity_id:
@@ -344,4 +361,3 @@ automation:
             - switch.battery_inverter_tasmota
             - switch.battery_charger
             - switch.battery_charger2
-    mode: restart

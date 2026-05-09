@@ -1,0 +1,19 @@
+################################################################################
+# 1. ZENTRALE PARAMETER (Single Source of Truth)
+################################################################################
+
+template:
+  - sensor:
+      - name: "Zentrale Parameter"
+        unique_id: zentrale_parameter
+        state: "OK"
+        attributes:
+          lfp_min_voltage: 3.00
+          lfp_max_voltage: 3.58
+          lfp_hysteresis: 0.2
+          venus_capacity_wh: 5120
+          ups_capacity_wh: 2500
+          override_soc_days: 6
+          battery_care_days: 7
+
+          kalman_lernrate: 0.05

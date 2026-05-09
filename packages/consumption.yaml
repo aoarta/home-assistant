@@ -102,7 +102,7 @@ template:
              has_value('sensor.marstek_batterieleistung_gesamt') }}
         state: >-
           {{ (states('sensor.solarnet_leistung_vom_netz') | float(0)
-            + states('sensor.marstek_batterieleistung_gesamt') | float(0)) | round(0) }}
+            + states('sensor.marstek_batterieleistung_gesamt') | float(0) ) | round(0) }}
 
   - sensor:
       - name: "Hausverbrauch Netto Stabil"

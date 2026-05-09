@@ -102,7 +102,8 @@
         - conditions:
             - condition: template
               value_template: >-
-                {% set threshold = 5 * 86400 %}
+                {% set days = state_attr('sensor.zentrale_parameter', 'override_soc_days') | float(5) %}
+                {% set threshold = days * 86400 %}
                 {% set now_ts = as_timestamp(now()) %}
                 {% set ages = [
                   (now_ts - as_timestamp(states('sensor.venus_1_last_full'))) if has_value('sensor.venus_1_last_full') else 9999999,
