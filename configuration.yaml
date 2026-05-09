@@ -79,12 +79,6 @@ recorder:
       - sensor.*energy_current*
       - sensor.*energy_voltage
 
-logger:
-  default: warning
-  logs:
-    homeassistant.components.modbus: error
-    custom_components.marstek_modbus: error
-
 sql:
   - name: "DB Top 10 Schreiber"
     query: >

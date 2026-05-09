@@ -1,13 +1,86 @@
 ################################################################################
-# 1. BMS DATEN-EXTRAKTION (CURL & REGEX)
+# 1. BMS DATEN-EXTRAKTION
 ################################################################################
-command_line:
-  - sensor:
-      name: "UPS Raw Data"
-      unique_id: ups_raw_data
-      command: "curl -s http://battery-bms.lan/show | grep -E 'Power:|SOC:|highest Cell|lowest Cell'"
-      scan_interval: 20
-      value_template: "{{ value }}"
+#command_line:
+#  - sensor:
+#      name: "UPS Raw Data"
+#      unique_id: ups_raw_data
+#      #command: "curl -s http://battery-bms.lan/show | grep -E 'Power:|SOC:|highest Cell|lowest Cell'"
+
+#      #command: "curl --max_time 2 -s http://192.168.0.13/show 2>/dev/null | grep -E 'Power:|SOC:|highest Cell|lowest Cell'"
+#      command: "curl --max_time 2 -s http://192.168.0.134/show | grep -E 'Power:|SOC:|highest Cell|lowest Cell'"
+
+#      scan_interval: 30
+#      value_template: "{{ value }}"
+
+rest:
+  - resource: http://192.168.0.13/show
+    scan_interval: 30 # Abfrageintervall in Sekunden anpassen, falls gewünscht
+    sensor:
+      - name: "UPS SOC"
+        value_template: "{{ value | regex_findall('SOC:\\s*([0-9.]+)') | first | default(0) }}"
+        unit_of_measurement: "%"
+        device_class: battery
+        state_class: measurement
+
+      - name: "UPS Power"
+        value_template: "{{ value | regex_findall('Power:\\s*([-0-9.]+)') | first | default(0) }}"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+
+      - name: "BMS Current"
+        value_template: "{{ value | regex_findall('Current:\\s*([-0-9.]+)') | first | default(0) }}"
+        unit_of_measurement: "A"
+        device_class: current
+        state_class: measurement
+
+      - name: "BMS Total Voltage"
+        value_template: "{{ value | regex_findall('totalVoltage:\\s*([0-9.]+)') | first | default(0) }}"
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+
+      - name: "BMS Total Capacity"
+        value_template: "{{ value | regex_findall('totalCapacity:\\s*([0-9.]+)') | first | default(0) }}"
+        unit_of_measurement: "Ah"
+        state_class: measurement
+
+      - name: "BMS Remaining Capacity"
+        value_template: "{{ value | regex_findall('remainingCapacity:\\s*([0-9.]+)') | first | default(0) }}"
+        unit_of_measurement: "Ah"
+        state_class: measurement
+
+      - name: "UPS Highest Cell"
+        value_template: "{{ value | regex_findall('highest Cell.*:\\s*([0-9.]+)') | first | default(0) }}"
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+
+      - name: "UPS Lowest Cell"
+        value_template: "{{ value | regex_findall('lowest Cell.*:\\s*([0-9.]+)') | first | default(0) }}"
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+
+      - name: "BMS Cell Diff"
+        # Beachte: "Cell diff" hat in deiner Ausgabe keinen Doppelpunkt, daher fangen wir nur die Leerzeichen ab
+        value_template: "{{ value | regex_findall('Cell diff\\s*([0-9.]+)') | first | default(0) }}"
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+
+      - name: "BMS Temperature Probe 0"
+        value_template: "{{ value | regex_findall('Probe 0:\\s*([-0-9.]+)') | first | default(0) }}"
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+
+      - name: "BMS Temperature Probe 1"
+        value_template: "{{ value | regex_findall('Probe 1:\\s*([-0-9.]+)') | first | default(0) }}"
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
 
 ################################################################################
 # 2. PLATTFORM SENSOREN (FILTER & INTEGRATION)
@@ -31,35 +104,13 @@ sensor:
     round: 0
     method: left
 
-  - platform: filter
-    name: "UPS Highest Cell stabil"
-    unique_id: ups_highest_cell_stabil
-    entity_id: sensor.ups_highest_cell
-    filters:
-      - filter: lowpass
-        time_constant: 1
-        precision: 3
-      - filter: time_throttle
-        window_size: "00:00:20"
-
-  - platform: filter
-    name: "UPS Lowest Cell stabil"
-    unique_id: ups_lowest_cell_stabil
-    entity_id: sensor.ups_lowest_cell
-    filters:
-      - filter: lowpass
-        time_constant: 1
-        precision: 3
-      - filter: time_throttle
-        window_size: "00:00:20"
-
 ################################################################################
 # 3. TEMPLATE SENSOREN
 ################################################################################
 template:
   - trigger:
       - platform: numeric_state
-        entity_id: sensor.ups_highest_cell_stabil
+        entity_id: sensor.ups_highest_cell
         above: 3.5
         for: "00:00:10"
       - platform: numeric_state
@@ -79,7 +130,7 @@ template:
           {% set current_energy = states('sensor.ups_energiefluss_wh') | float(0) %}
           {% set raw_last_reset = states('sensor.ups_soc_reset_punkt') %}
           {% set hw_soc = states('sensor.ups_soc') | float(0) %}
-          {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(0) %}
+          {% set high_cell = states('sensor.ups_highest_cell') | float(0) %}
           {% set lfp_max_voltage = state_attr('sensor.zentrale_parameter', 'lfp_max_voltage') | float(3.60) %}          
           {% set capacity = state_attr('sensor.zentrale_parameter', 'ups_capacity_wh') | float(2200) %}
 
@@ -160,31 +211,31 @@ template:
               {{ alt_wh }}
             {% endif %}
 
-  - trigger:
-      - platform: state
-        entity_id: sensor.ups_raw_data
-    sensor:
-      - name: "UPS SOC"
-        unique_id: ups_soc
-        unit_of_measurement: "%"
-        device_class: battery
-        state: "{{ trigger.to_state.state | regex_findall('SOC:\\s*([0-9.]+)') | first | default(states('sensor.ups_soc')) | float(0) }}"
+  #  - trigger:
+  #      - platform: state
+  #        entity_id: sensor.ups_raw_data
+  #    sensor:
+  #      - name: "UPS SOC"
+  #        unique_id: ups_soc
+  #        unit_of_measurement: "%"
+  #        device_class: battery
+  #        state: "{{ trigger.to_state.state | regex_findall('SOC:\\s*([0-9.]+)') | first | default(states('sensor.ups_soc')) | float(0) }}"
 
-      - name: "UPS Power"
-        unique_id: ups_power
-        unit_of_measurement: "W"
-        device_class: power
-        state: "{{ trigger.to_state.state | regex_findall('Power:\\s*(-?[0-9.]+)') | first | default(states('sensor.ups_power')) | float(0) }}"
+  #      - name: "UPS Power"
+  #        unique_id: ups_power
+  #        unit_of_measurement: "W"
+  #        device_class: power
+  #        state: "{{ trigger.to_state.state | regex_findall('Power:\\s*(-?[0-9.]+)') | first | default(states('sensor.ups_power')) | float(0) }}"
 
-      - name: "UPS Highest Cell"
-        unique_id: ups_highest_cell
-        unit_of_measurement: "V"
-        state: "{{ trigger.to_state.state | regex_findall('highest Cell\\s*\\[\\s*\\d+\\s*\\]:\\s*([0-9.]+)') | first | default(states('sensor.ups_highest_cell')) | float(0) }}"
+  #        - name: "UPS Highest Cell"
+  #          unique_id: ups_highest_cell
+  #          unit_of_measurement: "V"
+  #          state: "{{ trigger.to_state.state | regex_findall('highest Cell\\s*\\[\\s*\\d+\\s*\\]:\\s*([0-9.]+)') | first | default(states('sensor.ups_highest_cell')) | float(0) }}"
 
-      - name: "UPS Lowest Cell"
-        unique_id: ups_lowest_cell
-        unit_of_measurement: "V"
-        state: "{{ trigger.to_state.state | regex_findall('lowest Cell\\s*\\[\\s*\\d+\\s*\\]:\\s*([0-9.]+)') | first | default(states('sensor.ups_lowest_cell')) | float(0) }}"
+  #        - name: "UPS Lowest Cell"
+  #          unique_id: ups_lowest_cell
+  #          unit_of_measurement: "V"
+  #          state: "{{ trigger.to_state.state | regex_findall('lowest Cell\\s*\\[\\s*\\d+\\s*\\]:\\s*([0-9.]+)') | first | default(states('sensor.ups_lowest_cell')) | float(0) }}"
 
   - trigger:
       - platform: time_pattern
@@ -234,18 +285,18 @@ automation:
       - platform: state
         entity_id:
           - sensor.ups_custom_soc
-          - sensor.ups_lowest_cell_stabil
-          - sensor.ups_highest_cell_stabil
+          - sensor.ups_lowest_cell
+          - sensor.ups_highest_cell
           - binary_sensor.batterie_wartung_erforderlich
           - sensor.solarnet_leistung_vom_netz
           - sensor.ups_ac_leistung
     action:
       - choose:
-          # --- Wartungsmodus ein (mit Überladeschutz!)
+          # 1 --- Wartungsmodus ein (mit Überladeschutz!)
           - conditions:
               - condition: template
                 value_template: >-
-                  {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
+                  {% set high_cell = states('sensor.ups_highest_cell') | float(3.65) %}
                   {% set max_voltage = state_attr('sensor.zentrale_parameter', 'lfp_max_voltage') | float(3.60) %}
 
                   {# Nur laden wenn Wartung aktiv UND Batterie noch nicht voll #}
@@ -257,12 +308,12 @@ automation:
               - action: switch.turn_on
                 target: { entity_id: switch.battery_charger2 }
 
-          # --- NOT-LADUNG (SOC zu niedrig) ---
+          # 2 --- NOT-LADUNG (SOC zu niedrig) ---
           - conditions:
               - condition: template
                 value_template: >-
                   {% set soc = states('sensor.ups_custom_soc') | float(100) %}
-                  {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(2.9) %}
+                  {% set low_cell = states('sensor.ups_lowest_cell') | float(2.9) %}
                   {% set min_voltage = state_attr('sensor.zentrale_parameter', 'lfp_min_voltage') | float(2.9) %}
                   {{ (soc <= 12 or low_cell < min_voltage) and is_state('switch.battery_charger2', 'off') }}
             sequence:
@@ -271,13 +322,13 @@ automation:
               - action: switch.turn_on
                 target: { entity_id: switch.battery_charger2 }
 
-          # --- ENTLADEN STARTEN ---
+          # 3 --- ENTLADEN STARTEN ---
           - conditions:
               - condition: template
                 value_template: >-
                   {% set leistung_vom_netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
                   {% set soc = states('sensor.ups_custom_soc') | float(0) %}
-                  {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(2.9) %}
+                  {% set low_cell = states('sensor.ups_lowest_cell') | float(2.9) %}
                   {% set lfp_min_voltage = state_attr('sensor.zentrale_parameter', 'lfp_min_voltage') | float(0.2) %}                  
                   {% set hysteresis = state_attr('sensor.zentrale_parameter', 'lfp_hysteresis') | float(0.2) %}                  
 
@@ -289,13 +340,13 @@ automation:
               - action: switch.turn_on
                 target: { entity_id: switch.battery_inverter_tasmota }
 
-          # --- ENTLADEN STOPPEN ---
+          # 4 --- ENTLADEN STOPPEN ---
           - conditions:
               - condition: template
                 value_template: >-
                   {% set leistung_vom_netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
                   {% set soc = states('sensor.ups_custom_soc') | float(0) %}
-                  {% set low_cell = states('sensor.ups_lowest_cell_stabil') | float(2.8) %}
+                  {% set low_cell = states('sensor.ups_lowest_cell') | float(2.8) %}
                   {% set min_voltage = state_attr('sensor.zentrale_parameter', 'lfp_min_voltage') | float(2.9) %}                  
                   {{ (leistung_vom_netz < 140 or soc <= 20 or low_cell < min_voltage) and is_state('switch.battery_inverter_tasmota', 'on') }}
             sequence:
@@ -303,27 +354,27 @@ automation:
                 target: { entity_id: switch.battery_inverter_tasmota }
 
           #### hier noch einbauen, wenn die ladeleistung unter 20W sinkt, dann ausschalten
-          # --- LADEN STOPPEN ---
+          # 5 --- LADEN STOPPEN ---
           - conditions:
               - condition: template
                 value_template: >-
                   {% set leistung_vom_netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
                   {% set ladeleistung = states('sensor.ups_ac_leistung') | float(0) %}
-                  {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.65) %}
+                  {% set high_cell = states('sensor.ups_highest_cell') | float(3.65) %}
                   {% set max_voltage = state_attr('sensor.zentrale_parameter', 'lfp_max_voltage') | float(3.60) %}                  
-                  {{ ladeleistung > -40 or (leistung_vom_netz > -100 or high_cell > max_voltage) and (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
+                  {{ (ladeleistung > -40 or leistung_vom_netz > -100 or high_cell > max_voltage) and (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
             sequence:
               - action: switch.turn_off
                 target:
                   entity_id: [switch.battery_charger, switch.battery_charger2]
 
-          # --- LADEN STARTEN
+          # 6 --- LADEN STARTEN
           - conditions:
               - condition: template
                 value_template: >-
                   {% set leistung_vom_netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
                   {% set soc = states('sensor.ups_custom_soc') | float(100) %}
-                  {% set high_cell = states('sensor.ups_highest_cell_stabil') | float(3.60) %}
+                  {% set high_cell = states('sensor.ups_highest_cell') | float(3.60) %}
                   {% set max_voltage = state_attr('sensor.zentrale_parameter', 'lfp_max_voltage') | float(3.60) %}                  
                   {% set hysteresis = state_attr('sensor.zentrale_parameter', 'lfp_hysteresis') | float(0.2) %}                  
 

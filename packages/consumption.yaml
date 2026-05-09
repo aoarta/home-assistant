@@ -191,7 +191,7 @@ template:
         unique_id: hausverbrauch_gestern_2345
         unit_of_measurement: "kWh"
         device_class: energy
-        state_class: measurement
+        state_class: total
         state: >-
           {% if trigger.platform == 'time' %}
             {% set aktuell = states('sensor.hausverbrauch_heute_um') | float(none) %}

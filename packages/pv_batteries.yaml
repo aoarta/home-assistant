@@ -294,7 +294,9 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        state: "OK"
+        state: >-
+          {% set charge = state_attr(this.entity_id, 'charge') %}
+          {{ (charge.v1 + charge.v2) | round(0) if charge is mapping else 0 }}
         attributes:
           # Wir speichern das Ergebnis direkt als Objekt (Map), nicht als JSON-String
           charge: >-
@@ -350,7 +352,9 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        state: "OK"
+        state: >-
+          {% set discharge = state_attr(this.entity_id, 'discharge') %}
+          {{ (discharge.v1 + discharge.v2) | round(0) if discharge is mapping else 0 }}
         attributes:
           discharge: >-
             {# Inline statt this.state, um den aktuellen Wert zu haben und kein LAG zu vermeiden #}
@@ -402,7 +406,10 @@ template:
         unique_id: max_charge_limits
         unit_of_measurement: "W"
         state_class: measurement
-        state: "{{ now() }}"
+        state: >-
+          {% set limits = state_attr(this.entity_id, 'limits') %}
+          {{ (limits.v1 + limits.v2) | round(0) if limits is mapping else 0 }}
+
         attributes:
           limits: >-
             {% set default = {'v1': 2500, 'v2': 2500} %}
@@ -540,12 +547,21 @@ automation:
             {% set d2 = d.v2 | default(0) | int(0) %}
             {% if c2 >= 20 %}charge{% elif d2 >= 20 %}discharge{% else %}stop{% endif %}
 
-          # Sicherheitscheck: wenn unterschiedlich → beide stop
+          # Sicherheitscheck: Verhindert nur, dass eine lädt während die andere entlädt.
+          # Wenn eine auf 'stop' steht und die andere arbeitet, ist das erlaubt.
           target_mode_v1_safe: >-
-            {{ 'stop' if target_mode_v1 != target_mode_v2 else target_mode_v1 }}
+            {% if (target_mode_v1 == 'charge' and target_mode_v2 == 'discharge') or (target_mode_v1 == 'discharge' and target_mode_v2 == 'charge') %}
+              stop
+            {% else %}
+              {{ target_mode_v1 }}
+            {% endif %}
 
           target_mode_v2_safe: >-
-            {{ 'stop' if target_mode_v1 != target_mode_v2 else target_mode_v2 }}
+            {% if (target_mode_v1 == 'charge' and target_mode_v2 == 'discharge') or (target_mode_v1 == 'discharge' and target_mode_v2 == 'charge') %}
+              stop
+            {% else %}
+              {{ target_mode_v2 }}
+            {% endif %}
 
       - parallel:
           # --- Venus 1 komplett ---
