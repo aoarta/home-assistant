@@ -84,6 +84,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as err:
             _LOGGER.warning("Failed loading register definitions for entry %s: %s", entry.entry_id, err)
 
+        # Establish the Modbus connection upfront so the first refresh does not
+        # lazily reconnect on individual sensor reads, and failure is properly
+        # tracked from the start.
+        await coordinator.async_init()
+
         # Forward setup to all platforms defined in PLATFORMS
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

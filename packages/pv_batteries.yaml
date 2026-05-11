@@ -1,5 +1,18 @@
 # packages/pv_batteries.yaml
 
+input_number:
+  venus_1_energiefluss_wh_counter:
+    name: Venus 1 Energiefluss Counter
+    min: -50000
+    max: 50000
+    step: 1
+
+  venus_2_energiefluss_wh_counter:
+    name: Venus 2 Energiefluss Counter
+    min: -50000
+    max: 50000
+    step: 1
+
 sensor:
   - platform: filter
     name: "Marstek Venus 1 AC Leistung glatt"
@@ -23,19 +36,19 @@ sensor:
       - filter: time_throttle
         window_size: "00:00:30" # Schreibt nur alle 30 Sekunden einen Wert in die DB
 
-  - platform: integration
-    source: sensor.marstek_venus_1_ac_leistung # positiv ist entladen
-    name: "Venus 1 Energiefluss Wh"
-    unique_id: marstek_venus_1_energiefluss_wh
-    round: 0
-    method: left
+#  - platform: integration
+#    source: sensor.marstek_venus_1_ac_leistung # positiv ist entladen
+#    name: "Venus 1 Energiefluss Wh"
+#    unique_id: marstek_venus_1_energiefluss_wh
+#    round: 0
+#    method: left
 
-  - platform: integration
-    source: sensor.marstek_venus_2_ac_leistung # positiv ist entladen
-    name: "Venus 2 Energiefluss Wh"
-    unique_id: marstek_venus_2_energiefluss_wh
-    round: 0
-    method: left
+#  - platform: integration
+#    source: sensor.marstek_venus_2_ac_leistung # positiv ist entladen
+#    name: "Venus 2 Energiefluss Wh"
+#    unique_id: marstek_venus_2_energiefluss_wh
+#    round: 0
+#    method: left
 
 #  - platform: filter
 #    name: "Target Charge Distribution"
@@ -61,6 +74,23 @@ sensor:
 ################################################################################
 ################################################################################
 template:
+  - sensor:
+      - name: "Venus 1 Energiefluss Wh"
+        unique_id: venus_1_energiefluss_wh
+        unit_of_measurement: "Wh"
+        device_class: energy
+        state_class: total
+        state: >
+          {{ states('input_number.venus_1_energiefluss_wh_counter') }}
+  - sensor:
+      - name: "Venus 2 Energiefluss Wh"
+        unique_id: venus_2_energiefluss_wh
+        unit_of_measurement: "Wh"
+        device_class: energy
+        state_class: total
+        state: >
+          {{ states('input_number.venus_2_energiefluss_wh_counter') }}
+
   # ==========================================================
   # 1. Venus Last Full Zeitstempel (Korrigiert)
   # ==========================================================
@@ -101,6 +131,8 @@ template:
       - platform: numeric_state
         entity_id: sensor.marstek_venus_1_batterie_ladezustand
         above: 99.9
+      - platform: time_pattern
+        minutes: "/1"
     sensor:
       - name: "Venus 1 SOC Reset Punkt"
         unique_id: venus_1_soc_reset_punkt
@@ -132,6 +164,8 @@ template:
       - platform: numeric_state
         entity_id: sensor.marstek_venus_2_batterie_ladezustand
         above: 99.9
+      - platform: time_pattern
+        minutes: "/1"
     sensor:
       - name: "Venus 2 SOC Reset Punkt"
         unique_id: venus_2_soc_reset_punkt
@@ -478,7 +512,61 @@ template:
              is_number(states('sensor.marstek_venus_2_ac_leistung')) }}
 
 automation:
-  - alias: "Sende Lade und Entladebefehle an Hardware (Optimiert)"
+  - alias: "Venus 1 Energieintegration"
+    mode: queued
+
+    trigger:
+      - platform: time_pattern
+        seconds: "/10"
+
+    variables:
+      power: "{{ states('sensor.marstek_venus_1_ac_leistung') | float(0) }}"
+      delta_wh: >-
+        {% set delta = power * 10 / 3600 %}
+        {% set max_delta = 2500 * 10 / 3600 * 6 %}
+        {{ delta if delta < max_delta else 0 }}
+
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.venus_1_energiefluss_wh_counter
+        data:
+          value: >
+            {{
+              (
+                states('input_number.venus_1_energiefluss_wh_counter') | float(0)
+                + delta_wh
+              ) | round(3)
+            }}
+
+  - alias: "Venus 2 Energieintegration"
+    mode: queued
+
+    trigger:
+      - platform: time_pattern
+        seconds: "/10"
+
+    variables:
+      power: "{{ states('sensor.marstek_venus_2_ac_leistung') | float(0) }}"
+      delta_wh: >-
+        {% set delta = power * 10 / 3600 %}
+        {% set max_delta = 2500 * 10 / 3600 * 6 %}
+        {{ delta if delta < max_delta else 0 }}
+
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.venus_2_energiefluss_wh_counter
+        data:
+          value: >
+            {{
+              (
+                states('input_number.venus_2_energiefluss_wh_counter') | float(0)
+                + delta_wh
+              ) | round(3)
+            }}
+
+  - alias: "Sende Lade und Entladebefehle an Hardware"
     id: "sende_batterie_targets_v2"
     mode: restart
     #max: 3
@@ -535,7 +623,7 @@ automation:
             {% set d = d if d is mapping else {} %}
             {% set c1 = c.v1 | default(0) | int(0) %}
             {% set d1 = d.v1 | default(0) | int(0) %}
-            {% if c1 >= 20 %}charge{% elif d1 >= 20 %}discharge{% else %}stop{% endif %}
+            {% if c1 >= 20 %}charge{% elif d1 >= 20 %}discharge{% else %}standby{% endif %}
 
           target_mode_v2: >-
             {% set c = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
@@ -544,10 +632,10 @@ automation:
             {% set d = d if d is mapping else {} %}
             {% set c2 = c.v2 | default(0) | int(0) %}
             {% set d2 = d.v2 | default(0) | int(0) %}
-            {% if c2 >= 20 %}charge{% elif d2 >= 20 %}discharge{% else %}stop{% endif %}
+            {% if c2 >= 20 %}charge{% elif d2 >= 20 %}discharge{% else %}standby{% endif %}
 
           # Sicherheitscheck: Verhindert nur, dass eine lädt während die andere entlädt.
-          # Wenn eine auf 'stop' steht und die andere arbeitet, ist das erlaubt.
+          # Wenn eine auf 'standby' steht und die andere arbeitet, ist das erlaubt.
           target_mode_v1_safe: >-
             {% if (target_mode_v1 == 'charge' and target_mode_v2 == 'discharge') or (target_mode_v1 == 'discharge' and target_mode_v2 == 'charge') %}
               stop

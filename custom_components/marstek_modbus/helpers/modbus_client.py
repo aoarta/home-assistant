@@ -6,6 +6,7 @@ a Marstek Venus battery system asynchronously.
 
 from pymodbus.client.tcp import AsyncModbusTcpClient
 import asyncio
+import socket
 from typing import Optional
 
 import logging
@@ -105,8 +106,23 @@ class MarstekModbusClient:
             if connected:
                 # Small settle time so the device has time to flush and be ready
                 await asyncio.sleep(max(0.2, self.message_wait_sec))
-                # Reset the request lock to ensure no stale lock state
-                self._request_lock = asyncio.Lock()
+                # Enable TCP keepalive so the OS probes dead connections quickly
+                # rather than waiting hours for the default kernel timeout.
+                try:
+                    transport = getattr(self.client, "transport", None)
+                    if transport is not None:
+                        sock = transport.get_extra_info("socket")
+                        if sock is not None:
+                            sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                            if hasattr(socket, "TCP_KEEPIDLE"):
+                                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+                            if hasattr(socket, "TCP_KEEPINTVL"):
+                                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
+                            if hasattr(socket, "TCP_KEEPCNT"):
+                                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+                            _LOGGER.debug("TCP keepalive enabled on Modbus socket")
+                except Exception as ke:
+                    _LOGGER.debug("Could not set TCP keepalive: %s", ke)
                 _LOGGER.info(
                     "Connected to Modbus server at %s:%s with unit %s",
                     self.host,
@@ -144,11 +160,6 @@ class MarstekModbusClient:
         finally:
             # Ensure client reference is cleared so future connect creates fresh instance
             self.client = None
-            # Reset request lock as well
-            try:
-                self._request_lock = asyncio.Lock()
-            except Exception:
-                pass
 
     async def async_reconnect(self) -> bool:
         """Reconnect to the Modbus TCP server by closing and re-opening the connection."""
@@ -345,8 +356,8 @@ class MarstekModbusClient:
                         return byte_array.decode("ascii", errors="ignore").rstrip('\x00')
 
                     elif data_type == "schedule":
-                        # Return the raw register list for schedule blocks.
-                        # Expect 5 registers per schedule: days, start, end, mode (int16), enabled
+                        # Return a decoded dict for schedule blocks.
+                        # 5 registers: days, start, end, mode (int16 signed), enabled
                         if len(regs) < 5:
                             _LOGGER.warning(
                                 "Expected 5 registers for schedule at %d (0x%04X), got %s",
@@ -355,9 +366,15 @@ class MarstekModbusClient:
                                 len(regs),
                             )
                             return None
-                        # Return raw registers as list of ints; interpretation is left
-                        # to the caller (coordinator/sensor) as requested.
-                        return [int(r) for r in regs[:5]]
+                        mode_raw = int(regs[3])
+                        mode_signed = mode_raw - 0x10000 if mode_raw >= 0x8000 else mode_raw
+                        return {
+                            "days": int(regs[0]),
+                            "start": int(regs[1]),
+                            "end": int(regs[2]),
+                            "mode": mode_signed,
+                            "enabled": int(regs[4]),
+                        }
 
                     elif data_type == "bit":
                         if bit_index is None or not (0 <= bit_index < 16):

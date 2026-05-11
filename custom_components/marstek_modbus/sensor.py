@@ -176,6 +176,20 @@ class MarstekSensor(CoordinatorEntity, SensorEntity):
         return value
 
     @property
+    def suggested_display_precision(self) -> int | None:
+        """Suggest display precision based on definition, but only if not a string or mapped state."""
+        if self.states:
+            return None
+        return self.definition.get("precision")
+
+    @property
+    def suggested_display_unit(self) -> str | None:
+        """Suggest display unit based on definition, but only if not a string or mapped state."""
+        if self.states:
+            return None
+        return self.definition.get("unit")
+
+    @property
     def device_info(self) -> dict:
         return {
             "identifiers": {(DOMAIN, self.coordinator.config_entry.entry_id)},

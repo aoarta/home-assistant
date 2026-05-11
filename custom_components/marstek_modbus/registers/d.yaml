@@ -29,57 +29,45 @@ SENSOR_DEFINITIONS:
         register: 31000
         count: 10
         data_type: char
-        unit: null
         enabled_by_default: true
         icon: "mdi:package-variant-closed"
         scan_interval: very_low
-        precision: 0
     bms_version:
         register: 30204
-        unit: null
         icon: "mdi:battery-check-outline"
         category: diagnostic
         enabled_by_default: true
         data_type: uint16
-        precision: 0
         scan_interval: very_low
     vms_version:
         register: 30202
-        unit: null
         icon: "mdi:battery-check-outline"
         category: diagnostic
         enabled_by_default: true
         data_type: uint16
-        precision: 0
         scan_interval: very_low
     ems_version:
         register: 30200
-        unit: null
         category: diagnostic
         icon: "mdi:ticket-confirmation-outline"
         enabled_by_default: true
         data_type: uint16
         scale: 1
-        precision: 0
         scan_interval: very_low
     comm_module_firmware:
         register: 30350
         count: 6
-        unit: null
         category: diagnostic
         icon: "mdi:ticket-confirmation-outline"
         enabled_by_default: true
         data_type: char
-        precision: 0
         scan_interval: very_low
     mac_address:
         register: 30304
         count: 6
-        unit: null
         enabled_by_default: true
         icon: "mdi:ethernet"
         data_type: char
-        precision: 0
         scan_interval: very_low
     battery_soc:
         register: 32104
@@ -482,11 +470,9 @@ SENSOR_DEFINITIONS:
     inverter_state:
         register: 35100
         scale: 1
-        unit: null
         icon: "mdi:state-machine"
         enabled_by_default: true
         data_type: uint16
-        precision: 0
         states:
             0: Sleep
             1: Standby
@@ -499,11 +485,9 @@ SENSOR_DEFINITIONS:
     modbus_address:
         register: 41100
         data_type: uint16
-        unit: null
         icon: "mdi:home-automation"
         enabled_by_default: false
         scan_interval: very_low
-        precision: 0
     ac_offgrid_voltage:
         register: 32300
         scale: 0.1
@@ -669,7 +653,6 @@ SENSOR_DEFINITIONS:
     bluetooth_status:
         register: 30301
         data_type: uint16
-        unit: null
         icon: "mdi:bluetooth"
         category: diagnostic
         enabled_by_default: false
@@ -678,7 +661,6 @@ BINARY_SENSOR_DEFINITIONS:
     wifi_status:
         register: 30300
         data_type: uint16
-        unit: null
         category: diagnostic
         device_class: connectivity
         icon: "mdi:check-network-outline"
@@ -687,7 +669,6 @@ BINARY_SENSOR_DEFINITIONS:
     cloud_status:
         register: 30302
         data_type: uint16
-        unit: null
         category: diagnostic
         device_class: connectivity
         icon: "mdi:cloud-outline"

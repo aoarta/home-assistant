@@ -13,6 +13,13 @@
 #      scan_interval: 30
 #      value_template: "{{ value }}"
 
+input_number:
+  ups_energiefluss_wh_counter:
+    name: UPS Energiefluss Counter
+    min: -50000
+    max: 50000
+    step: 1
+
 rest:
   - resource: http://192.168.0.13/show
     scan_interval: 30 # Abfrageintervall in Sekunden anpassen, falls gewünscht
@@ -97,17 +104,26 @@ sensor:
       - filter: time_throttle
         window_size: "00:00:30"
 
-  - platform: integration
-    name: "UPS Energiefluss Wh"
-    unique_id: ups_energiefluss_wh
-    source: sensor.ups_ac_leistung_glatt
-    round: 0
-    method: left
+#  - platform: integration
+#    name: "UPS Energiefluss Wh"
+#    unique_id: ups_energiefluss_wh
+#    source: sensor.ups_ac_leistung_glatt
+#    round: 0
+#    method: left
 
 ################################################################################
 # 3. TEMPLATE SENSOREN
 ################################################################################
 template:
+  - sensor:
+      - name: "UPS Energiefluss Wh"
+        unique_id: ups_energiefluss_wh
+        unit_of_measurement: "Wh"
+        device_class: energy
+        state_class: total
+        state: >
+          {{ states('input_number.ups_energiefluss_wh_counter') }}
+
   - trigger:
       - platform: numeric_state
         entity_id: sensor.ups_highest_cell
@@ -277,6 +293,33 @@ template:
 # 4. AUTOMATIONEN
 ################################################################################
 automation:
+  - alias: "UPS Energieintegration"
+    mode: queued
+
+    trigger:
+      - platform: time_pattern
+        seconds: "/10"
+
+    variables:
+      power: "{{ states('sensor.ups_ac_leistung_glatt') | float(0) }}"
+      delta_wh: >-
+        {% set delta = power * 10 / 3600 %}
+        {% set max_delta = 2500 * 10 / 3600 * 6 %}
+        {{ delta if delta < max_delta else 0 }}
+
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ups_energiefluss_wh_counter
+        data:
+          value: >
+            {{
+              (
+                states('input_number.ups_energiefluss_wh_counter') | float(0)
+                + delta_wh
+              ) | round(3)
+            }}
+
   - alias: "UPS Grobregelung Laden & Entladen"
     id: ups_grob_control_full
     mode: queued
