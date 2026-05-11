@@ -24,14 +24,14 @@ sensor:
         window_size: "00:00:30" # Schreibt nur alle 30 Sekunden einen Wert in die DB
 
   - platform: integration
-    source: sensor.marstek_venus_1_ac_leistung_glatt # positiv ist entladen
+    source: sensor.marstek_venus_1_ac_leistung # positiv ist entladen
     name: "Venus 1 Energiefluss Wh"
     unique_id: marstek_venus_1_energiefluss_wh
     round: 0
     method: left
 
   - platform: integration
-    source: sensor.marstek_venus_2_ac_leistung_glatt # positiv ist entladen
+    source: sensor.marstek_venus_2_ac_leistung # positiv ist entladen
     name: "Venus 2 Energiefluss Wh"
     unique_id: marstek_venus_2_energiefluss_wh
     round: 0
@@ -90,7 +90,7 @@ template:
         state: "{{ now() }}"
 
   # ==========================================================
-  # 2. Venus SOC Reset Punkte (Doppelte Trigger entfernt)
+  # 2. Venus SOC Reset Punkte
   # ==========================================================
   - trigger:
       # Reagiert nur noch auf den geglätteten Custom SOC, um Bouncing
@@ -108,13 +108,13 @@ template:
         state: >-
           {% set current_energy = states('sensor.venus_1_energiefluss_wh') | float(0) %}
           {% set raw_last_reset = states('sensor.venus_1_soc_reset_punkt') %}
+          {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
+
           {% set hw_soc = states('sensor.marstek_venus_1_batterie_ladezustand') | float(0) %}
           {% set capacity = state_attr('sensor.zentrale_parameter', 'venus_capacity_wh') | float(5120) %}
 
-          {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
-
-          {# Sync auf HW-SOC wenn Batterie fast leer #}          
-          {% if hw_soc < 15 %}
+           {% if hw_soc < 15 %}
+            {# Sync auf HW-SOC wenn Batterie fast leer #}
             {{ current_energy - (hw_soc / 100 * capacity) }}
           {% elif hw_soc >= 100 %}
             {# Bei 100% nehmen wir den kleineren Wert (da Energiefluss beim Laden sinkt/negativ ist) #}
@@ -139,13 +139,12 @@ template:
         state: >-
           {% set current_energy = states('sensor.venus_2_energiefluss_wh') | float(0) %}
           {% set raw_last_reset = states('sensor.venus_2_soc_reset_punkt') %}
+          {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
           {% set hw_soc = states('sensor.marstek_venus_2_batterie_ladezustand') | float(0) %}
           {% set capacity = state_attr('sensor.zentrale_parameter', 'venus_capacity_wh') | float(5120) %}
 
-          {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
-
-          {# Sync auf HW-SOC wenn Batterie fast leer #}          
-          {% if hw_soc < 15 %}
+           {% if hw_soc < 15 %}
+            {# Sync auf HW-SOC wenn Batterie fast leer #}
             {{ current_energy - (hw_soc / 100 * capacity) }}
           {% elif hw_soc >= 100 %}
             {# Bei 100% nehmen wir den kleineren Wert (da Energiefluss beim Laden sinkt/negativ ist) #}
