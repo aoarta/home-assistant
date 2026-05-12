@@ -332,6 +332,7 @@ automation:
           - sensor.ups_highest_cell
           - binary_sensor.batterie_wartung_erforderlich
           - sensor.solarnet_leistung_vom_netz
+          - sensor.hausverbrauch_netto_stabil
           - sensor.ups_ac_leistung
     action:
       - choose:
@@ -370,12 +371,15 @@ automation:
               - condition: template
                 value_template: >-
                   {% set leistung_vom_netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
+                  {% set batterie_leistung = states('sensor.marstek_batterieleistung_gesamt') | float(0) %}
+                  {% set hausverbrauch = states('sensor.hausverbrauch_netto_stabil') | float(0) | round(0) %}                  
                   {% set soc = states('sensor.ups_custom_soc') | float(0) %}
                   {% set low_cell = states('sensor.ups_lowest_cell') | float(2.9) %}
                   {% set lfp_min_voltage = state_attr('sensor.zentrale_parameter', 'lfp_min_voltage') | float(0.2) %}                  
                   {% set hysteresis = state_attr('sensor.zentrale_parameter', 'lfp_hysteresis') | float(0.2) %}                  
 
-                  {{ leistung_vom_netz > 170 and soc > 25 and low_cell > lfp_min_voltage + hysteresis and is_state('switch.battery_inverter_tasmota', 'off') }}
+                  {{ (leistung_vom_netz > +10 or batterie_leistung > 170) and
+                     soc > 25 and low_cell > lfp_min_voltage + hysteresis and is_state('switch.battery_inverter_tasmota', 'off') }}
             sequence:
               - action: switch.turn_off
                 target:
@@ -388,10 +392,14 @@ automation:
               - condition: template
                 value_template: >-
                   {% set leistung_vom_netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
+                  {% set batterie_leistung = states('sensor.marstek_batterieleistung_gesamt') | float(0) %}
+                  {% set hausverbrauch = states('sensor.hausverbrauch_netto_stabil') | float(0) | round(0) %}                  
                   {% set soc = states('sensor.ups_custom_soc') | float(0) %}
                   {% set low_cell = states('sensor.ups_lowest_cell') | float(2.8) %}
                   {% set min_voltage = state_attr('sensor.zentrale_parameter', 'lfp_min_voltage') | float(2.9) %}                  
-                  {{ (leistung_vom_netz < 140 or soc <= 20 or low_cell < min_voltage) and is_state('switch.battery_inverter_tasmota', 'on') }}
+                  {{ ( (leistung_vom_netz > 10 and batterie_leistung < 0) 
+                       or soc <= 20 or low_cell < min_voltage) 
+                      and is_state('switch.battery_inverter_tasmota', 'on') }}
             sequence:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
@@ -402,10 +410,12 @@ automation:
               - condition: template
                 value_template: >-
                   {% set leistung_vom_netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
+                  {% set hausverbrauch = states('sensor.hausverbrauch_netto_stabil') | float(0) | round(0) %}                  
+
                   {% set ladeleistung = states('sensor.ups_ac_leistung') | float(0) %}
                   {% set high_cell = states('sensor.ups_highest_cell') | float(3.65) %}
                   {% set max_voltage = state_attr('sensor.zentrale_parameter', 'lfp_max_voltage') | float(3.60) %}                  
-                  {{ (ladeleistung > -40 or leistung_vom_netz > -100 or high_cell > max_voltage) and (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
+                  {{ (leistung_vom_netz < 10 or leistung_vom_netz > -100 or high_cell > max_voltage) and (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
             sequence:
               - action: switch.turn_off
                 target:
@@ -416,6 +426,8 @@ automation:
               - condition: template
                 value_template: >-
                   {% set leistung_vom_netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
+                  {% set hausverbrauch = states('sensor.hausverbrauch_netto_stabil') | float(0) | round(0) %}                  
+
                   {% set soc = states('sensor.ups_custom_soc') | float(100) %}
                   {% set high_cell = states('sensor.ups_highest_cell') | float(3.60) %}
                   {% set max_voltage = state_attr('sensor.zentrale_parameter', 'lfp_max_voltage') | float(3.60) %}                  
