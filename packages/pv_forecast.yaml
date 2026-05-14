@@ -173,14 +173,14 @@ sensor:
   - platform: rest
     name: "Solarprognose API Source Dach"
     resource: "https://www.solarprognose.de/web/solarprediction/api/v1?access-token=c2a2da7b09c3c2e2a20651a2223e7fa7&item=module_field&id=14443&type=hourly"
-    scan_interval: 86400
+    scan_interval: 31536000 # 1 Jahr in Sekunden
     json_attributes: [data]
     value_template: "{{ value_json.status if value_json is defined else 'OK' }}"
 
   - platform: rest
     name: "Solarprognose API Source Fassade"
     resource: "https://www.solarprognose.de/web/solarprediction/api/v1?access-token=c2a2da7b09c3c2e2a20651a2223e7fa7&item=module_field&id=14337&type=hourly"
-    scan_interval: 86400
+    scan_interval: 31536000 # 1 Jahr in Sekunden
     json_attributes: [data]
     value_template: "{{ value_json.status if value_json is defined else 'OK' }}"
 
@@ -270,6 +270,11 @@ template:
         unique_id: pv_forecast_ml_morgen
         unit_of_measurement: "kWh"
         state: "{{ states('sensor.prognose_morgen') | float(0) | round(1) }}"
+
+      - name: "PV Forecast ML ubermorgen"
+        unique_id: pv_forecast_ml_ubermorgen
+        unit_of_measurement: "kWh"
+        state: "{{ states('sensor.prognose_ubermorgen') | float(0) | round(1) }}"
 
       - name: "PV Forecast Solcast alles"
         unique_id: pv_forecast_solcast_alles

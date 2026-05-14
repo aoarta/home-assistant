@@ -60,8 +60,12 @@ template:
           - input_boolean.override_soc
           - binary_sensor.batterie_wartung_erforderlich
           - sensor.pv_forecast_weighted
-          - sensor.expected_need_today
-          - sensor.solar_zeit_logik
+          - sensor.pv_forecast_weighted_morgen
+          - sensor.pv_ertrag_heute_um
+          - sensor.expected_daily_consumption
+          - sensor.expected_daily_consumption_tomorrow
+          - sensor.expected_daily_consumption_day_after
+          - sensor.dynamic_soc
     sensor:
       - name: "Target SOC"
         unique_id: target_soc
@@ -75,15 +79,38 @@ template:
             120
           {% else %}
             {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}
-            {% set pv_ertrag_heute = states('sensor.pv_ertrag_heute_um')| float(0) %}
+            {% set pv_ertrag_heute = states('sensor.pv_ertrag_heute_um') | float(0) %}
 
             {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
             {% set hausverbrauch_heute = states('sensor.hausverbrauch_energie_heute') | float(0) %}
 
-            {% if expected_daily_consumption - hausverbrauch_heute > pv_forecast_today - pv_ertrag_heute %}
+            {# Variablen für Morgen #}
+            {% set pv_forecast_tomorrow = states('sensor.pv_forecast_weighted_morgen') | float(0) %}
+            {% set expected_daily_consumption_tomorrow = states('sensor.expected_daily_consumption_tomorrow') | float(expected_daily_consumption) %}
+
+            {# Variablen für Übermorgen #}
+            {% set pv_forecast_uebermorgen = states('sensor.pv_forecast_ml_ubermorgen') | float(0) %}
+            {% set expected_daily_consumption_uebermorgen = states('sensor.expected_daily_consumption_day_after') | float(expected_daily_consumption) %}
+
+            {# Berechnung der Restwerte für heute (nicht kleiner als 0) #}
+            {% set rest_pv_heute = ([0, pv_forecast_today - pv_ertrag_heute] | max) %}
+            {% set rest_verbrauch_heute = ([0, expected_daily_consumption - hausverbrauch_heute] | max) %}
+
+            {# Summen-Check #}
+            {% set sum_pv_3tage = rest_pv_heute + pv_forecast_tomorrow + pv_forecast_uebermorgen %}
+            {% set sum_verbrauch_3tage = rest_verbrauch_heute + expected_daily_consumption_tomorrow + expected_daily_consumption_uebermorgen %}
+
+            {% if sum_pv_3tage < sum_verbrauch_3tage %}
+              {# Wenn die nächsten 3 Tage insgesamt nicht reichen #}
+              133
+            {% elif pv_forecast_tomorrow < expected_daily_consumption_tomorrow %}
+              {# Wenn morgen alleine nicht reicht #}
+              131
+            {% elif rest_verbrauch_heute > rest_pv_heute %}
+              {# Wenn der heutige Rest-Tag nicht reicht #}
               130
             {% else %}
-              {{ states('sensor.dynamic_soc') }}
+              {{ states('sensor.dynamic_soc') | default(10, true) }}
             {% endif %}
           {% endif %}
 
