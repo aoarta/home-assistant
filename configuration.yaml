@@ -52,7 +52,6 @@ recorder:
       - sensor.garage_inverter_5min_average
       - sensor.balkon_inverter_5min_average
       - sensor.balkon_inverter2_5min_average
-      - sensor.hausverbrauch_netto_watt
       - sensor.solarnet_leistung_netzbezug
       - sensor.solarnet_leistung_netzeinspeisung
       - sensor.solarnet_leistung_verbrauch

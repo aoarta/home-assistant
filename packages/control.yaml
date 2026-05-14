@@ -42,7 +42,7 @@ template:
               101
             {% else %}
               {% set prognose_morgen = states('sensor.pv_forecast_weighted_morgen') | float(0) %}
-              {% set expected_need_tomorrow = 1.5 * states('sensor.hausverbrauch_gestern_2345') | float(15) %}
+              {% set expected_need_tomorrow = 1.5 * states('sensor.hausverbrauch_energie_gestern_2345') | float(15) %}
               {% if prognose_morgen > expected_need_tomorrow %}
                 85
               {% else %}

@@ -1,11 +1,4 @@
 # packages/pv_prognose.yaml
-# Fixes applied:
-#   1. repeat.item.obs aus for_each entfernt → obs wird jetzt sicher innerhalb der sequence berechnet
-#   2. Sensorname sensor.pv_ertrag_heute mit Kommentar versehen (ggf. anpassen)
-#   3. pv_forecast_bias_korrekturfaktor max: 100 → max: 1.5, step korrigiert
-#   4. pv_kalman_score_* initial: 0.25/0.15/0.45 → 1.0 (neutral, passend zum obs-Raum)
-#   5. score_neu jetzt mit | max(0.0001) nach unten begrenzt
-#   6. pv_kalman_score_ml initial: 0.001 → 0.0 (kein Einfluss bis Lerndaten da sind)
 
 ################################################################################
 # 1. INPUTS & PARAMETER
@@ -15,15 +8,15 @@ input_number:
     name: "Forecast Bias Korrekturfaktor"
     min: 0.5
     max: 1.5 # FIX: war 100 – Kalman klemmt auf [0.6, 1.4], max 1.5 ist sinnvoll
-    initial: 1.00
+    #initial: 1.00
     step: 0.0001 # FIX: war 0.001 bei max 100 – jetzt passend zu max 1.5
 
   # --- Kalman P-Werte (Bias) ---
   pv_kalman_p_bias:
     name: "Kalman P Bias"
-    min: 0
+    min: 0.001
     max: 1
-    initial: 0.02
+    #initial: 0.02
     step: 0.0001
 
   # --- Kalman Scores (Wie vertrauenswürdig ist der Provider?) ---
@@ -33,73 +26,73 @@ input_number:
   #   Neutraler Startwert: 1.0
   pv_kalman_score_solcast:
     name: "Kalman Score Solcast"
-    min: 0
+    min: 0.01
     max: 15
-    initial: 1.0 # FIX: war 0.25 (normiertes Gewicht) – passt nicht zum obs-Raum
+    #initial: 1.0 # FIX: war 0.25 (normiertes Gewicht) – passt nicht zum obs-Raum
     step: 0.001
 
   pv_kalman_score_solarprognose:
     name: "Kalman Score Solarprognose"
-    min: 0
+    min: 0.01
     max: 15
-    initial: 1.0 # FIX: war 0.15
+    #initial: 1.0 # FIX: war 0.15
     step: 0.001
 
   pv_kalman_score_forecastsolar:
     name: "Kalman Score ForecastSolar"
-    min: 0
+    min: 0.01
     max: 15
-    initial: 1.0 # FIX: war 0.15
+    #initial: 1.0 # FIX: war 0.15
     step: 0.001
 
   pv_kalman_score_openmeteo:
     name: "Kalman Score OpenMeteo"
-    min: 0
+    min: 0.01
     max: 15
-    initial: 1.0 # FIX: war 0.45
+    #initial: 1.0 # FIX: war 0.45
     step: 0.001
 
   pv_kalman_score_ml:
     name: "Kalman Score ML"
-    min: 0
+    min: 0.01
     max: 15
-    initial: 0.2 # FIX: war 0.001 – 0.0 = kein Einfluss bis echter Lernschritt
+    #initial: 0.2 # FIX: war 0.001 – 0.0 = kein Einfluss bis echter Lernschritt
     step: 0.001
 
   # --- Kalman P-Werte (Unsicherheit der Score-Schätzung) ---
   pv_kalman_p_solcast:
     name: "Kalman P Solcast"
-    min: 0
+    min: 0.001
     max: 1
-    initial: 0.1
+    #initial: 0.1
     step: 0.0001
 
   pv_kalman_p_solarprognose:
     name: "Kalman P Solarprognose"
-    min: 0
+    min: 0.001
     max: 1
-    initial: 0.1
+    #initial: 0.1
     step: 0.0001
 
   pv_kalman_p_forecastsolar:
     name: "Kalman P ForecastSolar"
-    min: 0
+    min: 0.001
     max: 1
-    initial: 0.1
+    #initial: 0.1
     step: 0.0001
 
   pv_kalman_p_openmeteo:
     name: "Kalman P OpenMeteo"
-    min: 0
+    min: 0.001
     max: 1
-    initial: 0.1
+    #initial: 0.1
     step: 0.0001
 
   pv_kalman_p_ml:
     name: "Kalman P ML"
-    min: 0
+    min: 0.001
     max: 1
-    initial: 0.1
+    #initial: 0.1
     step: 0.0001
 
   # --- Normierte Gewichte (nur Visualisierung im Dashboard) ---
@@ -284,6 +277,10 @@ template:
         availability: "{{ is_number(states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute')) }}"
         state: "{{ states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute') | float(0) | round(1) }}"
 
+  - trigger:
+      - platform: time_pattern
+        minutes: "/5"
+    sensor:
       - name: "PV Forecast Solarprognose alles"
         unique_id: pv_forecast_solarprognose_alles
         unit_of_measurement: "kWh"
@@ -341,9 +338,11 @@ template:
               {% elif now_ts > t %}
                 {% set ns.d_now = v %}
               {% endif %}
-              {% set ns.prev_t, ns.prev_v = t, v %}
+              {% set ns.prev_t = t %}
+              {% set ns.prev_v = v %}
             {% endfor %}
-            {% set ns.prev_t, ns.prev_v = 0, 0 %}
+            {% set ns.prev_t = 0 %}
+            {% set ns.prev_v = 0 %}            
             {% for ts, val in fassade.items() if ts.startswith(today) %}
               {% set t = as_timestamp(ts ~ tz) %}
               {% set v = val | float(0) %}
@@ -354,7 +353,8 @@ template:
               {% elif now_ts > t %}
                 {% set ns.f_now = v %}
               {% endif %}
-              {% set ns.prev_t, ns.prev_v = t, v %}
+              {% set ns.prev_t = t %}
+              {% set ns.prev_v = v %}
             {% endfor %}
             {{ ([0, ((ns.d_max - ns.d_now) + (ns.f_max - ns.f_now)) / 1000] | max) | round(1) }}
           {% else %}
@@ -560,7 +560,7 @@ automation:
       - trigger: time
         at: "23:55:00"
     variables:
-      real: "{{ states('sensor.pv_ertrag_heute_um') | float(0) }}"
+      real: "{{ states('sensor.pv_ertrag_heute') | float(0) }}"
       forecast_heute: "{{ states('input_number.pv_prognose_festwert_heute') | float(0) }}"
       # Kalman-Rauschparameter
       Q_bias: 0.001 # Prozessrauschen Bias
@@ -669,11 +669,11 @@ automation:
           # ── 4. Normierte Gewichte berechnen & schreiben (Dashboard) ─────────
           - variables:
               total_score: >-
-                {{ [states('input_number.pv_kalman_score_solcast')      | float(0), 0] | max +
-                   [states('input_number.pv_kalman_score_solarprognose') | float(0), 0] | max +
-                   [states('input_number.pv_kalman_score_forecastsolar') | float(0), 0] | max +
-                   [states('input_number.pv_kalman_score_openmeteo')     | float(0), 0] | max +
-                   [states('input_number.pv_kalman_score_ml')            | float(0), 0] | max }}
+                {{ [states('input_number.pv_kalman_score_solcast')      | float(0), 0] | max 
+                   + [states('input_number.pv_kalman_score_solarprognose') | float(0), 0] | max 
+                   + [states('input_number.pv_kalman_score_forecastsolar') | float(0), 0] | max 
+                   + [states('input_number.pv_kalman_score_openmeteo')     | float(0), 0] | max 
+                   + [states('input_number.pv_kalman_score_ml')            | float(0), 0] | max }}
           - if:
               - condition: template
                 value_template: "{{ total_score > 0 }}"

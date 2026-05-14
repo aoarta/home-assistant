@@ -27,25 +27,34 @@ input_number:
     icon: mdi:calendar-star
 
 utility_meter:
-  hausverbrauch_heute_um:
-    unique_id: hausverbrauch_heute_um
-    source: sensor.hausverbrauch_energie_kwh
-    name: "Hausverbrauch Heute UM"
+  # Hilfsentität
+  hausverbrauch_energie_heute_um:
+    unique_id: hausverbrauch_energie_heute_um
+    source: sensor.hausverbrauch_energie
+    name: "Hausverbrauch Energie Heute UM"
 
 sensor:
   - platform: integration
-    source: sensor.hausverbrauch_netto_watt # Eingang: Watt
-    name: "Hausverbrauch Energie kWh"
-    unique_id: hausverbrauch_energie_kwh
+    source: sensor.hausverbrauch_leistung_netto
+    name: "Hausverbrauch Energie"
+    unique_id: hausverbrauch_energie
     unit_prefix: k # W → kWh
     unit_time: h # pro Stunde
     round: 3
     method: trapezoidal # Trapezmethode = genauer
 
   - platform: filter
+    name: "Hausverbrauch Energie heute"
+    unique_id: hausverbrauch_energie_heute
+    entity_id: sensor.hausverbrauch_energie_heute_um
+    filters:
+      - filter: range
+        upper_bound: 60 # Alles über 60 kWh pro Tag wird ignoriert
+
+  - platform: filter
     name: "Hausverbrauch 5 Min Durchschnitt"
     unique_id: hausverbrauch_5min_avg
-    entity_id: sensor.hausverbrauch_netto_watt
+    entity_id: sensor.hausverbrauch_leistung_netto
     filters:
       - filter: time_simple_moving_average
         window_size: "00:05:00"
@@ -78,7 +87,7 @@ sensor:
   - platform: filter
     name: "Average consumption last 1h fast"
     unique_id: average_consumption_last_1h_fast
-    entity_id: sensor.hausverbrauch_netto_watt
+    entity_id: sensor.hausverbrauch_leistung_netto
     filters:
       - filter: time_simple_moving_average
         window_size: "01:00:00"
@@ -121,30 +130,45 @@ sensor:
 
 template:
   - sensor:
-      - name: "Hausverbrauch Netto Watt"
-        unique_id: hausverbrauch_netto_watt
+      - name: "Hausverbrauch Leistung Netto"
+        unique_id: hausverbrauch_leistung_netto
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
         availability: >-
           {{ has_value('sensor.solarnet_leistung_vom_netz') and
              has_value('sensor.marstek_batterieleistung_gesamt') and
-             hasvalue('sensor.pv_produktion_watt_fast')}}
+             has_value('sensor.pv_produktion_watt_fast') 
+             }}
         state: >-
-          {{ ( states('sensor.solarnet_leistung_vom_netz') | float(0) +
-               states('sensor.marstek_batterieleistung_gesamt') | float(0) +
-               states('sensor.pv_produktion_watt_fast') | float(0) 
+          {{ ( states('sensor.solarnet_leistung_vom_netz') | float(0) 
+               + states('sensor.marstek_batterieleistung_gesamt') | float(0) 
+               + states('sensor.pv_produktion_watt_fast') | float(0) 
               ) | round(0) }}
 
   - sensor:
-      - name: "Hausverbrauch Netto Stabil"
-        unique_id: hausverbrauch_netto_stabil
+      - name: "Ladeleistung"
+        unique_id: Ladeleistung
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        availability: "{{ has_value('sensor.hausverbrauch_netto_watt') }}"
+        availability: >-
+          {{ has_value('sensor.solarnet_leistung_vom_netz') and
+             has_value('sensor.marstek_batterieleistung_gesamt') }}
         state: >-
-          {{ ((states('sensor.hausverbrauch_netto_watt') | float(0) / 15) | int) * 15 }}
+          {{ ( states('sensor.solarnet_leistung_vom_netz') | float(0) +
+               states('sensor.marstek_batterieleistung_gesamt') | float(0) 
+              ) | round(0) }}
+
+  - sensor:
+      - name: "Ladeleistung Stabil"
+        unique_id: ladeleistung_stabil
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        availability: "{{ has_value('sensor.ladeleistung') }}"
+        state: >-
+          {{ ((states('sensor.ladeleistung') | float(0) / 15) | int) * 15 }}
 
   - trigger:
       - platform: state
@@ -219,14 +243,14 @@ template:
       - platform: homeassistant
         event: start
     sensor:
-      - name: "Hausverbrauch Gestern 23:45"
-        unique_id: hausverbrauch_gestern_2345
+      - name: "Hausverbrauch Energie bis Sonnenaufgang"
+        unique_id: hausverbrauch_energie_bis_sonnenaufgang
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total
         state: >-
           {% if trigger.platform == 'time' %}
-            {% set aktuell = states('sensor.hausverbrauch_heute_um') | float(none) %}
+            {% set aktuell = states('sensor.hausverbrauch_energie_heute') | float(none) %}
             {% set alt = this.state | float(none) %}
             {% if aktuell is not none and alt is not none %}
               {{ (0.9 * aktuell + 0.1 * alt) | round(2) }}
@@ -238,11 +262,60 @@ template:
           {% elif this.state is defined and is_number(this.state) %}
             {{ this.state }}
           {% else %}
-            {{ states('sensor.hausverbrauch_heute_um') | float(10.0) }}
+            {{ states('sensor.hausverbrauch_energie_heute') | float(10.0) }}
           {% endif %}
+
+  - trigger:
+      - platform: time
+        at: "00:31:00"
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id:
+          - binary_sensor.workday
+          - binary_sensor.workday_tomorrow
+          - input_number.verbrauch_speicher_wochentag
+          - input_number.verbrauch_speicher_samstag
+          - input_number.verbrauch_speicher_sonntag
+
+    sensor:
+      - name: "Expected daily consumption"
+        unique_id: expected_daily_consumption
+        unit_of_measurement: "kWh"
+        device_class: energy
+        availability: >-
+          {{ has_value('input_number.verbrauch_speicher_wochentag') and
+             has_value('binary_sensor.workday') }}
+        state: >-
+          {% set ist_sonntag         = now().weekday() == 6 %}
+          {% set feiertag            = is_state('binary_sensor.workday', 'off') %}
+          {% set ist_samstag         = now().weekday() == 5 %}
+          {% set morgen_ist_feiertag = is_state('binary_sensor.workday_tomorrow', 'off') %}
+
+          {% if ist_sonntag or feiertag %}
+            {{ states('input_number.verbrauch_speicher_sonntag') | float(0) | round(1) }}
+          {% elif ist_samstag or morgen_ist_feiertag %}
+            {{ states('input_number.verbrauch_speicher_samstag') | float(0) | round(1) }}
+          {% else %}
+            {{ states('input_number.verbrauch_speicher_wochentag') | float(0) | round(1) }}
+          {% endif %}
+        attributes:
+          tagtyp: >-
+            {% set ist_sonntag         = now().weekday() == 6 %}
+            {% set feiertag            = is_state('binary_sensor.workday', 'off') %}
+            {% set ist_samstag         = now().weekday() == 5 %}
+            {% set morgen_ist_feiertag = is_state('binary_sensor.workday_tomorrow', 'off') %}
+            {% if ist_sonntag or feiertag %}Sonntag/Feiertag
+            {% elif ist_samstag or morgen_ist_feiertag %}Samstag/Vorfeiertag
+            {% else %}Wochentag
+            {% endif %}
+          wochentag_kwh: "{{ states('input_number.verbrauch_speicher_wochentag') | float(0) | round(1) }}"
+          samstag_kwh: "{{ states('input_number.verbrauch_speicher_samstag')   | float(0) | round(1) }}"
+          sonntag_kwh: "{{ states('input_number.verbrauch_speicher_sonntag')   | float(0) | round(1) }}"
 
 automation:
   - alias: "Energiemanagement: Speichern & Reset bei Sonnenaufgang"
+    id: "consumption_save_counters"
     description: "Speichert den Verbrauch des vergangenen Tages und setzt den Zähler danach zurück"
     trigger:
       - platform: sun
@@ -253,20 +326,19 @@ automation:
       # 1. SCHRITT: Variablen berechnen
       - variables:
           vortag: "{{ now() - timedelta(hours=12) }}"
-          wochentag: "{{ vortag.weekday() }}"
-          ist_sonntag: "{{ wochentag == 6 }}"
-          ist_samstag: "{{ wochentag == 5 }}"
-          feiertag: "{{ is_state('binary_sensor.holiday', 'off') }}"
-          morgen_ist_feiertag: "{{ is_state('binary_sensor.holiday_tomorrow', 'off') }}"
+          ist_samstag: "{{ (now() - timedelta(hours=12)).weekday() == 5 }}"
+          ist_sonntag: "{{ (now() - timedelta(hours=12)).weekday() == 6 }}"
+          feiertag: "{{ is_state('binary_sensor.workday', 'off') }}"
+          morgen_ist_feiertag: "{{ is_state('binary_sensor.workday_tomorrow', 'off') }}"
           # Der aktuelle Wert vor dem Reset:
-          neu: "{{ states('sensor.hausverbrauch_heute_um') | float(0) }}"
+          neu: "{{ states('sensor.hausverbrauch_energie_heute') | float(0) }}"
 
       # 2. SCHRITT: In den richtigen Speicher schreiben
       - choose:
-          # FALL 1: Sonntag, Feiertag oder Tag VOR Feiertag
+          # FALL 1: Sonntag oder Feiertag
           - conditions:
               - condition: template
-                value_template: "{{ ist_sonntag or feiertag or morgen_ist_feiertag }}"
+                value_template: "{{ ist_sonntag or feiertag }}"
             sequence:
               - service: input_number.set_value
                 target:
@@ -274,12 +346,12 @@ automation:
                 data:
                   value: >
                     {% set alt = states('input_number.verbrauch_speicher_sonntag') | float(0) %}
-                    {{ (alt * 6/7) + neu }}
+                    {{ (alt * 6 + neu) / 7 }}
 
-          # FALL 2: Samstag
+          # FALL 2: Samstag oder Tag VOR Feiertag
           - conditions:
               - condition: template
-                value_template: "{{ ist_samstag }}"
+                value_template: "{{ ist_samstag or morgen_ist_feiertag }}"
             sequence:
               - service: input_number.set_value
                 target:
@@ -287,7 +359,7 @@ automation:
                 data:
                   value: >
                     {% set alt = states('input_number.verbrauch_speicher_samstag') | float(0) %}
-                    {{ (alt * 6/7) + neu }}
+                    {{ (alt * 6 + neu ) / 7 }}
 
         # FALL 3: Normaler Wochentag
         default:
@@ -297,14 +369,17 @@ automation:
             data:
               value: >
                 {% set alt = states('input_number.verbrauch_speicher_wochentag') | float(0) %}
-                {{ (alt * 6/7) + neu }}
+                {{ (alt * 6 + neu) / 7 }}
 
       # 3. SCHRITT: Kurze Wartezeit zur Sicherheit (10 Sekunden)
       - delay: "00:00:10"
 
       # 4. SCHRITT: Den Zähler für den neuen Tag auf Null setzen
-      - service: utility_meter.calibrate
+      #      - service: utility_meter.calibrate
+      #        target:
+      #          entity_id: sensor.hausverbrauch_energie_heute_um
+      #        data:
+      #          value: "0.00"
+      - action: utility_meter.reset
         target:
-          entity_id: sensor.hausverbrauch_heute_um
-        data:
-          value: "0.00"
+          entity_id: sensor.hausverbrauch_energie_heute_um

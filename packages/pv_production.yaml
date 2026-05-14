@@ -38,13 +38,6 @@ sensor:
     filters:
       - filter: range
         upper_bound: 60 # Alles über 60 kWh pro Tag wird ignoriert
-  - platform: filter
-    name: "Hausverbrauch heute"
-    unique_id: hausverbrauch_heute
-    entity_id: sensor.hausverbrauch_heute_um
-    filters:
-      - filter: range
-        upper_bound: 60 # Alles über 60 kWh pro Tag wird ignoriert
 
 template:
   - sensor:
