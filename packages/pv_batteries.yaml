@@ -316,7 +316,7 @@ template:
           - input_boolean.override_soc
           - sensor.dynamic_soc
           - sensor.dynamic_soc_grenzen
-          - sensor.hausverbrauch_netto_stabil
+          - sensor.ladeleistung_stabil
           - sensor.venus_1_custom_soc
           - sensor.venus_2_custom_soc
         for:
@@ -339,7 +339,7 @@ template:
             {% else %}
               {# dupliziere this.state um das aktuelle ergebneis und nicht das letzte zu haben #}
               {# Inline statt this.state um Lag zu vermeiden #}
-              {% set total = [0, states('sensor.hausverbrauch_netto_watt') | float(0)] | max | round(0) %}
+              {% set total = [0, -(states('sensor.ladeleistung') | float(0))] | max | round(0) %}
               {% set dyn_soc = states('sensor.dynamic_soc') | float(60) %}
 
               {% set s1 = states('sensor.venus_1_custom_soc') | float(100)
@@ -391,7 +391,8 @@ template:
         attributes:
           discharge: >-
             {# Inline statt this.state, um den aktuellen Wert zu haben und kein LAG zu vermeiden #}
-            {% set total = [states('sensor.hausverbrauch_netto_watt') | float(0), 0] | max | round(0) %}
+            {% set raw = states('sensor.ladeleistung') | float(0) %}
+            {% set total = [raw, 0] | max | round(0) %}
             {% set zero = {'v1': 0, 'v2': 0} %}
 
             {% if total > 0 %}
@@ -409,8 +410,8 @@ template:
                 {% set t2 = (total - t1) | int %}
 
                 {% if t1 < 200 and t2 < 200 %}
-                  {# Beide kleiner als 250: wechselnde Auswahl #}
-                  {# Wochentags-Logik: Montag=1, Dienstag=2, ... Sonntag=7 #}
+                  {# Beide kleiner als 200: wechselnde Auswahl #}
+                  {# Wochentags-Logik: Montag=0, Dienstag=1, ... Sonntag=6 #}
                   {% set odd = (now().weekday() + now().hour) % 2 %}
                   {% set t1 = total if odd == 1 else 0 %}
                   {% set t2 = total if odd == 0 else 0 %}
@@ -572,7 +573,7 @@ automation:
     #max: 3
     trigger:
       - platform: state
-        entity_id: sensor.hausverbrauch_netto_stabil
+        entity_id: sensor.ladeleistung_stabil
       - platform: state
         entity_id: sensor.target_charge_distribution_fast
       - platform: state

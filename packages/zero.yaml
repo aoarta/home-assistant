@@ -89,7 +89,7 @@ automation:
       - platform: state
         entity_id: sensor.zero_dynamischer_ladestrom
         for:
-          seconds: 5 # Entschärfung bei Schwanzungen
+          seconds: 5 # Entschärfung bei Schwankungen
       - platform: state
         entity_id: input_number.zero_manueller_ladestrom
       - platform: state
