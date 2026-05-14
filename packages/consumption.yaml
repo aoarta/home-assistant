@@ -313,6 +313,71 @@ template:
           samstag_kwh: "{{ states('input_number.verbrauch_speicher_samstag')   | float(0) | round(1) }}"
           sonntag_kwh: "{{ states('input_number.verbrauch_speicher_sonntag')   | float(0) | round(1) }}"
 
+      - name: "Expected daily consumption tomorrow"
+        unique_id: expected_daily_consumption_tomorrow
+        unit_of_measurement: "kWh"
+        device_class: energy
+        availability: >-
+          {{ has_value('input_number.verbrauch_speicher_wochentag') and
+             has_value('binary_sensor.workday_tomorrow') }}
+        state: >-
+          {% set wt              = (now().weekday() + 1) % 7 %}
+          {% set ist_sonntag     = wt == 6 %}
+          {% set ist_samstag     = wt == 5 %}
+          {% set feiertag        = is_state('binary_sensor.workday_tomorrow', 'off') %}
+          {# Vorfeiertag: kein workday+2-Sensor → nur per Wochentag prüfbar #}
+          {% set vorfeiertag     = (now().weekday() + 2) % 7 == 6 %}
+
+          {% if ist_sonntag or feiertag %}
+            {{ states('input_number.verbrauch_speicher_sonntag') | float(0) | round(1) }}
+          {% elif ist_samstag or vorfeiertag %}
+            {{ states('input_number.verbrauch_speicher_samstag') | float(0) | round(1) }}
+          {% else %}
+            {{ states('input_number.verbrauch_speicher_wochentag') | float(0) | round(1) }}
+          {% endif %}
+        attributes:
+          tagtyp: >-
+            {% set wt          = (now().weekday() + 1) % 7 %}
+            {% set ist_sonntag = wt == 6 %}
+            {% set ist_samstag = wt == 5 %}
+            {% set feiertag    = is_state('binary_sensor.workday_tomorrow', 'off') %}
+            {% set vorfeiertag = (now().weekday() + 2) % 7 == 6 %}
+            {% if ist_sonntag or feiertag %}Sonntag/Feiertag
+            {% elif ist_samstag or vorfeiertag %}Samstag/Vorfeiertag
+            {% else %}Wochentag
+            {% endif %}
+
+      - name: "Expected daily consumption day after"
+        unique_id: expected_daily_consumption_day_after
+        unit_of_measurement: "kWh"
+        device_class: energy
+        availability: >-
+          {{ has_value('input_number.verbrauch_speicher_wochentag') }}
+        state: >-
+          {% set wt          = (now().weekday() + 2) % 7 %}
+          {% set ist_sonntag = wt == 6 %}
+          {% set ist_samstag = wt == 5 %}
+          {# Kein workday-Sensor für +2/+3 Tage → Feiertage nicht erkennbar #}
+          {% set vorfeiertag = (now().weekday() + 3) % 7 == 6 %}
+
+          {% if ist_sonntag %}
+            {{ states('input_number.verbrauch_speicher_sonntag') | float(0) | round(1) }}
+          {% elif ist_samstag or vorfeiertag %}
+            {{ states('input_number.verbrauch_speicher_samstag') | float(0) | round(1) }}
+          {% else %}
+            {{ states('input_number.verbrauch_speicher_wochentag') | float(0) | round(1) }}
+          {% endif %}
+        attributes:
+          tagtyp: >-
+            {% set wt          = (now().weekday() + 2) % 7 %}
+            {% set ist_sonntag = wt == 6 %}
+            {% set ist_samstag = wt == 5 %}
+            {% set vorfeiertag = (now().weekday() + 3) % 7 == 6 %}
+            {% if ist_sonntag %}Sonntag (nur Wochentag, kein Feiertagssensor)
+            {% elif ist_samstag or vorfeiertag %}Samstag/Vorfeiertag (nur Wochentag)
+            {% else %}Wochentag
+            {% endif %}
+
 automation:
   - alias: "Energiemanagement: Speichern & Reset bei Sonnenaufgang"
     id: "consumption_save_counters"
