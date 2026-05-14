@@ -13,5 +13,5 @@ template:
           lfp_hysteresis: 0.020
           venus_capacity_wh: 5120
           ups_capacity_wh: 2200
-          override_soc_days: 6
-          battery_care_days: 7
+          override_soc_days: 5
+          battery_care_days: 8

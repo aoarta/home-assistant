@@ -138,43 +138,55 @@ template:
           {{ (s1 + s2) | round(0) }}
 
   - trigger:
-      - platform: time_pattern
-        seconds: "/15"
+      - platform: state
+        entity_id:
+          - sensor.balkon_inverter_1_clean
+          - sensor.balkon_inverter_2_clean
+          - sensor.garage_inverter_clean
+          - sensor.dach_energie_clean
     sensor:
+      - name: "PV Energy Realtime Aggregator"
+        unique_id: pv_energy_realtime_aggregator
+        # Dieser Hilfssensor nutzt die Variablen, um die anderen zu füttern
+        state: "OK"
+        attributes:
+          # --- HIER DER TRICK: Alle Werte einmal abrufen ---
+          balkon_1: "{{ states('sensor.balkon_inverter_1_clean') | float(0) }}"
+          balkon_2: "{{ states('sensor.balkon_inverter_2_clean') | float(0) }}"
+          garage: "{{ states('sensor.garage_inverter_clean') | float(0) }}"
+          dach: "{{ states('sensor.dach_energie_clean') | float(0) }}"
+
       - name: "PV Energy Balkon Realtime"
         unique_id: pv_energy_balkon_realtime
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
-        #zeilen: Summiert die oben erstellten "Clean" Sensoren
-        availability: >-
-          {{ is_number(states('sensor.balkon_inverter_1_clean')) and 
-             is_number(states('sensor.balkon_inverter_2_clean')) and
-             is_number(states('sensor.garage_inverter_clean')) }}
         state: >-
-          {% set s1 = states('sensor.balkon_inverter_1_clean') | float(0) %}
-          {% set s2 = states('sensor.balkon_inverter_2_clean') | float(0) %}
-          {% set s3 = states('sensor.garage_inverter_clean') | float(0) %}
-          {{ (s1 + s2 + s3) | round(2) }}
+          {% set attr = state_attr('sensor.pv_energy_realtime_aggregator', 'all') %}
+          {% set b1 = state_attr('sensor.pv_energy_realtime_aggregator', 'balkon_1') | float(0) %}
+          {% set b2 = state_attr('sensor.pv_energy_realtime_aggregator', 'balkon_2') | float(0) %}
+          {% set g = state_attr('sensor.pv_energy_realtime_aggregator', 'garage') | float(0) %}
+          {{ (b1 + b2 + g) | round(2) }}
 
       - name: "PV Energy Total Realtime"
         unique_id: pv_energy_total_realtime
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
-        #zeilen: Dach + Balkon Gesamt
-        availability: >-
-          {{ is_number(states('sensor.dach_energie_clean')) and 
-             is_number(states('sensor.pv_energy_balkon_realtime')) }}
         state: >-
-          {% set dach = states('sensor.dach_energie_clean') | float(0) %}
-          {% set balkon = states('sensor.pv_energy_balkon_realtime') | float(0) %}
-          {{ (dach + balkon) | round(2) }}
+          {% set b_total = states('sensor.pv_energy_balkon_realtime') | float(0) %}
+          {% set dach = state_attr('sensor.pv_energy_realtime_aggregator', 'dach') | float(0) %}
+          {{ (b_total + dach) | round(2) }}
 
+  - trigger:
+      - platform: time_pattern
+        seconds: "/15"
+    sensor:
       - name: "PV Produktion Watt"
         unique_id: pv_produktion_watt
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
+        # gerundeter wert auf Vielfache von 15
         state: >-
-          {{ states('sensor.pv_produktion_watt_fast') | float(0) | round(0) }}
+          {{ ((states('sensor.pv_produktion_watt_fast') | float(0)) / 15) | int * 15 }}
