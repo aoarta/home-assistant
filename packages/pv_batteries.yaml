@@ -339,7 +339,7 @@ template:
             {% else %}
               {# dupliziere this.state um das aktuelle ergebneis und nicht das letzte zu haben #}
               {# Inline statt this.state um Lag zu vermeiden #}
-              {% set total = [0, -(states('sensor.hausverbrauch_netto_watt') | float(0))] | max | round(0) %}
+              {% set total = [0, states('sensor.hausverbrauch_netto_watt') | float(0)] | max | round(0) %}
               {% set dyn_soc = states('sensor.dynamic_soc') | float(60) %}
 
               {% set s1 = states('sensor.venus_1_custom_soc') | float(100)
@@ -363,7 +363,7 @@ template:
 
                 {# Abwechselnd jede stunde eine andere Batterie laden, wenn im unteren Effizienzbereich #}
                 {% if t1 < 200 and t2 < 200 %}
-                  {% set odd = (now().isoweekday() + now().hour) % 2 %}
+                  {% set odd = (now().weekday() + now().hour) % 2 %} 
                   {% set t1 = total if odd == 1 else 0 %}
                   {% set t2 = total if odd == 0 else 0 %}
                 {% endif %}
@@ -411,7 +411,7 @@ template:
                 {% if t1 < 200 and t2 < 200 %}
                   {# Beide kleiner als 250: wechselnde Auswahl #}
                   {# Wochentags-Logik: Montag=1, Dienstag=2, ... Sonntag=7 #}
-                  {% set odd = (now().isoweekday() + now().hour) % 2 %}
+                  {% set odd = (now().weekday() + now().hour) % 2 %}
                   {% set t1 = total if odd == 1 else 0 %}
                   {% set t2 = total if odd == 0 else 0 %}
                 {% endif %}

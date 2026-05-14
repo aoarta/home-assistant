@@ -2,3 +2,4 @@ custom_components/*
 solar_forecast_ml/*
 solcast_solar/*
 toorox_foresight_ha/*
+sfml_stats/*

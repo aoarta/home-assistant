@@ -1,17 +1,46 @@
+input_number:
+  verbrauch_speicher_wochentag:
+    name: "Speicher Wochentag"
+    min: 0
+    max: 10000
+    step: 0.1
+    mode: box
+    unit_of_measurement: "kWh"
+    icon: mdi:calendar-range
+
+  verbrauch_speicher_samstag:
+    name: "Speicher Samstag"
+    min: 0
+    max: 10000
+    step: 0.1
+    mode: box
+    unit_of_measurement: "kWh"
+    icon: mdi:calendar-weekend
+
+  verbrauch_speicher_sonntag:
+    name: "Speicher Sonntag/Feiertag"
+    min: 0
+    max: 10000
+    step: 0.1
+    mode: box
+    unit_of_measurement: "kWh"
+    icon: mdi:calendar-star
+
 utility_meter:
   hausverbrauch_heute_um:
     unique_id: hausverbrauch_heute_um
-    source: sensor.hausverbrauch_energy
+    source: sensor.hausverbrauch_energie_kwh
     name: "Hausverbrauch Heute UM"
-    cycle: daily
 
 sensor:
   - platform: integration
-    source: sensor.hausverbrauch_netto_watt
-    name: hausverbrauch_energy
-    unit_prefix: k
-    round: 2
-    method: left
+    source: sensor.hausverbrauch_netto_watt # Eingang: Watt
+    name: "Hausverbrauch Energie kWh"
+    unique_id: hausverbrauch_energie_kwh
+    unit_prefix: k # W → kWh
+    unit_time: h # pro Stunde
+    round: 3
+    method: trapezoidal # Trapezmethode = genauer
 
   - platform: filter
     name: "Hausverbrauch 5 Min Durchschnitt"
@@ -99,10 +128,13 @@ template:
         state_class: measurement
         availability: >-
           {{ has_value('sensor.solarnet_leistung_vom_netz') and
-             has_value('sensor.marstek_batterieleistung_gesamt') }}
+             has_value('sensor.marstek_batterieleistung_gesamt') and
+             hasvalue('sensor.pv_produktion_watt_fast')}}
         state: >-
-          {{ (states('sensor.solarnet_leistung_vom_netz') | float(0)
-            + states('sensor.marstek_batterieleistung_gesamt') | float(0) ) | round(0) }}
+          {{ ( states('sensor.solarnet_leistung_vom_netz') | float(0) +
+               states('sensor.marstek_batterieleistung_gesamt') | float(0) +
+               states('sensor.pv_produktion_watt_fast') | float(0) 
+              ) | round(0) }}
 
   - sensor:
       - name: "Hausverbrauch Netto Stabil"
@@ -208,3 +240,71 @@ template:
           {% else %}
             {{ states('sensor.hausverbrauch_heute_um') | float(10.0) }}
           {% endif %}
+
+automation:
+  - alias: "Energiemanagement: Speichern & Reset bei Sonnenaufgang"
+    description: "Speichert den Verbrauch des vergangenen Tages und setzt den Zähler danach zurück"
+    trigger:
+      - platform: sun
+        event: sunrise
+        offset: "00:30:00" # Auslöser kurz nach Sonnenaufgang
+    mode: single
+    action:
+      # 1. SCHRITT: Variablen berechnen
+      - variables:
+          vortag: "{{ now() - timedelta(hours=12) }}"
+          wochentag: "{{ vortag.weekday() }}"
+          ist_sonntag: "{{ wochentag == 6 }}"
+          ist_samstag: "{{ wochentag == 5 }}"
+          feiertag: "{{ is_state('binary_sensor.holiday', 'off') }}"
+          morgen_ist_feiertag: "{{ is_state('binary_sensor.holiday_tomorrow', 'off') }}"
+          # Der aktuelle Wert vor dem Reset:
+          neu: "{{ states('sensor.hausverbrauch_heute_um') | float(0) }}"
+
+      # 2. SCHRITT: In den richtigen Speicher schreiben
+      - choose:
+          # FALL 1: Sonntag, Feiertag oder Tag VOR Feiertag
+          - conditions:
+              - condition: template
+                value_template: "{{ ist_sonntag or feiertag or morgen_ist_feiertag }}"
+            sequence:
+              - service: input_number.set_value
+                target:
+                  entity_id: input_number.verbrauch_speicher_sonntag
+                data:
+                  value: >
+                    {% set alt = states('input_number.verbrauch_speicher_sonntag') | float(0) %}
+                    {{ (alt * 6/7) + neu }}
+
+          # FALL 2: Samstag
+          - conditions:
+              - condition: template
+                value_template: "{{ ist_samstag }}"
+            sequence:
+              - service: input_number.set_value
+                target:
+                  entity_id: input_number.verbrauch_speicher_samstag
+                data:
+                  value: >
+                    {% set alt = states('input_number.verbrauch_speicher_samstag') | float(0) %}
+                    {{ (alt * 6/7) + neu }}
+
+        # FALL 3: Normaler Wochentag
+        default:
+          - service: input_number.set_value
+            target:
+              entity_id: input_number.verbrauch_speicher_wochentag
+            data:
+              value: >
+                {% set alt = states('input_number.verbrauch_speicher_wochentag') | float(0) %}
+                {{ (alt * 6/7) + neu }}
+
+      # 3. SCHRITT: Kurze Wartezeit zur Sicherheit (10 Sekunden)
+      - delay: "00:00:10"
+
+      # 4. SCHRITT: Den Zähler für den neuen Tag auf Null setzen
+      - service: utility_meter.calibrate
+        target:
+          entity_id: sensor.hausverbrauch_heute_um
+        data:
+          value: "0.00"
