@@ -34,21 +34,10 @@ template:
         state: "OK"
         attributes:
           min: "10"
-          low: "{{ 60 if not is_state('input_boolean.override_soc', 'on') else 101 }}"
-          mid: "{{ 80 if not is_state('input_boolean.override_soc', 'on') else 101 }}"
+          low: "60"
+          mid: "80"
+          high: "85"
           max: "100.5"
-          high: >-
-            {% if is_state('input_boolean.override_soc', 'on') %}
-              101
-            {% else %}
-              {% set prognose_morgen = states('sensor.pv_forecast_weighted_morgen') | float(0) %}
-              {% set expected_need_tomorrow = 1.5 * states('sensor.hausverbrauch_energie_gestern_2345') | float(15) %}
-              {% if prognose_morgen > expected_need_tomorrow %}
-                85
-              {% else %}
-                103
-              {% endif %}
-            {% endif %}
 
       - name: "Batterieleistung gesamt"
         unique_id: batterieleistung_gesamt
@@ -69,46 +58,55 @@ template:
         entity_id:
           - input_number.manuelle_ladeleistung
           - input_boolean.override_soc
-          - sensor.dynamic_soc_grenzen
           - binary_sensor.batterie_wartung_erforderlich
           - sensor.pv_forecast_weighted
           - sensor.expected_need_today
           - sensor.solar_zeit_logik
-
     sensor:
-      - name: "Dynamic SOC"
-        unique_id: dynamic_soc
+      - name: "Target SOC"
+        unique_id: target_soc
         unit_of_measurement: "%"
         state: >-
-          {% if states('input_number.manuelle_ladeleistung') | float(0) > 0 %}
+          {% if is_state('input_boolean.override_soc', 'on') %}
+            101
+          {% elif states('input_number.manuelle_ladeleistung') | float(0) > 0 %}
             110
           {% elif is_state('binary_sensor.batterie_wartung_erforderlich', 'on') %}
             120
           {% else %}
-            {% set solar_today = states('sensor.pv_forecast_weighted') | float(-1) %}
-            {% set expected_need_today = states('sensor.expected_need_today') | float(0) %}
+            {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}
+            {% set pv_ertrag_heute = states('sensor.pv_ertrag_heute_um')| float(0) %}
 
-            {% if solar_today > 1.2 * expected_need_today or solar_today == -1 %}
-              {% set ts = as_timestamp(now()) %} 
-              {% set s_rise = state_attr('sensor.solar_zeit_logik', 'sun_rise') | float(0) %}
-              {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
-              {% set b_set = state_attr('sensor.solar_zeit_logik', 'b_set') | float(0) %}
-              {% set s_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
+            {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
+            {% set hausverbrauch_heute = states('sensor.hausverbrauch_energie_heute') | float(0) %}
 
-              {% if ts < s_rise %}
-                {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
-              {% elif ts < t1130 %}
-                {{ state_attr('sensor.dynamic_soc_grenzen', 'low') | float(60) }}
-              {% elif ts < b_set %}
-                {{ state_attr('sensor.dynamic_soc_grenzen', 'mid') | float(80) }}
-              {% elif ts < s_set %}
-                {{ state_attr('sensor.dynamic_soc_grenzen', 'high') | float(100) }}
-              {% else %}
-                {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
-              {% endif %}
-            {% else %}
+            {% if expected_daily_consumption - hausverbrauch_heute > pv_forecast_today - pv_ertrag_heute %}
               130
+            {% else %}
+              {{ states('sensor.dynamic_soc') }}
             {% endif %}
+          {% endif %}
+
+      - name: "Dynamic SOC"
+        unique_id: dynamic_soc
+        unit_of_measurement: "%"
+        state: >-
+          {% set ts = as_timestamp(now()) %} 
+          {% set s_rise = state_attr('sensor.solar_zeit_logik', 'sun_rise') | float(0) %}
+          {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
+          {% set b_set = state_attr('sensor.solar_zeit_logik', 'b_set') | float(0) %}
+          {% set s_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
+
+          {% if ts < s_rise %}
+            {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
+          {% elif ts < t1130 %}
+            {{ state_attr('sensor.dynamic_soc_grenzen', 'low') | float(60) }}
+          {% elif ts < b_set %}
+            {{ state_attr('sensor.dynamic_soc_grenzen', 'mid') | float(80) }}
+          {% elif ts < s_set %}
+            {{ state_attr('sensor.dynamic_soc_grenzen', 'high') | float(100) }}
+          {% else %}
+            {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
           {% endif %}
 
   - binary_sensor:

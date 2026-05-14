@@ -359,7 +359,7 @@ automation:
                   {% set soc = states('sensor.ups_custom_soc') | float(100) %}
                   {% set low_cell = states('sensor.ups_lowest_cell') | float(2.9) %}
                   {% set min_voltage = state_attr('sensor.zentrale_parameter', 'lfp_min_voltage') | float(2.9) %}
-                  {{ (soc <= 12 or low_cell < min_voltage) and is_state('switch.battery_charger2', 'off') }}
+                  {{ 1<0 and (soc | float(100) <= 12 or low_cell < min_voltage) and is_state('switch.battery_charger2', 'off') }}
             sequence:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
@@ -434,9 +434,9 @@ automation:
                 target: { entity_id: switch.battery_charger }
               - if:
                   - condition: template
-                    value_template: "{{ states('sensor.solarnet_leistung_vom_netz') | float(0) < -1200 and states('sensor.ups_custom_soc') | float(0) < 99 }}"
+                    value_template: "{{ 1<0 and states('sensor.solarnet_leistung_vom_netz') | float(0) < -1200 and states('sensor.ups_custom_soc') | float(0) < 99 }}"
                 then:
-                  - delay: "00:00:01"
+                  - delay: "00:00:02"
                   - action: switch.turn_on
                     target: { entity_id: switch.battery_charger2 }
 
