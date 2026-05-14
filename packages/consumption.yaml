@@ -411,7 +411,7 @@ automation:
                 data:
                   value: >
                     {% set alt = states('input_number.verbrauch_speicher_sonntag') | float(0) %}
-                    {{ (alt * 6 + neu) / 7 }}
+                    {{ (2 * alt + neu) / 3 }}
 
           # FALL 2: Samstag oder Tag VOR Feiertag
           - conditions:
@@ -424,7 +424,7 @@ automation:
                 data:
                   value: >
                     {% set alt = states('input_number.verbrauch_speicher_samstag') | float(0) %}
-                    {{ (alt * 6 + neu ) / 7 }}
+                    {{ (2 * alt + neu ) / 3 }}
 
         # FALL 3: Normaler Wochentag
         default:
@@ -434,7 +434,7 @@ automation:
             data:
               value: >
                 {% set alt = states('input_number.verbrauch_speicher_wochentag') | float(0) %}
-                {{ (alt * 6 + neu) / 7 }}
+                {{ (4 * alt + neu) / 5 }}
 
       # 3. SCHRITT: Kurze Wartezeit zur Sicherheit (10 Sekunden)
       - delay: "00:00:10"

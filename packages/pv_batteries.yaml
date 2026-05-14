@@ -586,69 +586,38 @@ automation:
           milliseconds: 500
 
       - variables:
-          v1_laden: >-
-            {% set c = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
-            {% set c = c if c is mapping else {} %}
-            {% set c1 = c.v1 | default(0) | int(0) %}
-            {{ [c1, 2500] | min if c1 >= 20 else 0 }}
+          # 1. --- DATEN EINMALIG ABRUFEN ---
+          c_raw: "{{ state_attr('sensor.target_charge_distribution_fast', 'charge') }}"
+          d_raw: "{{ state_attr('sensor.target_discharge_distribution_fast', 'discharge') }}"
 
-          v1_entladen: >-
-            {% set c = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
-            {% set d = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
-            {% set c = c if c is mapping else {} %}
-            {% set d = d if d is mapping else {} %}
-            {% set c1 = c.v1 | default(0) | int(0) %}
-            {% set d1 = d.v1 | default(0) | int(0) %}
-            {{ [d1, 2500] | min if d1 >= 20 and c1 < 20 else 0 }}
+          # 2. --- SICHERES MAPPING (Fallback falls leer) ---
+          c: "{{ c_raw if c_raw is mapping else {'v1': 0, 'v2': 0} }}"
+          d: "{{ d_raw if d_raw is mapping else {'v1': 0, 'v2': 0} }}"
 
-          v2_laden: >-
-            {% set c = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
-            {% set c = c if c is mapping else {} %}
-            {% set c2 = c.v2 | default(0) | int(0) %}
-            {{ [c2, 2500] | min if c2 >= 20 else 0 }}
+          # 3. --- EINZELWERTE EXTRAHIEREN ---
+          c1: "{{ c.v1 | default(0) | int(0) }}"
+          d1: "{{ d.v1 | default(0) | int(0) }}"
+          c2: "{{ c.v2 | default(0) | int(0) }}"
+          d2: "{{ d.v2 | default(0) | int(0) }}"
 
-          v2_entladen: >-
-            {% set c = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
-            {% set d = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
-            {% set c = c if c is mapping else {} %}
-            {% set d = d if d is mapping else {} %}
-            {% set c2 = c.v2 | default(0) | int(0) %}
-            {% set d2 = d.v2 | default(0) | int(0) %}
-            {{ [d2, 2500] | min if d2 >= 20 and c2 < 20 else 0 }}
+          # 4. --- LEISTUNGEN BERECHNEN ---
+          v1_laden: "{{ [c1, 2500] | min if c1 >= 20 else 0 }}"
+          v1_entladen: "{{ [d1, 2500] | min if d1 >= 20 and c1 < 20 else 0 }}"
 
-          target_mode_v1: >-
-            {% set c = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
-            {% set d = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
-            {% set c = c if c is mapping else {} %}
-            {% set d = d if d is mapping else {} %}
-            {% set c1 = c.v1 | default(0) | int(0) %}
-            {% set d1 = d.v1 | default(0) | int(0) %}
-            {% if c1 >= 20 %}charge{% elif d1 >= 20 %}discharge{% else %}standby{% endif %}
+          v2_laden: "{{ [c2, 2500] | min if c2 >= 20 else 0 }}"
+          v2_entladen: "{{ [d2, 2500] | min if d2 >= 20 and c2 < 20 else 0 }}"
 
-          target_mode_v2: >-
-            {% set c = state_attr('sensor.target_charge_distribution_fast', 'charge') %}
-            {% set d = state_attr('sensor.target_discharge_distribution_fast', 'discharge') %}
-            {% set c = c if c is mapping else {} %}
-            {% set d = d if d is mapping else {} %}
-            {% set c2 = c.v2 | default(0) | int(0) %}
-            {% set d2 = d.v2 | default(0) | int(0) %}
-            {% if c2 >= 20 %}charge{% elif d2 >= 20 %}discharge{% else %}standby{% endif %}
+          # 5. --- ZIEL-MODI BESTIMMEN ---
+          target_mode_v1: "{{ 'charge' if c1 >= 20 else ('discharge' if d1 >= 20 else 'standby') }}"
+          target_mode_v2: "{{ 'charge' if c2 >= 20 else ('discharge' if d2 >= 20 else 'standby') }}"
 
-          # Sicherheitscheck: Verhindert nur, dass eine lädt während die andere entlädt.
-          # Wenn eine auf 'standby' steht und die andere arbeitet, ist das erlaubt.
-          target_mode_v1_safe: >-
-            {% if (target_mode_v1 == 'charge' and target_mode_v2 == 'discharge') or (target_mode_v1 == 'discharge' and target_mode_v2 == 'charge') %}
-              stop
-            {% else %}
-              {{ target_mode_v1 }}
-            {% endif %}
+          # 6. --- SICHERHEITS-CHECK (Conflict Resolution) ---
+          is_conflict: >-
+            {{ (target_mode_v1 == 'charge' and target_mode_v2 == 'discharge') or
+               (target_mode_v1 == 'discharge' and target_mode_v2 == 'charge') }}
 
-          target_mode_v2_safe: >-
-            {% if (target_mode_v1 == 'charge' and target_mode_v2 == 'discharge') or (target_mode_v1 == 'discharge' and target_mode_v2 == 'charge') %}
-              stop
-            {% else %}
-              {{ target_mode_v2 }}
-            {% endif %}
+          target_mode_v1_safe: "{{ 'standby' if is_conflict else target_mode_v1 }}"
+          target_mode_v2_safe: "{{ 'standby' if is_conflict else target_mode_v2 }}"
 
       - parallel:
           # --- Venus 1 komplett ---

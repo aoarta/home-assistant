@@ -53,7 +53,7 @@ template:
   # 2. Trigger-basierte Sensoren
   - trigger:
       - platform: time_pattern
-        minutes: "/5"
+        minutes: "/2"
       - platform: state
         entity_id:
           - input_number.manuelle_ladeleistung
@@ -61,12 +61,30 @@ template:
           - binary_sensor.batterie_wartung_erforderlich
           - sensor.pv_forecast_weighted
           - sensor.pv_forecast_weighted_morgen
+          - sensor.pv_forecast_ml_ubermorgen
           - sensor.pv_ertrag_heute_um
           - sensor.expected_daily_consumption
           - sensor.expected_daily_consumption_tomorrow
           - sensor.expected_daily_consumption_day_after
+          - sensor.hausverbrauch_energie_heute
           - sensor.dynamic_soc
     sensor:
+      - name: "Rest PV Heute"
+        unique_id: rest_pv_heute
+        unit_of_measurement: "kWh" # Falls deine Sensoren Wh liefern, hier anpassen
+        state: >-
+          {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}
+          {% set pv_ertrag_heute = states('sensor.pv_ertrag_heute_um') | float(0) %}
+          {{ ([0, pv_forecast_today - pv_ertrag_heute] | max) | round(2) }}
+
+      - name: "Rest Verbrauch Heute"
+        unique_id: rest_verbrauch_heute
+        unit_of_measurement: "kWh"
+        state: >-
+          {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
+          {% set hausverbrauch_heute = states('sensor.hausverbrauch_energie_heute') | float(0) %}
+          {{ ([0, expected_daily_consumption - hausverbrauch_heute] | max) | round(2) }}
+
       - name: "Target SOC"
         unique_id: target_soc
         unit_of_measurement: "%"
@@ -106,7 +124,7 @@ template:
             {% elif pv_forecast_tomorrow < expected_daily_consumption_tomorrow %}
               {# Wenn morgen alleine nicht reicht #}
               131
-            {% elif rest_verbrauch_heute > rest_pv_heute %}
+            {% elif rest_pv_heute < rest_verbrauch_heute %}
               {# Wenn der heutige Rest-Tag nicht reicht #}
               130
             {% else %}
@@ -114,6 +132,12 @@ template:
             {% endif %}
           {% endif %}
 
+  - trigger:
+      - platform: time_pattern
+        minutes: "/5"
+      - platform: homeassistant
+        event: start
+    sensor:
       - name: "Dynamic SOC"
         unique_id: dynamic_soc
         unit_of_measurement: "%"
