@@ -314,8 +314,7 @@ template:
         entity_id:
           - input_number.manuelle_ladeleistung
           - input_boolean.override_soc
-          - sensor.dynamic_soc
-          - sensor.dynamic_soc_grenzen
+          - sensor.target_soc
           - sensor.ladeleistung_stabil
           - sensor.venus_1_custom_soc
           - sensor.venus_2_custom_soc
@@ -340,7 +339,7 @@ template:
               {# dupliziere this.state um das aktuelle ergebneis und nicht das letzte zu haben #}
               {# Inline statt this.state um Lag zu vermeiden #}
               {% set total = [0, -(states('sensor.ladeleistung') | float(0))] | max | round(0) %}
-              {% set dyn_soc = states('sensor.dynamic_soc') | float(60) %}
+              {% set dyn_soc = states('sensor.target_soc') | float(60) %}
 
               {% set s1 = states('sensor.venus_1_custom_soc') | float(100)
                     if is_state('switch.marstek_venus1_modbus_rs485_steuermodus', 'on') else 100 %}
@@ -428,7 +427,7 @@ template:
         event: start
       - platform: state
         entity_id:
-          - sensor.dynamic_soc
+          - sensor.target_soc
           - sensor.venus_1_custom_soc
           - sensor.venus_2_custom_soc
           - sensor.solar_zeit_logik
@@ -450,7 +449,7 @@ template:
             {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
             {% set b_set = state_attr('sensor.solar_zeit_logik', 'b_set') | float(0) %}
             {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
-            {% set ziel_soc = states('sensor.dynamic_soc') | float(80) %}
+            {% set ziel_soc = states('sensor.target_soc') | float(80) %}
 
             {% if ts >= t1130 and ts < b_set and ziel_soc < 100 %}
               {% set capacity = state_attr('sensor.zentrale_parameter', 'venus_capacity_wh') | float(5120) %}
