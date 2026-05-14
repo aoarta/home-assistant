@@ -379,8 +379,8 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ (netz > 10 or bat_pwr > 170) and soc > 25 
-                     and low_cell > min_v + hyst and not inverter_an }}
+                  {{ (netz | float(0) > 10 or bat_pwr | float(0) > 170) and soc | float(0) > 25 
+                     and low_cell | float(0) > min_v | float(0) + hyst | float(0) and not inverter_an }}
             sequence:
               - action: switch.turn_off
                 target:

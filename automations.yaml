@@ -38,7 +38,7 @@
         topic: cmnd/tasmotas/Backlog
         payload: "{% set lat = state_attr('zone.home', 'latitude') | float(0) |
           round(6) %} {% set lon = state_attr('zone.home', 'longitude') | float(0)
-          | round(6) %} Latitude {{ lat }}; Longitude {{ lon }}; PowerDelta 105; WattRes
+          | round(6) %} Latitude {{ lat }}; Longitude {{ lon }}; PowerDelta 110; WattRes
           1; TelePeriod 15; Sunrise 1"
 
 - alias: "Batterie Wartung: Nachtladung erzwingen"
