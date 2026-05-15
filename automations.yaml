@@ -99,14 +99,14 @@
       data:
         timestamp: "{{ now().timestamp() }}"
 
-- alias: SOC Override bedarfsgesteuert (5 Tage)
+- alias: SOC Override bedarfsgesteuert
   description:
     Setzt den Override auf AN, wenn eine der Batterien seit über 5 Tagen
     nicht voll war, sonst auf AUS
   id: soc_override_weekly_control
   triggers:
-    - trigger: time
-      at: "03:00:00"
+    - trigger: time_pattern
+      minutes: "/5"
     - trigger: homeassistant
       event: start
   actions:
@@ -124,12 +124,21 @@
                   (now_ts - as_timestamp(states('input_datetime.ups_last_full'), 0)) if has_value('input_datetime.ups_last_full') else 0
                 ] %}
                 {{ ages | max > threshold }}
-
           sequence:
             - action: input_boolean.turn_on
               target:
                 entity_id: input_boolean.override_soc
+
       default:
+        - condition: template
+          value_template: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set ages = [
+              (now_ts - as_timestamp(states('input_datetime.venus_1_last_full'), now_ts)) if has_value('input_datetime.venus_1_last_full') else now_ts,
+              (now_ts - as_timestamp(states('input_datetime.venus_2_last_full'), now_ts)) if has_value('input_datetime.venus_2_last_full') else now_ts,
+              (now_ts - as_timestamp(states('input_datetime.ups_last_full'), now_ts)) if has_value('input_datetime.ups_last_full') else now_ts
+            ] %}
+            {{ ages | min < 3600 }}
         - action: input_boolean.turn_off
           target:
             entity_id: input_boolean.override_soc

@@ -467,6 +467,38 @@ automation:
           - sequence:
               - variables:
                   power: "{{ states('sensor.marstek_venus_1_ac_leistung') | float(0) }}"
+                  # Eigenverbrauch von 9W hinzufügen (9W / 3600s * 15s = 0.0375 Wh pro Intervall)
+                  standby_loss: 0.0375
+                  delta_wh: >-
+                    {% set meas_delta = power * 15 / 3600 %}
+                    {% set max_delta = 2500 * 15 / 3600 * 6 %}
+                    {# Wir addieren den Standby-Verlust zum gemessenen Delta #}
+                    {{ (meas_delta + standby_loss) if meas_delta < max_delta else 0 }}
+              - action: input_number.set_value
+                target:
+                  entity_id: input_number.venus_1_energiefluss_wh_counter
+                data:
+                  value: >
+                    {{ (states('input_number.venus_1_energiefluss_wh_counter') | float(0) + delta_wh) | round(3) }}
+
+          - sequence:
+              - variables:
+                  power: "{{ states('sensor.marstek_venus_2_ac_leistung') | float(0) }}"
+                  standby_loss: 0.0375
+                  delta_wh: >-
+                    {% set meas_delta = power * 15 / 3600 %}
+                    {% set max_delta = 2500 * 15 / 3600 * 6 %}
+                    {{ (meas_delta + standby_loss) if meas_delta < max_delta else 0 }}
+              - action: input_number.set_value
+                target:
+                  entity_id: input_number.venus_2_energiefluss_wh_counter
+                data:
+                  value: >
+                    {{ (states('input_number.venus_2_energiefluss_wh_counter') | float(0) + delta_wh) | round(3) }}
+
+          - sequence:
+              - variables:
+                  power: "{{ states('sensor.marstek_venus_1_ac_leistung') | float(0) }}"
                   delta_wh: >-
                     {% set delta = power * 15 / 3600 %}
                     {% set max_delta = 2500 * 15 / 3600 * 6 %}
@@ -622,3 +654,49 @@ automation:
           entity_id: "input_datetime.{{ trigger.id }}_last_full"
         data:
           timestamp: "{{ now().timestamp() }}"
+
+  - alias: "Marstek Venus: Ladeleistung zurücksetzen wenn SOC > Target"
+    id: marstek_venus_reset_charge_over_target
+    mode: single
+    trigger:
+      - platform: time_pattern
+        minutes: "/2"
+      - platform: state
+        entity_id:
+          - sensor.venus_1_custom_soc
+          - sensor.venus_2_custom_soc
+          - sensor.target_soc
+
+    action:
+      - variables:
+          target: "{{ states('sensor.target_soc') | float(100) }}"
+
+      - parallel:
+          - sequence:
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {% set ladeleistung = states('number.marstek_venus_1_ladeleistung_einstellen') | float(0) %}
+                      {% set soc = states('sensor.venus_1_custom_soc') | float(0) %}
+                      {{ ladeleistung != 0 and soc > target }}
+                then:
+                  - action: number.set_value
+                    target:
+                      entity_id: number.marstek_venus_1_ladeleistung_einstellen
+                    data:
+                      value: 0
+
+          - sequence:
+              - delay: "00:00:00.150"
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {% set ladeleistung = states('number.marstek_venus_2_ladeleistung_einstellen') | float(0) %}
+                      {% set soc = states('sensor.venus_2_custom_soc') | float(0) %}
+                      {{ ladeleistung != 0 and soc > target }}
+                then:
+                  - action: number.set_value
+                    target:
+                      entity_id: number.marstek_venus_2_ladeleistung_einstellen
+                    data:
+                      value: 0

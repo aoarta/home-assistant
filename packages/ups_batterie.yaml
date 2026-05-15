@@ -393,8 +393,11 @@ automation:
               - condition: template
                 value_template: >-
                   {# Stop wenn Netzbezug steigt, Akku voll, Zelle zu hoch ODER Ladeleistung zu gering #}
-                  {{ (netz > 10 or bat_pwr > -100 or high_cell > max_v or (ups_pwr < 20 and soc > 90)) 
-                     and lader_an }}
+                  {{ (netz > 10 or high_cell > max_v 
+                                or (ups_pwr < 20 and soc > 90) 
+                                or (bat_pwr > -100 and netz > -50))   
+                    and lader_an }}
+
             sequence:
               - action: switch.turn_off
                 target:
