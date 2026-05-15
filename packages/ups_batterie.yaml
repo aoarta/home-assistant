@@ -334,7 +334,6 @@ automation:
           - sensor.ups_custom_soc
           - sensor.ups_lowest_cell
           - sensor.ups_highest_cell
-          - binary_sensor.batterie_wartung_erforderlich
           - input_number.manuelle_ladeleistung
     action:
       # --- VARIABLEN VORZIEHEN ---
