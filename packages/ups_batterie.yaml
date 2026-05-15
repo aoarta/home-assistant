@@ -165,18 +165,6 @@ template:
           {% endif %}
 
   - trigger:
-      - platform: numeric_state
-        entity_id: sensor.ups_custom_soc
-        above: "99.9"
-        for: "00:00:05"
-    sensor:
-      - name: "UPS Last Full"
-        unique_id: ups_last_full_timestamp
-        device_class: timestamp
-        availability: "{{ is_number(states('sensor.ups_custom_soc')) }}"
-        state: "{{ now() }}"
-
-  - trigger:
       - platform: state
         entity_id: sensor.ups_energiefluss_wh
       - platform: homeassistant
@@ -455,3 +443,17 @@ automation:
             - switch.battery_inverter_tasmota
             - switch.battery_charger
             - switch.battery_charger2
+
+  - alias: "UPS: Zeitstempel Batterie voll aktualisieren"
+    id: ups_set_last_full_timestamp
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.ups_custom_soc
+        above: 99.9
+        for: "00:00:05"
+    actions:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: "input_datetime.ups_last_full"
+        data:
+          timestamp: "{{ now().timestamp() }}"

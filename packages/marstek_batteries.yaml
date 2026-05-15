@@ -1,4 +1,4 @@
-# packages/pv_batteries.yaml
+# packages/marstek_batteries.yaml
 
 input_number:
   venus_1_energiefluss_wh_counter:
@@ -93,35 +93,7 @@ template:
           {{ states('input_number.venus_2_energiefluss_wh_counter') }}
 
   # ==========================================================
-  # 1. Venus Last Full Zeitstempel (Korrigiert)
-  # ==========================================================
-  - trigger:
-      - platform: numeric_state
-        entity_id: sensor.marstek_venus_1_batterie_ladezustand
-        above: 99
-        for: "00:01:00"
-    sensor:
-      - name: "Venus 1 Last Full"
-        unique_id: venus_1_last_full_timestamp
-        device_class: timestamp
-        # Prüft, ob der Quellsensor eine Zahl ist, sonst bleibt der letzte Wert erhalten
-        availability: "{{ is_number(states('sensor.marstek_venus_1_batterie_ladezustand')) }}"
-        state: "{{ now() }}"
-
-  - trigger:
-      - platform: numeric_state
-        entity_id: sensor.marstek_venus_2_batterie_ladezustand
-        above: 99
-        for: "00:01:00"
-    sensor:
-      - name: "Venus 2 Last Full"
-        unique_id: venus_2_last_full_timestamp
-        device_class: timestamp
-        availability: "{{ is_number(states('sensor.marstek_venus_2_batterie_ladezustand')) }}"
-        state: "{{ now() }}"
-
-  # ==========================================================
-  # 2. Venus SOC Reset Punkte
+  # Venus SOC Reset Punkte
   # ==========================================================
   - trigger:
       # Reagiert nur noch auf den geglätteten Custom SOC, um Bouncing
@@ -626,3 +598,27 @@ automation:
                     entity_id: number.marstek_venus_2_entladeleistung_einstellen,
                   }
                 data: { value: "{{ v2_entladen }}" }
+
+  # ==========================================================
+  # Venus Last Full Zeitstempel (Korrigiert)
+  # ==========================================================
+
+  - alias: "Marstek: Zeitstempel Batterie voll aktualisieren"
+    id: marstek_set_last_full_timestamp
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.marstek_venus_1_batterie_ladezustand
+        above: 99
+        for: "00:01:00"
+        id: "venus1"
+      - trigger: numeric_state
+        entity_id: sensor.marstek_venus_2_batterie_ladezustand
+        above: 99
+        for: "00:01:00"
+        id: "venus2"
+    actions:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: "input_datetime.{{ trigger.id }}_last_full"
+        data:
+          timestamp: "{{ now().timestamp() }}"

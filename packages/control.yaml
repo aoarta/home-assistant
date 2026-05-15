@@ -164,22 +164,22 @@ template:
       - name: "Batterie Wartung Erforderlich"
         unique_id: batterie_wartung_erforderlich
         state: >-
-          {% set v1_last = states('sensor.venus_1_last_full') %}
-          {% set v2_last = states('sensor.venus_2_last_full') %}
-          {% set ups_last = states('sensor.ups_last_full') %}
+          {% set v1_last = states('input_datetime.venus_1_last_full') %}
+          {% set v2_last = states('input_datetime.venus_2_last_full') %}
+          {% set ups_last = states('input_datetime.ups_last_full') %}
 
           {% set days = state_attr('sensor.zentrale_parameter', 'battery_care_days') | float(5) %}
           {% set threshold = days * 86400 %} {# in Sekunden #}
           {% set now_ts = as_timestamp(now()) %}
 
           {# Fallback auf 0 Sekunden gesetzt, um Fehlauslösungen bei Neustarts/Verbindungsabbrüchen zu vermeiden. Zudem as_timestamp mit Default-Wert (now_ts) abgesichert. #}
-          {% set v1_age = (now_ts - as_timestamp(v1_last, now_ts)) if has_value('sensor.venus_1_last_full') else 0 %}
-          {% set v2_age = (now_ts - as_timestamp(v2_last, now_ts)) if has_value('sensor.venus_2_last_full') else 0 %}
-          {% set ups_age = (now_ts - as_timestamp(ups_last, now_ts)) if has_value('sensor.ups_last_full') else 0 %}
+          {% set v1_age = (now_ts - as_timestamp(v1_last, now_ts)) if has_value('input_datetime.venus_1_last_full') else 0 %}
+          {% set v2_age = (now_ts - as_timestamp(v2_last, now_ts)) if has_value('input_datetime.venus_2_last_full') else 0 %}
+          {% set ups_age = (now_ts - as_timestamp(ups_last, now_ts)) if has_value('input_datetime.ups_last_full') else 0 %}
 
           {{ v1_age > threshold or v2_age > threshold or ups_age > threshold }}
         attributes:
           # Hier ebenfalls as_timestamp mit Default (0) versehen, um Log-Fehler zu vermeiden
-          v1_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('sensor.venus_1_last_full'), as_timestamp(now()))) / 86400) | int if has_value('sensor.venus_1_last_full') else '?' }}"
-          v2_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('sensor.venus_2_last_full'), as_timestamp(now()))) / 86400) | int if has_value('sensor.venus_2_last_full') else '?' }}"
-          ups_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('sensor.ups_last_full'), as_timestamp(now()))) / 86400) | int if has_value('sensor.ups_last_full') else '?' }}"
+          v1_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.venus_1_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.venus_1_last_full') else '?' }}"
+          v2_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.venus_2_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.venus_2_last_full') else '?' }}"
+          ups_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.ups_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.ups_last_full') else '?' }}"

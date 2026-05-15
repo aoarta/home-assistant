@@ -66,26 +66,38 @@
 - alias: "Batterie Wartung: Beenden wenn voll"
   id: batterie_wartung_beenden
   triggers:
-    - trigger: state
+    - trigger: numeric_state
       entity_id:
         - sensor.marstek_venus_1_batterie_ladezustand
         - sensor.marstek_venus_2_batterie_ladezustand
-      to: "100"
+      above: 99
   conditions:
+    # Nur ausführen, wenn die manuelle Ladung gerade aktiv ist
     - condition: numeric_state
       entity_id: input_number.manuelle_ladeleistung
-      above: 999
-      below: 1001
-    - condition: template
-      value_template: >-
-        {{ states('sensor.marstek_venus_1_batterie_ladezustand') | int(0) >= 100 and
-          states('sensor.marstek_venus_2_batterie_ladezustand') | int(0) >= 100 }}
+      above: 0
+    # Sicherstellen, dass BEIDE Batterien voll sind, bevor wir abschalten
+    - condition: numeric_state
+      entity_id: sensor.marstek_venus_1_batterie_ladezustand
+      above: 99
+    - condition: numeric_state
+      entity_id: sensor.marstek_venus_2_batterie_ladezustand
+      above: 99
   actions:
+    # 1. Ladeleistung wieder auf 0 setzen
     - action: input_number.set_value
       target:
         entity_id: input_number.manuelle_ladeleistung
       data:
         value: 0
+    # 2. Wartung "löschen" (Zeitstempel auf JETZT setzen)
+    - action: input_datetime.set_datetime
+      target:
+        entity_id:
+          - input_datetime.venus_1_last_full
+          - input_datetime.venus_2_last_full
+      data:
+        timestamp: "{{ now().timestamp() }}"
 
 - alias: SOC Override bedarfsgesteuert (5 Tage)
   description:
@@ -105,10 +117,11 @@
                 {% set days = state_attr('sensor.zentrale_parameter', 'override_soc_days') | float(5) %}
                 {% set threshold = days * 86400 %}
                 {% set now_ts = as_timestamp(now()) %}
+                {# Verwende 0 statt 9999999, um Fehlschaltungen bei Nichtverfügbarkeit zu vermeiden #}
                 {% set ages = [
-                  (now_ts - as_timestamp(states('sensor.venus_1_last_full'))) if has_value('sensor.venus_1_last_full') else 9999999,
-                  (now_ts - as_timestamp(states('sensor.venus_2_last_full'))) if has_value('sensor.venus_2_last_full') else 9999999,
-                  (now_ts - as_timestamp(states('sensor.ups_last_full'))) if has_value('sensor.ups_last_full') else 9999999
+                  (now_ts - as_timestamp(states('input_datetime.venus_1_last_full'), 0)) if has_value('input_datetime.venus_1_last_full') else 0,
+                  (now_ts - as_timestamp(states('input_datetime.venus_2_last_full'), 0)) if has_value('input_datetime.venus_2_last_full') else 0,
+                  (now_ts - as_timestamp(states('input_datetime.ups_last_full'), 0)) if has_value('input_datetime.ups_last_full') else 0
                 ] %}
                 {{ ages | max > threshold }}
 
