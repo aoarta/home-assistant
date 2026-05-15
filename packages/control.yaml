@@ -8,8 +8,25 @@ input_boolean:
     icon: mdi:battery-lock
     initial: false
 
+input_number:
+  takt_interval_sekunden:
+    min: 1
+    max: 300
+    step: 1
+
+input_datetime:
+  takt_anker:
+    has_date: true
+    has_time: true
+
 template:
   - sensor:
+      - name: "Takt"
+        unique_id: takt
+        device_class: timestamp
+        state: >
+          {{ states('input_datetime.takt_anker') }}
+
       - name: "Solar Zeit-Logik"
         unique_id: solar_zeit_logik
         availability: "{{ state_attr('sun.sun', 'next_setting') is not none }}"
@@ -183,3 +200,25 @@ template:
           v1_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.venus_1_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.venus_1_last_full') else '?' }}"
           v2_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.venus_2_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.venus_2_last_full') else '?' }}"
           ups_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.ups_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.ups_last_full') else '?' }}"
+
+automation:
+  - alias: "Takt Engine"
+    mode: single
+
+    trigger:
+      - platform: time_pattern
+        seconds: "/1"
+
+    condition:
+      - condition: template
+        value_template: >
+          {% set interval = states('input_number.takt_interval_sekunden')|int(10) %}
+          {% set last = as_timestamp(states('input_datetime.takt_anker')) %}
+          {{ as_timestamp(now()) - last >= interval }}
+
+    action:
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.takt_anker
+        data:
+          datetime: "{{ now().isoformat() }}"
