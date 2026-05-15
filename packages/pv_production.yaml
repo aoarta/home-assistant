@@ -178,15 +178,36 @@ template:
           {% set dach = state_attr('sensor.pv_energy_realtime_aggregator', 'dach') | float(0) %}
           {{ (b_total + dach) | round(2) }}
 
+  #  - trigger:
+  #      - platform: time_pattern
+  #        seconds: "/15"
+  #    sensor:
+  #      - name: "PV Produktion Watt"
+  #        unique_id: pv_produktion_watt
+  #        unit_of_measurement: "W"
+  #        device_class: power
+  #        state_class: measurement
+  #        # gerundeter wert auf Vielfache von 15
+  #        state: >-
+  #          {{ ((states('sensor.pv_produktion_watt_fast') | float(0)) / 15) | int * 15 }}
+
   - trigger:
-      - platform: time_pattern
-        seconds: "/15"
+      - platform: state
+        entity_id: sensor.pv_produktion_watt_fast
+
     sensor:
       - name: "PV Produktion Watt"
         unique_id: pv_produktion_watt
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        # gerundeter wert auf Vielfache von 15
-        state: >-
-          {{ ((states('sensor.pv_produktion_watt_fast') | float(0)) / 15) | int * 15 }}
+
+        state: >
+          {% set neu = states('sensor.pv_produktion_watt_fast') | float(0) %}
+          {% set alt = this.state | float(neu) %}
+
+          {% if abs(neu - alt) >= 15 %}
+            {{ neu | round(0) }}
+          {% else %}
+            {{ alt }}
+          {% endif %}
