@@ -160,7 +160,20 @@ template:
                states('sensor.marstek_batterieleistung_gesamt') | float(0) 
               ) | round(0) }}
 
-  - sensor:
+  #  - sensor:
+  #      - name: "Ladeleistung Stabil"
+  #        unique_id: ladeleistung_stabil
+  #        unit_of_measurement: "W"
+  #        device_class: power
+  #        state_class: measurement
+  #        availability: "{{ has_value('sensor.ladeleistung') }}"
+  #        state: >-
+  #          {{ ((states('sensor.ladeleistung') | float(0) / 15) | int) * 15 }}
+
+  - trigger:
+      - platform: state
+        entity_id: sensor.ladeleistung
+    sensor:
       - name: "Ladeleistung Stabil"
         unique_id: ladeleistung_stabil
         unit_of_measurement: "W"
@@ -168,7 +181,9 @@ template:
         state_class: measurement
         availability: "{{ has_value('sensor.ladeleistung') }}"
         state: >-
-          {{ ((states('sensor.ladeleistung') | float(0) / 15) | int) * 15 }}
+          {% set neu = states('sensor.ladeleistung') | float(0) %}
+          {% set alt = this.state | float(neu) %}
+          {{ neu | round(0) if (neu - alt) | abs >= 15 else alt }}
 
   - trigger:
       - platform: state
