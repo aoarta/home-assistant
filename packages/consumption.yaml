@@ -238,20 +238,6 @@ template:
             {% set now_ts = as_timestamp(now()) %}
             {{ ((sun_set - now_ts) / 3600) | round(2) if sun_set > now_ts else 0 }}
 
-      - name: "PV Storage Balance Today"
-        unique_id: expected_need_today # Consumption and storage
-        unit_of_measurement: "kWh"
-        state: >-
-          {% set free_m = states('sensor.marstek_free_capacity_kwh') %}
-          {% set free_u = states('sensor.ups_free_capacity_kwh') %}
-          {% set load = states('sensor.estimated_remaining_consumption') %}
-
-          {% if is_number(free_m) and is_number(free_u) and is_number(load) %}
-            {{ (free_m|float + free_u|float + load|float) | round(1) }}
-          {% else %}
-            {{ this.state | default(0) }}
-          {% endif %}
-
   - triggers:
       - trigger: time
         at: "23:45:00"

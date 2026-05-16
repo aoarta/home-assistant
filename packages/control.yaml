@@ -114,40 +114,45 @@ template:
           {% elif is_state('binary_sensor.battery_maintenance_required', 'on') %}
             120
           {% else %}
-            {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}
-            {% set pv_ertrag_heute = states('sensor.pv_ertrag_heute_um') | float(0) %}
+            {# === Usable energy in battery (discharge capacity, incl. safety margin) === #}
+            {% set usable_energy = states('sensor.marstek_usable_energy_kwh') | float(0) %}
 
+            {# === Safety factors === #}
+            {% set pv_factor = 0.85 %}
+            {% set consumption_buffer = 1.10 %}
+
+            {# === Today (remaining) === #}
+            {% set pv_remaining_today = states('sensor.pv_forecast_weighted') | float(0) * pv_factor %}
             {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
-            {% set hausverbrauch_heute = states('sensor.hausverbrauch_energie_heute') | float(0) %}
+            {% set consumption_today = states('sensor.hausverbrauch_energie_heute') | float(0) %}
+            {% set consumption_remaining_today = ([0, expected_daily_consumption - consumption_today] | max) * consumption_buffer %}
 
-            {# Variables for tomorrow #}
-            {% set pv_forecast_tomorrow = states('sensor.pv_forecast_weighted_morgen') | float(0) %}
-            {% set expected_daily_consumption_tomorrow = states('sensor.expected_daily_consumption_tomorrow') | float(expected_daily_consumption) %}
+            {# === Tomorrow === #}
+            {% set pv_tomorrow = states('sensor.pv_forecast_weighted_morgen') | float(0) * pv_factor %}
+            {% set consumption_tomorrow = states('sensor.expected_daily_consumption_tomorrow') | float(expected_daily_consumption) * consumption_buffer %}
 
-            {# Variables for the day after tomorrow #}
-            {% set pv_forecast_uebermorgen = states('sensor.pv_forecast_ml_ubermorgen') | float(0) %}
-            {% set expected_daily_consumption_uebermorgen = states('sensor.expected_daily_consumption_day_after') | float(expected_daily_consumption) %}
+            {# === Day after tomorrow === #}
+            {% set pv_day_after = states('sensor.pv_forecast_ml_ubermorgen') | float(0) * pv_factor %}
+            {% set consumption_day_after = states('sensor.expected_daily_consumption_day_after') | float(expected_daily_consumption) * consumption_buffer %}
 
-            {# Calculate remaining values for today (not less than 0) #}
-            {% set rest_pv_heute = ([0, pv_forecast_today - pv_ertrag_heute] | max) %}
-            {% set rest_verbrauch_heute = ([0, expected_daily_consumption - hausverbrauch_heute] | max) %}
+            {# === Rolling balance: simulate battery state over the next days === #}
+            {# balance_X = energy left in battery at the end of day X #}
+            {# Becomes negative when consumption cannot be covered. #}
+            {% set balance_today = usable_energy + pv_remaining_today - consumption_remaining_today %}
+            {% set balance_tomorrow = balance_today + pv_tomorrow - consumption_tomorrow %}
+            {% set balance_day_after = balance_tomorrow + pv_day_after - consumption_day_after %}
 
-            {# 3-day totals check #}
-            {% set sum_pv_3tage = rest_pv_heute + pv_forecast_tomorrow + pv_forecast_uebermorgen %}
-            {% set sum_verbrauch_3tage = rest_verbrauch_heute + expected_daily_consumption_tomorrow + expected_daily_consumption_uebermorgen %}
-
-            {% if sum_pv_3tage < sum_verbrauch_3tage %}
-              {# Next 3 days are not sufficient overall #}
-              133
-            {% elif pv_forecast_tomorrow < expected_daily_consumption_tomorrow %}
-              {# Tomorrow alone is not sufficient #}
-              131
-            {% elif rest_pv_heute < rest_verbrauch_heute %}
-              {# Remaining part of today is not sufficient #}
-              130
+            {# === Decision: most urgent shortfall wins === #}
+            {% if balance_today < 0 %}
+              130   {# Today's energy insufficient — charge to 100% now #}
+            {% elif balance_tomorrow < 0 %}
+              131   {# Tomorrow will fall short #}
+            {% elif balance_day_after < 0 %}
+              133   {# Day after tomorrow will fall short #}
             {% else %}
-              {{ states('sensor.dynamic_soc') | default(10, true) }}
+              {{ states('sensor.dynamic_soc') | default(50, true) }}
             {% endif %}
+
           {% endif %}
 
   - triggers:

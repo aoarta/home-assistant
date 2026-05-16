@@ -405,7 +405,7 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ ((netz < 10 and bat_pwr < 150) or soc <= 20 or low_cell < min_v) 
+                  {{ ((netz | float(0) < 10 and bat_pwr | float(0) < 150) or soc <= 20 or low_cell < min_v) 
                      and inverter_an }}
             sequence:
               - action: switch.turn_off
