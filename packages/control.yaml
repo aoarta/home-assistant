@@ -6,7 +6,6 @@ input_boolean:
   override_soc:
     name: "Manueller SOC Override"
     icon: mdi:battery-lock
-    initial: false
 
 input_number:
   takt_interval_sekunden:
@@ -25,7 +24,7 @@ template:
         unique_id: takt
         device_class: timestamp
         state: >
-          {{ states('input_datetime.takt_anker') }}
+          {{ states('input_datetime.takt_anker') |  timestamp_utc  }}
 
       - name: "Solar Zeit-Logik"
         unique_id: solar_zeit_logik

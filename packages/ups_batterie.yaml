@@ -265,7 +265,7 @@ template:
         state: >-
           {% set p1 = states('sensor.battery_charger_energy_power') | float(0) %}
           {% set p2 = states('sensor.battery_charger2_energy_power') | float(0) %}
-          {{ (p1 + p2) | round(0) }}
+          {{ (p1 + p2) | round(-1) }}
 
       - name: "UPS AC Leistung"
         unique_id: ups_ac_leistung
@@ -275,39 +275,36 @@ template:
         state: >-
           {% set charging = states('sensor.battery_total_charge_power') | float(0) %}
           {% set discharging = states('sensor.battery_inverter_energy_power') | float(0) %}
-          {{ (discharging - charging) | round(0) }}
+          {{ (discharging - charging) | round(-1) }}
 
 ################################################################################
 # 4. AUTOMATIONEN
 ################################################################################
 automation:
   - alias: "UPS Energieintegration"
+    id: ups_energieintegration
     mode: queued
-
     trigger:
-      - platform: time_pattern
-        seconds: "/30"
-
+      - platform: state
+        entity_id: sensor.takt
     variables:
       power: "{{ states('sensor.ups_ac_leistung_glatt') | float(0) }}"
+      own_consumption_w: "{{ state_attr('sensor.zentrale_parameter', 'ups_own_consumption') | float(10) }}"
+      delta_t: "{{ states('input_number.tack_interval_sekunden') | float(1)  }}"
       delta_wh: >-
-        {% set delta = power * 30 / 3600 %}
-        {% set max_delta = 2500 * 30 / 3600  %}
+        {% set delta_t_h = delta_t / 3600 %}
+        {% set standby_loss = own_consumption_w * delta_t_h %}
+        {% set delta_p = power * delta_t_h %}
+        {% set max_delta_p = 2500 * delta_t_h  %}
         {# wenn delta > max_delta, dann ist etwas faul.#}
-        {{ delta if delta < max_delta else 0 }}
-
+        {{ (delta_p + standby_loss) if delta_p < max_delta_p else standby_loss }}
     action:
       - service: input_number.set_value
         target:
           entity_id: input_number.ups_energiefluss_wh_counter
         data:
           value: >
-            {{
-              (
-                states('input_number.ups_energiefluss_wh_counter') | float(0)
-                + delta_wh
-              ) | round(3)
-            }}
+            {{ states('input_number.ups_energiefluss_wh_counter') | float(0) + delta_wh }}
 
   - alias: "UPS Grobregelung Laden & Entladen"
     id: ups_grob_control_full
@@ -342,6 +339,23 @@ automation:
           lader_an: "{{ is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on') }}"
 
       - choose:
+          # 0 --- keine Verbindung zum BMS
+          - conditions:
+              - condition: template
+                value_template: "{{ max_v == 0 and min_v == 0 }}"
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id:
+                    - switch.battery_inverter_tasmota
+                    - switch.battery_charger
+                    - switch.battery_charger2
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ BMS Verbindung verloren"
+                  message: "Keine Verbindung zum BMS – alle Schalter abgeschaltet! ({{ now().strftime('%H:%M:%S') }})"
+                  notification_id: "bms_no_connection"
+
           # 1 --- Wartungsmodus ein
           - conditions:
               - condition: template
@@ -351,6 +365,9 @@ automation:
                 target: { entity_id: switch.battery_inverter_tasmota }
               - action: switch.turn_on
                 target: { entity_id: switch.battery_charger2 }
+              - action: persistent_notification.dismiss
+                data:
+                  notification_id: "bms_no_connection"
 
           # 2 --- NOT-LADUNG
           - conditions:
@@ -361,6 +378,9 @@ automation:
                 target: { entity_id: switch.battery_inverter_tasmota }
               - action: switch.turn_on
                 target: { entity_id: switch.battery_charger2 }
+              - action: persistent_notification.dismiss
+                data:
+                  notification_id: "bms_no_connection"
 
           # 3 --- ENTLADEN STARTEN
           - conditions:
@@ -377,6 +397,9 @@ automation:
                   }
               - action: switch.turn_on
                 target: { entity_id: switch.battery_inverter_tasmota }
+              - action: persistent_notification.dismiss
+                data:
+                  notification_id: "bms_no_connection"
 
           # 4 --- ENTLADEN STOPPEN
           - conditions:
@@ -387,6 +410,9 @@ automation:
             sequence:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
+              - action: persistent_notification.dismiss
+                data:
+                  notification_id: "bms_no_connection"
 
           # 5 --- LADEN STOPPEN (Inklusive < 20W Logik)
           - conditions:
@@ -397,7 +423,6 @@ automation:
                                 or (ups_pwr < 20 and soc > 90) 
                                 or (bat_pwr > -100 and netz > -50))   
                     and lader_an }}
-
             sequence:
               - action: switch.turn_off
                 target:
@@ -405,6 +430,9 @@ automation:
                     entity_id:
                       [switch.battery_charger, switch.battery_charger2],
                   }
+              - action: persistent_notification.dismiss
+                data:
+                  notification_id: "bms_no_connection"
 
           # 6 --- LADEN STARTEN
           - conditions:
@@ -422,6 +450,9 @@ automation:
                   - delay: "00:00:01"
                   - action: switch.turn_on
                     target: { entity_id: switch.battery_charger2 }
+              - action: persistent_notification.dismiss
+                data:
+                  notification_id: "bms_no_connection"
 
   - alias: "Sicherheitsabschaltung: Charger und Inverter gleichzeitig"
     id: safety_simultaneous_power

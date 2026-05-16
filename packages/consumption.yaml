@@ -439,7 +439,7 @@ automation:
                 data:
                   value: >
                     {% set alt = states('input_number.verbrauch_speicher_samstag') | float(0) %}
-                    {{ (2 * alt + neu ) / 3 }}
+                    {{ (2 * alt + neu) / 3 }}
 
         # FALL 3: Normaler Wochentag
         default:

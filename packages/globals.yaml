@@ -8,10 +8,16 @@ template:
         unique_id: zentrale_parameter
         state: "OK"
         attributes:
+          # chemistry
           lfp_min_voltage: 3.00
           lfp_max_voltage: 3.58
           lfp_hysteresis: 0.020
+          # batteries: capacity
           venus_capacity_wh: 5120
           ups_capacity_wh: 2200
+          # batteries: own consumtion
+          venus_own_consumption_h: 9
+          ups_own_consumption_h: 22
+          # battery care
           override_soc_days: 5
           battery_care_days: 8
