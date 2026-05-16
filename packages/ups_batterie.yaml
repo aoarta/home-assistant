@@ -478,13 +478,17 @@ automation:
             - switch.battery_charger
             - switch.battery_charger2
 
+  # ==========================================================
+  # UPS: Last Full Zeitstempel
+  # ==========================================================
+
   - alias: "UPS: Zeitstempel Batterie voll aktualisieren"
     id: ups_set_last_full_timestamp
     triggers:
       - trigger: numeric_state
         entity_id: sensor.ups_custom_soc
         above: 99.9
-        for: "00:00:05"
+        for: "00:01:00"
     actions:
       - action: input_datetime.set_datetime
         target:
