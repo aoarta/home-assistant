@@ -127,7 +127,7 @@ template:
             {{ current_energy - (hw_soc / 100 * capacity) }}
           {% elif hw_soc >= 100 %}
             {# At 100% we take the smaller value (since energy flow decreases/goes negative when charging) #}
-            {{ [current_energy, last_reset] | min }}
+            {{ [current_energy, last_reset] | max }}
           {% elif current_energy < last_reset %}
             {{ current_energy }}
           {% else %}
@@ -159,7 +159,7 @@ template:
             {{ current_energy - (hw_soc / 100 * capacity) }}
           {% elif hw_soc >= 100 %}
             {# At 100% we take the smaller value (since energy flow decreases/goes negative when charging) #}
-            {{ [current_energy, last_reset] | min }}
+            {{ [current_energy, last_reset] | max }}
           {% elif current_energy < last_reset %}
             {{ current_energy }}
           {% else %}
@@ -618,28 +618,65 @@ automation:
   # ==========================================================
   # Marstek: Last Full Timestamp
   # ==========================================================
-
   - alias: "Marstek: Zeitstempel Batterie voll aktualisieren"
     id: marstek_set_last_full_timestamp
     triggers:
       - trigger: numeric_state
-        entity_id: sensor.marstek_venus_1_batterie_ladezustand
+        entity_id:
+          - sensor.marstek_venus_1_batterie_ladezustand
+          - sensor.marstek_venus_2_batterie_ladezustand
         above: 99
-        for: "00:01:00"
-        id: "venus1"
-      - trigger: numeric_state
-        entity_id: sensor.marstek_venus_2_batterie_ladezustand
-        above: 99
-        for: "00:01:00"
-        id: "venus2"
+        id: "sensor_update"
+
+      - trigger: time_pattern
+        minutes: "/10"
+        id: "timer_update"
+
     actions:
-      - variables:
-          ziel: "input_datetime.{{ trigger.id }}_last_full"
-      - action: input_datetime.set_datetime
-        target:
-          entity_id: "{{ ziel }}"
-        data:
-          timestamp: "{{ now().timestamp() }}"
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: "sensor_update"
+            sequence:
+              - variables:
+                  device_id: "{{ trigger.entity_id.split('_')[2] }}"
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: "input_datetime.venus_{{ device_id }}_last_full"
+                data:
+                  timestamp: "{{ now().timestamp() }}"
+              - action: number.set_value
+                target:
+                  entity_id: "number.marstek_venus_{{ device_id }}_ladeleistung_einstellen"
+                data:
+                  value: 0
+
+          - conditions:
+              - condition: trigger
+                id: "timer_update"
+            sequence:
+              - repeat:
+                  for_each:
+                    - num: "1"
+                      ent: sensor.marstek_venus_1_batterie_ladezustand
+                    - num: "2"
+                      ent: sensor.marstek_venus_2_batterie_ladezustand
+                  sequence:
+                    # Hier nutzen wir jetzt ein Template statt der Standard-Bedingung
+                    - if:
+                        - condition: template
+                          value_template: "{{ states(repeat.item.ent) | float(0) > 99 }}"
+                      then:
+                        - action: input_datetime.set_datetime
+                          target:
+                            entity_id: "input_datetime.venus_{{ repeat.item.num }}_last_full"
+                          data:
+                            timestamp: "{{ now().timestamp() }}"
+                        - action: number.set_value
+                          target:
+                            entity_id: "number.marstek_venus_{{ repeat.item.num }}_ladeleistung_einstellen"
+                          data:
+                            value: 0
 
   - alias: "Marstek Venus: Ladeleistung zurücksetzen wenn SOC > Target"
     id: marstek_venus_reset_charge_over_target
