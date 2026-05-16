@@ -1,4 +1,4 @@
-# packages/pv_prognose.yaml
+# packages/pv_forecast.yaml
 
 ################################################################################
 # 1. INPUTS & PARAMETER
@@ -186,14 +186,14 @@ sensor:
 
   - platform: rest
     name: "Forecastsolar API Source Dach"
-    resource_template: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/30/-45/7.5"
+    resource: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/30/-45/7.5"
     scan_interval: 86400
     json_attributes: [result]
     value_template: "{{ value_json.message.info.place if value_json is defined else 'OK' }}"
 
   - platform: rest
     name: "Forecastsolar API Source Fassade"
-    resource_template: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/85/90/2.4"
+    resource: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/85/90/2.4"
     scan_interval: 86400
     json_attributes: [result]
     value_template: "{{ value_json.message.info.place if value_json is defined else 'OK' }}"
@@ -203,7 +203,7 @@ sensor:
 ################################################################################
 template:
   # --- TRIGGER-BASIERTE SPEICHER-SENSOREN (Überleben Neustart) ---
-  - trigger:
+  - triggers:
       - platform: time_pattern
         minutes: "/5"
       - platform: homeassistant
@@ -220,7 +220,7 @@ template:
         attributes:
           data: >-
             {% set val = state_attr('sensor.solarprognose_api_source_dach', 'data') %}
-            {{ val if val is mapping else state_attr('this', 'data') }}
+            {{ val if val is mapping else state_attr(this.entity_id, 'data') }}
 
       - name: "Solarprognose Api Raw Fassade Stable"
         unique_id: solarprognose_api_raw_fassade_stable
@@ -229,9 +229,9 @@ template:
         attributes:
           data: >-
             {% set val = state_attr('sensor.solarprognose_api_source_fassade', 'data') %}
-            {{ val if val is mapping else state_attr('this', 'data') }}
+            {{ val if val is mapping else state_attr(this.entity_id, 'data') }}
 
-  - trigger:
+  - triggers:
       - platform: time_pattern
         minutes: "/5"
       - platform: homeassistant
@@ -248,7 +248,7 @@ template:
         attributes:
           result: >-
             {% set val = state_attr('sensor.forecastsolar_api_source_dach', 'result') %}
-            {{ val if val is mapping else state_attr('this', 'result') }}
+            {{ val if val is mapping else state_attr(this.entity_id, 'result') }}
 
       - name: "Forecastsolar API Raw Fassade Stable"
         unique_id: forecastsolar_api_raw_fassade_stable
@@ -257,7 +257,7 @@ template:
         attributes:
           result: >-
             {% set val = state_attr('sensor.forecastsolar_api_source_fassade', 'result') %}
-            {{ val if val is mapping else state_attr('this', 'result') }}
+            {{ val if val is mapping else state_attr(this.entity_id, 'result') }}
 
   # --- BERECHNUNGS-SENSOREN ---
   - sensor:
@@ -282,7 +282,7 @@ template:
         availability: "{{ is_number(states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute')) }}"
         state: "{{ states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute') | float(0) | round(1) }}"
 
-  - trigger:
+  - triggers:
       - platform: time_pattern
         minutes: "/5"
     sensor:
@@ -551,9 +551,11 @@ automation:
             - { id: "openmeteo" }
             - { id: "ml" }
           sequence:
+            - variables:
+                _save_entity: "input_number.pv_save_{{ repeat.item.id }}_morgens" # ← NEU
             - action: input_number.set_value
               target:
-                entity_id: "input_number.pv_save_{{ repeat.item.id }}_morgens"
+                entity_id: "{{ _save_entity }}" # ← GEÄNDERT
               data:
                 value: "{{ states('sensor.pv_forecast_' ~ repeat.item.id ~ '_alles') | float(0) }}"
 
@@ -651,34 +653,33 @@ automation:
                       value_template: "{{ obs_val | float(-1) >= 0 }}"
                   then:
                     - variables:
-                        # decay der scores: 0.987^(28Tage) = 69%
+                        _score_entity: "input_number.pv_kalman_score_{{ repeat.item.id }}" # ← NEU
+                        _p_entity: "input_number.pv_kalman_p_{{ repeat.item.id }}" # ← NEU
                         score_alt: "{{ states('input_number.pv_kalman_score_' ~ repeat.item.id) | float(1.0) * 0.987 }}"
-
                         P_alt: "{{ states('input_number.pv_kalman_p_' ~ repeat.item.id) | float(0.1) }}"
                         P_pred: "{{ P_alt + Q_w }}"
                         K: "{{ P_pred / (P_pred + R_w) }}"
-                        # FIX: | max(0.0001) – Score kann nicht negativ werden
                         score_neu: "{{ ([score_alt + K * (obs_val | float(0) - score_alt), 0.0001] | max) | round(5) }}"
                         P_neu: "{{ ((1 - K) * P_pred) | clamp(0.0001, 1.0) | round(5) }}"
                     - action: input_number.set_value
                       target:
-                        entity_id: "input_number.pv_kalman_score_{{ repeat.item.id }}"
+                        entity_id: "{{ _score_entity }}" # ← GEÄNDERT (war: "input_number.pv_kalman_score_{{ repeat.item.id }}")
                       data:
                         value: "{{ score_neu }}"
                     - action: input_number.set_value
                       target:
-                        entity_id: "input_number.pv_kalman_p_{{ repeat.item.id }}"
+                        entity_id: "{{ _p_entity }}" # ← GEÄNDERT (war: "input_number.pv_kalman_p_{{ repeat.item.id }}")
                       data:
                         value: "{{ P_neu }}"
 
           # ── 4. Normierte Gewichte berechnen & schreiben (Dashboard) ─────────
           - variables:
               total_score: >-
-                {{ [states('input_number.pv_kalman_score_solcast')      | float(0), 0] | max 
-                   + [states('input_number.pv_kalman_score_solarprognose') | float(0), 0] | max 
-                   + [states('input_number.pv_kalman_score_forecastsolar') | float(0), 0] | max 
-                   + [states('input_number.pv_kalman_score_openmeteo')     | float(0), 0] | max 
-                   + [states('input_number.pv_kalman_score_ml')            | float(0), 0] | max }}
+                {{ [states('input_number.pv_kalman_score_solcast')        | float(0), 0] | max
+                  + [states('input_number.pv_kalman_score_solarprognose') | float(0), 0] | max
+                  + [states('input_number.pv_kalman_score_forecastsolar') | float(0), 0] | max
+                  + [states('input_number.pv_kalman_score_openmeteo')     | float(0), 0] | max
+                  + [states('input_number.pv_kalman_score_ml')            | float(0), 0] | max }}
           - if:
               - condition: template
                 value_template: "{{ total_score > 0 }}"
@@ -691,9 +692,11 @@ automation:
                     - "openmeteo"
                     - "ml"
                   sequence:
+                    - variables:
+                        _weight_entity: "input_number.weight_{{ repeat.item }}" # ← NEU
                     - action: input_number.set_value
                       target:
-                        entity_id: "input_number.weight_{{ repeat.item }}"
+                        entity_id: "{{ _weight_entity }}" # ← GEÄNDERT (war: "input_number.weight_{{ repeat.item }}")
                       data:
                         value: >-
                           {{ ([states('input_number.pv_kalman_score_' ~ repeat.item) | float(0), 0] | max

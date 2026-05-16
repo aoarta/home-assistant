@@ -24,7 +24,7 @@ template:
         unique_id: takt
         device_class: timestamp
         state: >
-          {{ states('input_datetime.takt_anker') |  timestamp_utc  }}
+          {{ as_timestamp(states('input_datetime.takt_anker'), 0) | timestamp_utc }}
 
       - name: "Solar Zeit-Logik"
         unique_id: solar_zeit_logik
@@ -153,6 +153,7 @@ template:
         minutes: "/5"
       - platform: homeassistant
         event: start
+        offset: "00:00:15"
     sensor:
       - name: "Dynamic SOC"
         unique_id: dynamic_soc
