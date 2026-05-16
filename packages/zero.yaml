@@ -19,7 +19,7 @@ input_number:
     icon: mdi:battery-check
 
   zero_manueller_ladestrom:
-    name: "Manueller Ladestrom (0 = Automatik)"
+    name: "Manual Charging Current (0 = Automatic)"
     initial: 0
     min: 0
     max: 32
@@ -30,13 +30,13 @@ input_number:
 # --- TEMPLATES (SENSORS) ---
 template:
   - sensor:
-      - name: "Warp3 Berechnete Leistung"
+      - name: "Warp3 Calculated Power"
         unique_id: "warp3_calculated_power"
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
         state: >-
-          {# Wir nutzen den Zielwert (globalcurrent), damit die Berechnung sofort reagiert #}
+          {# We use the target value (globalcurrent) so the calculation reacts immediately #}
           {% if is_state('binary_sensor.warp3_2ita_cable', 'on') %}
             {% set current = states('number.warp3_2ita_globalcurrent') | float(0) %}
             {{ (current * 230) | round(0) }}
@@ -44,17 +44,17 @@ template:
             0
           {% endif %}
 
-  - trigger:
-      - platform: time_pattern
+  - triggers:
+      - trigger: time_pattern
         seconds: "/30"
-      - platform: state
+      - trigger: state
         entity_id:
           - sensor.warp3_2ita_powernow
           - sensor.solarnet_leistung_vom_netz
           - sensor.marstek_venus_1_ac_leistung
           - sensor.marstek_venus_2_ac_leistung
     sensor:
-      - name: "Zero Dynamischer Ladestrom"
+      - name: "Zero Dynamic Charging Current"
         unique_id: zero_dynamischer_ladestrom
         unit_of_measurement: "A"
         state_class: measurement
@@ -63,14 +63,14 @@ template:
           {% if cable_connected %}
             {% set charger_power = states('sensor.warp3_2ita_powernow') | float(0) %}
             {% set power_from_net = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
-            {# Batterie lädt < 0 #}
+            {# Battery charging < 0 #}
             {% set venus1 = states('sensor.marstek_venus_1_ac_leistung') | float(0) %}
             {% set venus2 = states('sensor.marstek_venus_2_ac_leistung') | float(0) %}
 
-            {# Überschussberechnung: es fehlt noch die batterieleistung #}
+            {# Surplus calculation: battery power included #}
             {% set surplus = charger_power - power_from_net - venus1 - venus2 %}
             {% set amps = (surplus / 230) | int(0) %}
-            
+
             {% if amps >= 6 %}
               {{ amps | clamp(6, 16) }}
             {% else %}
@@ -82,32 +82,32 @@ template:
 
 # --- AUTOMATIONS ---
 automation:
-  - alias: "Zero: PV-Überschuss Laden Dynamisch"
+  - alias: "Zero: Dynamic PV Surplus Charging"
     id: zero_pv_dynamic_charging
     mode: restart
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: sensor.zero_dynamischer_ladestrom
         for:
-          seconds: 5 # Entschärfung bei Schwankungen
-      - platform: state
+          seconds: 5 # Debounce for fluctuations
+      - trigger: state
         entity_id: input_number.zero_manueller_ladestrom
-      - platform: state
+      - trigger: state
         entity_id: sensor.zero_motorcycles_1037976_soc
         for:
-          seconds: 10 # SOC ändert sich langsam
-      - platform: state
+          seconds: 10 # SOC changes slowly
+      - trigger: state
         entity_id: binary_sensor.warp3_2ita_cable
         to: "on"
-      - platform: time_pattern
-        minutes: "/2" # Fallback: alle 30 s prüfen
+      - trigger: time_pattern
+        minutes: "/2" # Fallback: check every 2 minutes
 
-    condition:
+    conditions:
       - condition: state
         entity_id: binary_sensor.warp3_2ita_cable
         state: "on"
 
-    action:
+    actions:
       - variables:
           soc: "{{ states('sensor.zero_motorcycles_1037976_soc') | float(0) }}"
           manual_amps: "{{ states('input_number.zero_manueller_ladestrom') | int(0) }}"
@@ -118,7 +118,7 @@ automation:
           is_charging: "{{ is_state('binary_sensor.warp3_2ita_charging', 'on') | bool }}"
 
       - choose:
-          # --- MODUS A: MANUELLER LADESTROM (Priorität) ---
+          # --- MODE A: MANUAL CHARGING CURRENT (priority) ---
           - conditions:
               - "{{ manual_amps | int(0) >= 6 }}"
               - "{{ soc | float(0) < stop_limit | float(100) }}"
@@ -152,14 +152,14 @@ automation:
                 data:
                   value: 0
 
-          # --- MODUS B: PV-AUTOMATIK (wenn manuell auf 0 steht) ---
+          # --- MODE B: PV AUTOMATIC (when manual is set to 0) ---
           - conditions:
               - "{{ manual_amps | int(0) == 0 }}"
-              - "{{ soc | int(0) < stop_limit | int(0)}}"
+              - "{{ soc | int(0) < stop_limit | int(0) }}"
               - "{{ is_charging or soc | int(0) < start_limit | int(0) }}"
             sequence:
               - choose:
-                  # START oder ANPASSUNG
+                  # START or ADJUST
                   - conditions:
                       - "{{ pv_amps | int(0) >= 6 }}"
                       - "{{ soc | int(0) < stop_limit | int(0) }}"
@@ -179,7 +179,7 @@ automation:
                             target:
                               entity_id: button.warp3_2ita_startcharge
 
-                  # STOPP (Limit erreicht oder zu wenig Sonne)
+                  # STOP (limit reached or insufficient solar)
                   - conditions:
                       - "{{ is_charging }}"
                       - "{{ soc | int(0) >= stop_limit | int(0) or pv_amps | int(0) < 6 }}"
@@ -188,18 +188,18 @@ automation:
                         target:
                           entity_id: button.warp3_2ita_stopcharge
 
-  - alias: "Zero: Korrigiere manuellen Ladestrom"
+  - alias: "Zero: Correct Manual Charging Current"
     id: zero_korrigiere_manuellen_ladestrom
     mode: restart
-    trigger:
-      - platform: state
+    triggers:
+      - trigger: state
         entity_id: input_number.zero_manueller_ladestrom
-    condition:
+    conditions:
       - condition: numeric_state
         entity_id: input_number.zero_manueller_ladestrom
         above: 0
         below: 6
-    action:
+    actions:
       - action: input_number.set_value
         target:
           entity_id: input_number.zero_manueller_ladestrom

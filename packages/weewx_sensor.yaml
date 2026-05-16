@@ -1,6 +1,6 @@
 mqtt:
   sensor:
-    - name: "Außentemperatur"
+    - name: "Outdoor Temperature"
       unique_id: ws_out_temp
       state_topic: "weather/loop"
       expire_after: 600
@@ -10,10 +10,10 @@ mqtt:
       state_class: measurement
       device: &ws_device
         identifiers: "wetterstation_mqtt_01"
-        name: "Wetterstation"
+        name: "Weather Station"
         model: "WeeWX / MQTT Gateway"
 
-    - name: "Luftfeuchtigkeit"
+    - name: "Humidity"
       unique_id: ws_out_hum
       state_topic: "weather/loop"
       expire_after: 600
@@ -23,7 +23,7 @@ mqtt:
       state_class: measurement
       device: *ws_device
 
-    - name: "Luftdruck"
+    - name: "Barometric Pressure"
       unique_id: ws_pressure
       state_topic: "weather/loop"
       expire_after: 600
@@ -33,7 +33,7 @@ mqtt:
       state_class: measurement
       device: *ws_device
 
-    - name: "Windgeschwindigkeit"
+    - name: "Wind Speed"
       unique_id: ws_wind_speed
       state_topic: "weather/loop"
       expire_after: 600
@@ -43,7 +43,7 @@ mqtt:
       state_class: measurement
       device: *ws_device
 
-    - name: "Windböen"
+    - name: "Wind Gusts"
       unique_id: ws_wind_gust
       state_topic: "weather/loop"
       expire_after: 600
@@ -53,7 +53,7 @@ mqtt:
       state_class: measurement
       device: *ws_device
 
-    - name: "Windrichtung"
+    - name: "Wind Direction"
       unique_id: ws_wind_dir
       state_topic: "weather/loop"
       expire_after: 600
@@ -62,7 +62,7 @@ mqtt:
       icon: "mdi:compass"
       device: *ws_device
 
-    - name: "Regenrate"
+    - name: "Rain Rate"
       unique_id: ws_rain_rate
       state_topic: "weather/loop"
       expire_after: 600
@@ -72,7 +72,7 @@ mqtt:
       state_class: measurement
       device: *ws_device
 
-    - name: "Regen heute"
+    - name: "Rain Today"
       unique_id: ws_rain_day
       state_topic: "weather/loop"
       expire_after: 600
@@ -82,7 +82,7 @@ mqtt:
       state_class: total_increasing
       device: *ws_device
 
-    - name: "Regen letzte 24 Stunden"
+    - name: "Rain Last 24 Hours"
       unique_id: ws_rain_24h
       state_topic: "weather/loop"
       expire_after: 600
@@ -92,7 +92,7 @@ mqtt:
       state_class: total_increasing
       device: *ws_device
 
-    - name: "Solarstrahlung"
+    - name: "Solar Radiation"
       unique_id: ws_solar_rad
       state_topic: "weather/loop"
       expire_after: 600
@@ -111,7 +111,7 @@ mqtt:
       state_class: measurement
       device: *ws_device
 
-    - name: "Taupunkt"
+    - name: "Dew Point"
       unique_id: ws_dewpoint
       state_topic: "weather/loop"
       expire_after: 600
@@ -121,7 +121,7 @@ mqtt:
       state_class: measurement
       device: *ws_device
 
-    - name: "Gefühlte Temperatur"
+    - name: "Apparent Temperature"
       unique_id: ws_app_temp
       state_topic: "weather/loop"
       expire_after: 600
@@ -131,7 +131,7 @@ mqtt:
       state_class: measurement
       device: *ws_device
 
-    - name: "Wolkenuntergrenze"
+    - name: "Cloud Base"
       unique_id: ws_cloudbase
       state_topic: "weather/loop"
       expire_after: 600
@@ -140,7 +140,7 @@ mqtt:
       icon: "mdi:weather-cloudy"
       device: *ws_device
 
-    - name: "Verdunstung (ET)"
+    - name: "Evapotranspiration (ET)"
       unique_id: ws_evapotranspiration
       state_topic: "weather/loop"
       expire_after: 600
@@ -150,7 +150,7 @@ mqtt:
       state_class: total_increasing
       device: *ws_device
 
-    - name: "Innentemperatur"
+    - name: "Indoor Temperature"
       unique_id: ws_in_temp
       state_topic: "weather/loop"
       expire_after: 600

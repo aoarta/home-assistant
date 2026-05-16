@@ -7,7 +7,7 @@ input_number:
   pv_forecast_bias_korrekturfaktor:
     name: "Forecast Bias Korrekturfaktor"
     min: 0.5
-    max: 1.5 # FIX: war 100 – Kalman klemmt auf [0.6, 1.4], max 1.5 ist sinnvoll
+    max: 1.5 # FIX: war 100 – Kalman klemmt auf [0.6, 1.5], max 1.5 ist sinnvoll
     #initial: 1.00
     step: 0.0001 # FIX: war 0.001 bei max 100 – jetzt passend zu max 1.5
 
@@ -587,7 +587,7 @@ automation:
               messung_bias: "{{ real | float(0) / forecast_heute | float(0) }}"
               P_bias_pred: "{{ P_bias_alt + Q_bias }}"
               K_bias: "{{ P_bias_pred / (P_bias_pred + R_bias) }}"
-              bias_neu: "{{ (bias_alt + K_bias * (messung_bias - bias_alt)) | clamp(0.6, 1.4) | round(4) }}"
+              bias_neu: "{{ (bias_alt + K_bias * (messung_bias - bias_alt)) | clamp(0.6, 1.5) | round(4) }}"
               P_bias_neu: "{{ ((1 - K_bias) * P_bias_pred) | clamp(0.0001, 1.0) | round(5) }}"
           - action: input_number.set_value
             target:
