@@ -1,10 +1,10 @@
 ################################################################################
-# 1. ZENTRALE PARAMETER (Single Source of Truth)
+# 1. CENTRAL PARAMETERS (Single Source of Truth)
 ################################################################################
 
 template:
   - sensor:
-      - name: "Zentrale Parameter"
+      - name: "Central Parameters"
         unique_id: zentrale_parameter
         state: "OK"
         attributes:
@@ -15,7 +15,7 @@ template:
           # batteries: capacity
           venus_capacity_wh: 5120
           ups_capacity_wh: 2200
-          # batteries: own consumtion
+          # batteries: own consumption
           venus_own_consumption_h: 9
           ups_own_consumption_h: 22
           # battery care

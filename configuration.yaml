@@ -1,4 +1,4 @@
-# Grundkonfiguration
+# Base configuration
 default_config:
 
 frontend:
@@ -32,7 +32,7 @@ recorder:
   db_url: mysql://homeassistant:homeassistant@core-mariadb/homeassistant?charset=utf8mb4
   include:
     entities:
-      # dein täglicher PV-Produktionssensor:
+      # your daily PV production sensor:
       - sensor.pv_forecast_weighted
       - sensor.pv_forecast_weighted_morgen
       - sensor.solar_forecast_ml_planungsprognose_p10_blend
@@ -80,22 +80,22 @@ recorder:
       - sensor.*energy_factor*
 
 sql:
-  - name: "DB Top 10 Schreiber"
+  - name: "DB Top 10 Writers"
     query: >
-      SELECT 
-          m.entity_id, 
-          COUNT(*) AS anzahl 
+      SELECT
+          m.entity_id,
+          COUNT(*) AS count
       FROM states s
       JOIN states_meta m ON s.metadata_id = m.metadata_id
       WHERE s.last_updated_ts >= UNIX_TIMESTAMP(NOW() - INTERVAL 15 MINUTE)
       GROUP BY s.metadata_id
-      ORDER BY anzahl DESC
+      ORDER BY count DESC
       LIMIT 10;
     column: "entity_id"
 
 command_line:
   - sensor:
-      name: "CPU Aktuelle Geschwindigkeit"
+      name: "CPU Current Speed"
       unique_id: cpu_current_speed_mhz
       command: "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq"
       unit_of_measurement: "MHz"
@@ -103,10 +103,9 @@ command_line:
       scan_interval: 60
 
   - sensor:
-      name: "CPU Maximale Geschwindigkeit"
+      name: "CPU Maximum Speed"
       unique_id: cpu_max_speed_mhz
       command: "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"
       unit_of_measurement: "MHz"
       value_template: "{{ (value | float / 1000) | round(0) }}"
-      scan_interval: 86400 # Reicht einmal am Tag
-
+      scan_interval: 86400 # Once per day is sufficient

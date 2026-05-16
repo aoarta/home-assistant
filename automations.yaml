@@ -1,5 +1,5 @@
-- alias: Venus Steuermodus einschalten (30 Min nach Sonnenaufgang)
-  description: Schaltet die Marstek Venus Switches 30 Minuten nach Sonnenaufgang ein.
+- alias: "Venus Control Mode Enable (30 Min After Sunrise)"
+  description: "Enables the Marstek Venus control mode switches 30 minutes after sunrise."
   id: "1773505418790"
   triggers:
     - trigger: sun
@@ -12,8 +12,9 @@
           - switch.marstek_venus1_modbus_rs485_steuermodus
           - switch.marstek_venus2_modbus_rs485_steuermodus
   mode: single
-- alias: setze cpu-schedutil
-  description: Setze CPU auf schedutil
+
+- alias: "Set CPU Schedutil"
+  description: "Set CPU governor to schedutil"
   triggers:
     - trigger: homeassistant
       event: start
@@ -24,7 +25,7 @@
   mode: single
   id: 2ec11fc5fd5147ca9a2ab304ef7b4b8c
 
-- alias: "Tasmota: Globales Setup an alle"
+- alias: "Tasmota: Global Setup Broadcast"
   id: tasmota_global_broadcast
   triggers:
     - trigger: homeassistant
@@ -41,18 +42,18 @@
           | round(6) %} Latitude {{ lat }}; Longitude {{ lon }}; PowerDelta 110; WattRes
           1; TelePeriod 15; Sunrise 1"
 
-- alias: "Batterie Wartung: Nachtladung erzwingen"
+- alias: "Battery Maintenance: Force Night Charge"
   id: batterie_wartung_nachtladung
   triggers:
     - trigger: sun
       event: sunset
-      offset: "00:05:00" # hier am abend oder in der nacht starten
+      offset: "00:05:00" # start in the evening or at night
     - trigger: state
-      entity_id: binary_sensor.batterie_wartung_erforderlich
+      entity_id: binary_sensor.battery_maintenance_required
       to: "on"
   conditions:
     - condition: state
-      entity_id: binary_sensor.batterie_wartung_erforderlich
+      entity_id: binary_sensor.battery_maintenance_required
       state: "on"
     - condition: sun
       after: sunset
@@ -63,7 +64,7 @@
       data:
         value: 1000.0
 
-- alias: "Batterie Wartung: Beenden wenn voll"
+- alias: "Battery Maintenance: Stop When Full"
   id: batterie_wartung_beenden
   triggers:
     - trigger: numeric_state
@@ -72,11 +73,11 @@
         - sensor.marstek_venus_2_batterie_ladezustand
       above: 99
   conditions:
-    # Nur ausführen, wenn die manuelle Ladung gerade aktiv ist
+    # Only run if manual charging is currently active
     - condition: numeric_state
       entity_id: input_number.manuelle_ladeleistung
       above: 0
-    # Sicherstellen, dass BEIDE Batterien voll sind, bevor wir abschalten
+    # Ensure BOTH batteries are full before stopping
     - condition: numeric_state
       entity_id: sensor.marstek_venus_1_batterie_ladezustand
       above: 99
@@ -84,13 +85,13 @@
       entity_id: sensor.marstek_venus_2_batterie_ladezustand
       above: 99
   actions:
-    # 1. Ladeleistung wieder auf 0 setzen
+    # 1. Reset charging power to 0
     - action: input_number.set_value
       target:
         entity_id: input_number.manuelle_ladeleistung
       data:
         value: 0
-    # 2. Wartung "löschen" (Zeitstempel auf JETZT setzen)
+    # 2. Clear maintenance flag (set timestamp to NOW)
     - action: input_datetime.set_datetime
       target:
         entity_id:
@@ -99,10 +100,10 @@
       data:
         timestamp: "{{ now().timestamp() }}"
 
-- alias: SOC Override bedarfsgesteuert
-  description:
-    Setzt den Override auf AN, wenn eine der Batterien seit über 5 Tagen
-    nicht voll war, sonst auf AUS
+- alias: "SOC Override Demand-Controlled"
+  description: >
+    Sets Override to ON if any battery has not been full for over 5 days,
+    otherwise sets it OFF.
   id: soc_override_weekly_control
   triggers:
     - trigger: time_pattern
@@ -117,7 +118,7 @@
                 {% set days = state_attr('sensor.zentrale_parameter', 'override_soc_days') | float(5) %}
                 {% set threshold = days * 86400 %}
                 {% set now_ts = as_timestamp(now()) %}
-                {# Verwende 0 statt 9999999, um Fehlschaltungen bei Nichtverfügbarkeit zu vermeiden #}
+                {# Use 0 instead of 9999999 to avoid false triggers when unavailable #}
                 {% set ages = [
                   (now_ts - as_timestamp(states('input_datetime.venus_1_last_full'), 0)) if has_value('input_datetime.venus_1_last_full') else 0,
                   (now_ts - as_timestamp(states('input_datetime.venus_2_last_full'), 0)) if has_value('input_datetime.venus_2_last_full') else 0,

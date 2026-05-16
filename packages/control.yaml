@@ -1,12 +1,12 @@
 # packages/control.yaml
 
 #########
-## Die Control-Logik: Das Setzen des dynamischen SOC
+## The Control Logic: Setting the Dynamic SOC
 #########
 
 input_boolean:
   override_soc:
-    name: "Manueller SOC Override"
+    name: "Manual SOC Override"
     icon: mdi:battery-lock
 
 input_number:
@@ -16,19 +16,19 @@ input_number:
     step: 1
 
 input_datetime:
-  takt_anker:
+  takt_base:
     has_date: true
     has_time: true
 
 template:
   - sensor:
-      - name: "Takt"
+      - name: "Tick"
         unique_id: takt
         device_class: timestamp
         state: >
-          {{ as_timestamp(states('input_datetime.takt_anker'), 0) | timestamp_utc }}
+          {{ as_timestamp(states('input_datetime.takt_base'), 0) | timestamp_utc }}
 
-      - name: "Solar Zeit-Logik"
+      - name: "Solar Time Logic"
         unique_id: solar_zeit_logik
         availability: "{{ state_attr('sun.sun', 'next_setting') is not none }}"
         state: >-
@@ -37,7 +37,7 @@ template:
           {% set sr = as_timestamp(state_attr('sun.sun', 'next_rising')) | default(0) %}
           {% set today_sr = sr - 86400 if sr > ts else sr %}
           {% set today_ss = ss - 86400 if ss > as_timestamp(now().replace(hour=23, minute=59)) else ss %}
-          {{ 'Tag' if today_sr <= ts <= today_ss else 'Nacht' }}
+          {{ 'Day' if today_sr <= ts <= today_ss else 'Night' }}
         attributes:
           now_ts: "{{ as_timestamp(now()) }}"
           sun_rise: "{{ as_timestamp(state_attr('sun.sun', 'next_rising')) - 86400 if as_timestamp(state_attr('sun.sun', 'next_rising')) > as_timestamp(now()) else as_timestamp(state_attr('sun.sun', 'next_rising')) }}"
@@ -47,7 +47,7 @@ template:
             {% set ss = as_timestamp(state_attr('sun.sun', 'next_setting')) %}
             {{ (ss - 86400 if ss > as_timestamp(now().replace(hour=23, minute=59)) else ss) - 3*3600 }}
 
-      - name: "Dynamic SOC Grenzen"
+      - name: "Dynamic SOC Limits"
         unique_id: dynamic_soc_grenzen
         state: "OK"
         attributes:
@@ -57,7 +57,7 @@ template:
           high: "85"
           max: "100.5"
 
-      - name: "Batterieleistung gesamt"
+      - name: "Total Battery Power"
         unique_id: batterieleistung_gesamt
         unit_of_measurement: "W"
         device_class: power
@@ -68,15 +68,15 @@ template:
           {% set ups = states('sensor.ups_ac_leistung') | float(0) %}
           {{ (venus1 + venus2 + ups) | round(0) }}
 
-  # 2. Trigger-basierte Sensoren
-  - trigger:
-      - platform: time_pattern
+  # 2. Trigger-based sensors
+  - triggers:
+      - trigger: time_pattern
         minutes: "/2"
-      - platform: state
+      - trigger: state
         entity_id:
           - input_number.manuelle_ladeleistung
           - input_boolean.override_soc
-          - binary_sensor.batterie_wartung_erforderlich
+          - binary_sensor.battery_maintenance_required
           - sensor.pv_forecast_weighted
           - sensor.pv_forecast_weighted_morgen
           - sensor.pv_forecast_ml_ubermorgen
@@ -87,15 +87,15 @@ template:
           - sensor.hausverbrauch_energie_heute
           - sensor.dynamic_soc
     sensor:
-      - name: "Rest PV Heute"
+      - name: "Remaining PV Today"
         unique_id: rest_pv_heute
-        unit_of_measurement: "kWh" # Falls deine Sensoren Wh liefern, hier anpassen
+        unit_of_measurement: "kWh"
         state: >-
           {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}
           {% set pv_ertrag_heute = states('sensor.pv_ertrag_heute_um') | float(0) %}
           {{ ([0, pv_forecast_today - pv_ertrag_heute] | max) | round(2) }}
 
-      - name: "Rest Verbrauch Heute"
+      - name: "Remaining Consumption Today"
         unique_id: rest_verbrauch_heute
         unit_of_measurement: "kWh"
         state: >-
@@ -111,7 +111,7 @@ template:
             101
           {% elif states('input_number.manuelle_ladeleistung') | float(0) > 0 %}
             110
-          {% elif is_state('binary_sensor.batterie_wartung_erforderlich', 'on') %}
+          {% elif is_state('binary_sensor.battery_maintenance_required', 'on') %}
             120
           {% else %}
             {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}
@@ -120,45 +120,45 @@ template:
             {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
             {% set hausverbrauch_heute = states('sensor.hausverbrauch_energie_heute') | float(0) %}
 
-            {# Variablen für Morgen #}
+            {# Variables for tomorrow #}
             {% set pv_forecast_tomorrow = states('sensor.pv_forecast_weighted_morgen') | float(0) %}
             {% set expected_daily_consumption_tomorrow = states('sensor.expected_daily_consumption_tomorrow') | float(expected_daily_consumption) %}
 
-            {# Variablen für Übermorgen #}
+            {# Variables for the day after tomorrow #}
             {% set pv_forecast_uebermorgen = states('sensor.pv_forecast_ml_ubermorgen') | float(0) %}
             {% set expected_daily_consumption_uebermorgen = states('sensor.expected_daily_consumption_day_after') | float(expected_daily_consumption) %}
 
-            {# Berechnung der Restwerte für heute (nicht kleiner als 0) #}
+            {# Calculate remaining values for today (not less than 0) #}
             {% set rest_pv_heute = ([0, pv_forecast_today - pv_ertrag_heute] | max) %}
             {% set rest_verbrauch_heute = ([0, expected_daily_consumption - hausverbrauch_heute] | max) %}
 
-            {# Summen-Check #}
+            {# 3-day totals check #}
             {% set sum_pv_3tage = rest_pv_heute + pv_forecast_tomorrow + pv_forecast_uebermorgen %}
             {% set sum_verbrauch_3tage = rest_verbrauch_heute + expected_daily_consumption_tomorrow + expected_daily_consumption_uebermorgen %}
 
             {% if sum_pv_3tage < sum_verbrauch_3tage %}
-              {# Wenn die nächsten 3 Tage insgesamt nicht reichen #}
+              {# Next 3 days are not sufficient overall #}
               133
             {% elif pv_forecast_tomorrow < expected_daily_consumption_tomorrow %}
-              {# Wenn morgen alleine nicht reicht #}
+              {# Tomorrow alone is not sufficient #}
               131
             {% elif rest_pv_heute < rest_verbrauch_heute %}
-              {# Wenn der heutige Rest-Tag nicht reicht #}
+              {# Remaining part of today is not sufficient #}
               130
             {% else %}
               {{ states('sensor.dynamic_soc') | default(10, true) }}
             {% endif %}
           {% endif %}
 
-  - trigger:
-      - platform: time_pattern
+  - triggers:
+      - trigger: time_pattern
         minutes: "/2"
     sensor:
       - name: "Dynamic SOC"
         unique_id: dynamic_soc
         unit_of_measurement: "%"
         state: >-
-          {% set ts = as_timestamp(now()) %} 
+          {% set ts = as_timestamp(now()) %}
           {% set s_rise = state_attr('sensor.solar_zeit_logik', 'sun_rise') | float(0) %}
           {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
           {% set b_set = state_attr('sensor.solar_zeit_logik', 'b_set') | float(0) %}
@@ -177,47 +177,48 @@ template:
           {% endif %}
 
   - binary_sensor:
-      - name: "Batterie Wartung Erforderlich"
-        unique_id: batterie_wartung_erforderlich
+      - name: "Battery Maintenance Required"
+        unique_id: battery_maintenance_required
         state: >-
           {% set v1_last = states('input_datetime.venus_1_last_full') %}
           {% set v2_last = states('input_datetime.venus_2_last_full') %}
           {% set ups_last = states('input_datetime.ups_last_full') %}
 
           {% set days = state_attr('sensor.zentrale_parameter', 'battery_care_days') | float(5) %}
-          {% set threshold = days * 86400 %} {# in Sekunden #}
+          {% set threshold = days * 86400 %} {# in seconds #}
           {% set now_ts = as_timestamp(now()) %}
 
-          {# Fallback auf 0 Sekunden gesetzt, um Fehlauslösungen bei Neustarts/Verbindungsabbrüchen zu vermeiden. Zudem as_timestamp mit Default-Wert (now_ts) abgesichert. #}
+          {# Fallback to 0 to avoid false triggers on restarts/connection drops.
+             as_timestamp also secured with default value (now_ts). #}
           {% set v1_age = (now_ts - as_timestamp(v1_last, now_ts)) if has_value('input_datetime.venus_1_last_full') else 0 %}
           {% set v2_age = (now_ts - as_timestamp(v2_last, now_ts)) if has_value('input_datetime.venus_2_last_full') else 0 %}
           {% set ups_age = (now_ts - as_timestamp(ups_last, now_ts)) if has_value('input_datetime.ups_last_full') else 0 %}
 
           {{ v1_age > threshold or v2_age > threshold or ups_age > threshold }}
         attributes:
-          # Hier ebenfalls as_timestamp mit Default (0) versehen, um Log-Fehler zu vermeiden
-          v1_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.venus_1_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.venus_1_last_full') else '?' }}"
-          v2_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.venus_2_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.venus_2_last_full') else '?' }}"
-          ups_tage: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.ups_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.ups_last_full') else '?' }}"
+          # as_timestamp also secured with default (0) here to avoid log errors
+          v1_days: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.venus_1_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.venus_1_last_full') else '?' }}"
+          v2_days: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.venus_2_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.venus_2_last_full') else '?' }}"
+          ups_days: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.ups_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.ups_last_full') else '?' }}"
 
 automation:
-  - alias: "Takt Engine"
+  - alias: "Tick Engine"
     mode: single
 
-    trigger:
-      - platform: time_pattern
+    triggers:
+      - trigger: time_pattern
         seconds: "/1"
 
-    condition:
+    conditions:
       - condition: template
         value_template: >
-          {% set interval = states('input_number.takt_interval_sekunden')|int(10) %}
-          {% set last = as_timestamp(states('input_datetime.takt_anker')) %}
+          {% set interval = states('input_number.takt_interval_sekunden') | int(10) %}
+          {% set last = as_timestamp(states('input_datetime.takt_base')) %}
           {{ as_timestamp(now()) - last >= interval }}
 
-    action:
-      - service: input_datetime.set_datetime
+    actions:
+      - action: input_datetime.set_datetime
         target:
-          entity_id: input_datetime.takt_anker
+          entity_id: input_datetime.takt_base
         data:
           datetime: "{{ now().isoformat() }}"
