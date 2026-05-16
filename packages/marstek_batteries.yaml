@@ -612,7 +612,7 @@ automation:
                 data: { value: "{{ v2_entladen }}" }
 
   # ==========================================================
-  # Venus Last Full Zeitstempel (Korrigiert)
+  # Marstek: Last Full Zeitstempel
   # ==========================================================
 
   - alias: "Marstek: Zeitstempel Batterie voll aktualisieren"
@@ -629,9 +629,11 @@ automation:
         for: "00:01:00"
         id: "venus2"
     actions:
+      - variables:
+          ziel: "input_datetime.{{ trigger.id }}_last_full"
       - action: input_datetime.set_datetime
         target:
-          entity_id: "input_datetime.{{ trigger.id }}_last_full"
+          entity_id: "{{ ziel }}"
         data:
           timestamp: "{{ now().timestamp() }}"
 
