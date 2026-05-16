@@ -27,23 +27,29 @@ input_number:
     unit_of_measurement: "A"
     icon: mdi:car-speed-limiter
 
+# --- INPUT DATETIME ---
+input_datetime:
+  zero_last_charge_start:
+    name: "Zero Last Charge Start"
+    has_date: true
+    has_time: true
+
+  zero_last_automation_action:
+    name: "Zero Last Automation Action"
+    # Timestamp of the last start/stop action *initiated by the automation itself*.
+    # Used to distinguish automation-triggered from user-triggered charging state changes.
+    has_date: true
+    has_time: true
+
+  zero_user_override_until:
+    name: "Zero User Override Until"
+    # While now() < this timestamp, the automation is paused (user is in control).
+    # Cleared when the cable is unplugged.
+    has_date: true
+    has_time: true
+
 # --- TEMPLATES (SENSORS) ---
 template:
-  - sensor:
-      - name: "Warp3 Calculated Power"
-        unique_id: "warp3_calculated_power"
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        state: >-
-          {# We use the target value (globalcurrent) so the calculation reacts immediately #}
-          {% if is_state('binary_sensor.warp3_2ita_cable', 'on') %}
-            {% set current = states('number.warp3_2ita_globalcurrent') | float(0) %}
-            {{ (current * 230) | round(0) }}
-          {% else %}
-            0
-          {% endif %}
-
   - triggers:
       - trigger: time_pattern
         seconds: "/30"
@@ -57,31 +63,51 @@ template:
       - name: "Zero Dynamic Charging Current"
         unique_id: zero_dynamischer_ladestrom
         unit_of_measurement: "A"
+        device_class: current
         state_class: measurement
         state: >-
           {% set cable_connected = is_state('binary_sensor.warp3_2ita_cable', 'on') %}
-          {% if cable_connected %}
+          {% if not cable_connected %}
+            0
+          {% else %}
+            {# Sign conventions:
+               - charger_power: positive = consumption
+               - power_from_net: positive = grid import, negative = grid export
+               - venus1/2: positive = discharging, negative = charging
+               True PV surplus available for the wallbox (battery treated as flexible):
+                 surplus = charger_power - power_from_net - venus1 - venus2
+            #}
             {% set charger_power = states('sensor.warp3_2ita_powernow') | float(0) %}
             {% set power_from_net = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
-            {# Battery charging < 0 #}
             {% set venus1 = states('sensor.marstek_venus_1_ac_leistung') | float(0) %}
             {% set venus2 = states('sensor.marstek_venus_2_ac_leistung') | float(0) %}
 
-            {# Surplus calculation: battery power included #}
             {% set surplus = charger_power - power_from_net - venus1 - venus2 %}
-            {% set amps = (surplus / 230) | int(0) %}
+            {% set amps = (surplus / 230) | round(0, 'floor') | int %}
 
             {% if amps >= 6 %}
-              {{ amps | clamp(6, 16) }}
+              {{ [[amps, 6] | max, 16] | min }}
             {% else %}
               0
             {% endif %}
+          {% endif %}
+
+      - name: "Zero User Override Active"
+        unique_id: zero_user_override_active
+        # Helper sensor: true while the user-override window is still in the future
+        state: >-
+          {% set until = states('input_datetime.zero_user_override_until') %}
+          {% if until in ['unknown', 'unavailable', none] %}
+            false
           {% else %}
-            0
+            {{ as_datetime(until) > now() }}
           {% endif %}
 
 # --- AUTOMATIONS ---
 automation:
+  # ============================================================
+  # Main automation: PV-driven charging logic
+  # ============================================================
   - alias: "Zero: Dynamic PV Surplus Charging"
     id: zero_pv_dynamic_charging
     mode: restart
@@ -89,9 +115,11 @@ automation:
       - trigger: state
         entity_id: sensor.zero_dynamischer_ladestrom
         for:
-          seconds: 5 # Debounce for fluctuations
+          seconds: 30 # only react to surplus changes that are stable for 30s
       - trigger: state
         entity_id: input_number.zero_manueller_ladestrom
+        for:
+          seconds: 2 # debounce slider drags
       - trigger: state
         entity_id: sensor.zero_motorcycles_1037976_soc
         for:
@@ -99,32 +127,52 @@ automation:
       - trigger: state
         entity_id: binary_sensor.warp3_2ita_cable
         to: "on"
-      - trigger: time_pattern
-        minutes: "/2" # Fallback: check every 2 minutes
+      - trigger: state
+        entity_id: sensor.zero_user_override_active
+        to: "false"
+        # When the override expires, re-evaluate immediately
 
     conditions:
       - condition: state
         entity_id: binary_sensor.warp3_2ita_cable
         state: "on"
+      # Respect user override window
+      - condition: state
+        entity_id: sensor.zero_user_override_active
+        state: "false"
+
+    variables:
+      # Tunables — adjust here without touching the logic
+      adjust_threshold_amps: 2 # only re-set current if delta >= this many amps
+      min_charge_runtime_seconds: 180 # wallbox must run at least 3 min before auto-stopping
+      startcharge_delay_ms: 500 # let the wallbox process set_value before pressing start
 
     actions:
       - variables:
-          soc: "{{ states('sensor.zero_motorcycles_1037976_soc') | float(0) }}"
+          soc: "{{ states('sensor.zero_motorcycles_1037976_soc') | int(0) }}"
           manual_amps: "{{ states('input_number.zero_manueller_ladestrom') | int(0) }}"
           pv_amps: "{{ states('sensor.zero_dynamischer_ladestrom') | int(0) }}"
-          stop_limit: "{{ states('input_number.zero_ladung_stop_soc') | float(100) }}"
-          start_limit: "{{ states('input_number.zero_ladung_start_soc') | float(100) }}"
+          stop_limit: "{{ states('input_number.zero_ladung_stop_soc') | int(100) }}"
+          start_limit: "{{ states('input_number.zero_ladung_start_soc') | int(60) }}"
           current_wb_target: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
-          is_charging: "{{ is_state('binary_sensor.warp3_2ita_charging', 'on') | bool }}"
+          is_charging: "{{ is_state('binary_sensor.warp3_2ita_charging', 'on') }}"
+          last_start_raw: "{{ states('input_datetime.zero_last_charge_start') }}"
+          seconds_since_start: >-
+            {% if last_start_raw in ['unknown', 'unavailable', none] %}
+              99999
+            {% else %}
+              {{ (now() - as_datetime(last_start_raw)).total_seconds() | int }}
+            {% endif %}
+          min_runtime_reached: "{{ seconds_since_start >= min_charge_runtime_seconds }}"
 
       - choose:
-          # --- MODE A: MANUAL CHARGING CURRENT (priority) ---
+          # --- MODE A1: MANUAL CHARGING — active and below stop limit ---
           - conditions:
-              - "{{ manual_amps | int(0) >= 6 }}"
-              - "{{ soc | float(0) < stop_limit | float(100) }}"
+              - "{{ manual_amps >= 6 }}"
+              - "{{ soc < stop_limit }}"
             sequence:
               - if:
-                  - "{{ manual_amps | int(0) != current_wb_target | int(0) }}"
+                  - "{{ (manual_amps - current_wb_target) | abs >= adjust_threshold_amps }}"
                 then:
                   - action: number.set_value
                     target:
@@ -134,38 +182,59 @@ automation:
               - if:
                   - "{{ not is_charging }}"
                 then:
+                  - delay:
+                      milliseconds: "{{ startcharge_delay_ms }}"
+                  # Mark this as automation-initiated BEFORE pressing the button,
+                  # so the detector ignores the resulting state change.
+                  - action: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.zero_last_automation_action
+                    data:
+                      timestamp: "{{ now().timestamp() }}"
                   - action: button.press
                     target:
                       entity_id: button.warp3_2ita_startcharge
+                  - action: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.zero_last_charge_start
+                    data:
+                      timestamp: "{{ now().timestamp() }}"
 
+          # --- MODE A2: MANUAL CHARGING — stop limit reached ---
           - conditions:
-              - "{{ manual_amps | int(0) >= 6 }}"
-              - "{{ soc | int(0) >= stop_limit | int(0) }}"
+              - "{{ manual_amps >= 6 }}"
+              - "{{ soc >= stop_limit }}"
               - "{{ is_charging }}"
             sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.zero_last_automation_action
+                data:
+                  timestamp: "{{ now().timestamp() }}"
               - action: button.press
                 target:
                   entity_id: button.warp3_2ita_stopcharge
+              # Reset manual to 0 -> falls back to PV auto mode next time
               - action: input_number.set_value
                 target:
                   entity_id: input_number.zero_manueller_ladestrom
                 data:
                   value: 0
 
-          # --- MODE B: PV AUTOMATIC (when manual is set to 0) ---
+          # --- MODE B: PV AUTOMATIC (when manual is 0) ---
           - conditions:
-              - "{{ manual_amps | int(0) == 0 }}"
-              - "{{ soc | int(0) < stop_limit | int(0) }}"
-              - "{{ is_charging or soc | int(0) < start_limit | int(0) }}"
+              - "{{ manual_amps == 0 }}"
+              - "{{ soc < stop_limit }}"
+              # Hysteresis: keep charging until stop_limit, or start fresh below start_limit
+              - "{{ is_charging or soc < start_limit }}"
             sequence:
               - choose:
-                  # START or ADJUST
+                  # B1: START or ADJUST when enough PV surplus
                   - conditions:
-                      - "{{ pv_amps | int(0) >= 6 }}"
-                      - "{{ soc | int(0) < stop_limit | int(0) }}"
+                      - "{{ pv_amps >= 6 }}"
                     sequence:
                       - if:
-                          - "{{ pv_amps | int(0) != current_wb_target | int(0) }}"
+                          - "{{ (pv_amps - current_wb_target) | abs >= adjust_threshold_amps }}"
                         then:
                           - action: number.set_value
                             target:
@@ -175,19 +244,99 @@ automation:
                       - if:
                           - "{{ not is_charging }}"
                         then:
+                          - delay:
+                              milliseconds: "{{ startcharge_delay_ms }}"
+                          - action: input_datetime.set_datetime
+                            target:
+                              entity_id: input_datetime.zero_last_automation_action
+                            data:
+                              timestamp: "{{ now().timestamp() }}"
                           - action: button.press
                             target:
                               entity_id: button.warp3_2ita_startcharge
+                          - action: input_datetime.set_datetime
+                            target:
+                              entity_id: input_datetime.zero_last_charge_start
+                            data:
+                              timestamp: "{{ now().timestamp() }}"
 
-                  # STOP (limit reached or insufficient solar)
+                  # B2: STOP — but only if min runtime reached or SOC limit hit
                   - conditions:
                       - "{{ is_charging }}"
-                      - "{{ soc | int(0) >= stop_limit | int(0) or pv_amps | int(0) < 6 }}"
+                      - "{{ soc >= stop_limit or (pv_amps < 6 and min_runtime_reached) }}"
                     sequence:
+                      - action: input_datetime.set_datetime
+                        target:
+                          entity_id: input_datetime.zero_last_automation_action
+                        data:
+                          timestamp: "{{ now().timestamp() }}"
                       - action: button.press
                         target:
                           entity_id: button.warp3_2ita_stopcharge
 
+  # ============================================================
+  # User action detection: pause automation when user takes control
+  # ============================================================
+  - alias: "Zero: Detect User Manual Wallbox Action"
+    id: zero_detect_user_action
+    mode: queued
+    max: 5
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.warp3_2ita_charging
+        # React on any change (on->off or off->on)
+    conditions:
+      # Cable must be connected (otherwise charging state changes are not user actions)
+      - condition: state
+        entity_id: binary_sensor.warp3_2ita_cable
+        state: "on"
+      # Ignore the change if the automation just triggered it (within 5 seconds)
+      - condition: template
+        value_template: >-
+          {% set last_auto = states('input_datetime.zero_last_automation_action') %}
+          {% if last_auto in ['unknown', 'unavailable', none] %}
+            true
+          {% else %}
+            {{ (now() - as_datetime(last_auto)).total_seconds() > 5 }}
+          {% endif %}
+    actions:
+      # User pressed start/stop directly on the wallbox -> pause automation for 15 min
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.zero_user_override_until
+        data:
+          timestamp: "{{ (now() + timedelta(minutes=15)).timestamp() }}"
+      - action: logbook.log
+        data:
+          name: "Zero Charger"
+          message: >-
+            User override detected (charging -> {{ trigger.to_state.state }}).
+            Automation paused until {{ (now() + timedelta(minutes=15)).strftime('%H:%M') }}.
+
+  # ============================================================
+  # Reset user override when cable is unplugged
+  # ============================================================
+  - alias: "Zero: Reset User Override on Cable Unplug"
+    id: zero_reset_override_on_unplug
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.warp3_2ita_cable
+        to: "off"
+    actions:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.zero_user_override_until
+        data:
+          timestamp: "{{ now().timestamp() }}"
+      - action: logbook.log
+        data:
+          name: "Zero Charger"
+          message: "Cable unplugged — user override cleared."
+
+  # ============================================================
+  # Slider correction: force 0 or >=6
+  # ============================================================
   - alias: "Zero: Correct Manual Charging Current"
     id: zero_korrigiere_manuellen_ladestrom
     mode: restart

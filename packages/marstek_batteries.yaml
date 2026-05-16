@@ -191,7 +191,7 @@ template:
               {% if hw_soc >= 100 %}
                 100
               {% else %}
-                {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12) * 1000 %}
+                {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
                   {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
                   {{ calc_soc | round(1) | clamp(0, 100) }}
                {% endif %}
@@ -232,7 +232,7 @@ template:
               {% if hw_soc >= 100 %}
                 100
               {% else %}
-                {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.12) * 1000 %}
+                {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
                 {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
                 
                 {# Clamps the value cleanly between 0 and 100 and rounds #}
@@ -256,17 +256,34 @@ template:
               {{ alt_wh }}
             {% endif %}
 
-      - name: "Marstek Free capacity kWh"
-        unique_id: marstek_free_capacity_kwh
+      - name: "Marstek usable Energy"
+        unique_id: marstek_usable_energy
         unit_of_measurement: "kWh"
         device_class: energy
         state: >-
-          {% set cap1 = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.12) %}
-          {% set cap2 = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.12) %}
-          {% set soc1 = states('sensor.venus_1_custom_soc') | float(0) %}
-          {% set soc2 = states('sensor.venus_2_custom_soc') | float(0) %}
+          {% set min_soc = state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) %}
+          {% set cap1 = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) %}
+          {% set cap2 = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) %}
 
-          {{ (cap1 * (1 - (soc1 / 100)) + cap2 * (1 - (soc2 / 100))) | round(2) }}
+          {% set soc1 = states('sensor.venus_1_custom_soc') | 
+               float(states('sensor.marstek_venus_1_batterie_ladezustand') | float(0)
+          ) %}
+          {% set soc2 = states('sensor.venus_2_custom_soc') | 
+               float(states('sensor.marstek_venus_2_batterie_ladezustand') | float(0)
+          ) %}
+
+          {% set usable_soc1 = [0, soc1 - min_soc] | max %}
+          {% set usable_soc2 = [0, soc2 - min_soc] | max %}
+
+          {% set usable_cap1 = usable_soc1 / 100 * cap1 %}
+          {% set usable_cap2 = usable_soc2 / 100 * cap2 %}
+
+          {{ (usable_cap1 + usable_cap2) | round(3) }}
+        availability: >-
+          {{ is_number(states('sensor.venus_1_custom_soc')) and
+             is_number(states('sensor.venus_2_custom_soc')) and
+             is_number(states('sensor.marstek_venus_1_batterie_ladezustand')) and
+             is_number(states('sensor.marstek_venus_2_batterie_ladezustand')) }}
 
   - triggers:
       - trigger: homeassistant
@@ -450,9 +467,9 @@ template:
           {% endif %}
         availability: >-
           {# The sensor is only available when at least one source provides data #}
-          {{ is_number(states('sensor.venus_1_custom_soc')) or 
-              is_number(states('sensor.venus_2_custom_soc')) or
-              is_number(states('sensor.marstek_venus_1_batterie_ladezustand')) or
+          {{ is_number(states('sensor.venus_1_custom_soc')) and
+              is_number(states('sensor.venus_2_custom_soc')) and
+              is_number(states('sensor.marstek_venus_1_batterie_ladezustand')) and
               is_number(states('sensor.marstek_venus_2_batterie_ladezustand')) }}
 
       - name: "Marstek Batterieleistung Gesamt"
@@ -467,7 +484,7 @@ template:
           {{ (venus1 + venus2) | round(0) }}
         availability: >-
           {# The sensor is only available when at least one of the source sensors provides a valid value #}
-          {{ is_number(states('sensor.marstek_venus_1_ac_leistung')) or 
+          {{ is_number(states('sensor.marstek_venus_1_ac_leistung')) and
              is_number(states('sensor.marstek_venus_2_ac_leistung')) }}
 
 automation:
