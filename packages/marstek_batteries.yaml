@@ -324,9 +324,9 @@ template:
                 {% endif %}
 
                 {% if t1 > lim1 and t2 < lim2 %}
-                  {{ {'v1': lim1, 'v2': [lim2, t2 + t1 - lim1] | min | round(0)} }}
+                  {{ {'v1': lim1, 'v2': [lim2, t2 + t1 - lim1] | min | round(0) | int} }}
                 {% elif t1 < lim1 and t2 > lim2 %}
-                  {{ {'v1': [lim1, t1 + t2 - lim2] | min | round(0), 'v2': lim2} }}
+                  {{ {'v1': [lim1, t1 + t2 - lim2] | min | round(0) | int, 'v2': lim2} }}
                 {% elif t1 > lim1 and t2 > lim2 %}
                   {{ {'v1': lim1, 'v2': lim2} }}
                 {% else %}
@@ -343,12 +343,12 @@ template:
         state_class: measurement
         state: >-
           {% set discharge = state_attr(this.entity_id, 'discharge') %}
-          {{ (discharge.v1 + discharge.v2) | round(0) if discharge is mapping else 0 }}
+          {{ (discharge.v1 + discharge.v2) | round(0) | int if discharge is mapping else 0 }}
         attributes:
           discharge: >-
             {# Inline statt this.state, um den aktuellen Wert zu haben und kein LAG zu vermeiden #}
             {% set raw = states('sensor.ladeleistung') | float(0) %}
-            {% set total = [raw, 0] | max | round(0) %}
+            {% set total = [raw, 0] | max | round(0) | int %}
             {% set zero = {'v1': 0, 'v2': 0} %}
 
             {% if total > 0 %}
@@ -386,7 +386,7 @@ template:
         state_class: measurement
         state: >-
           {% set limits = state_attr(this.entity_id, 'limits') %}
-          {{ (limits.v1 + limits.v2) | round(0) if limits is mapping else 0 }}
+          {{ (limits.v1 + limits.v2) | round(0) |int if limits is mapping else 0 }}
 
         attributes:
           limits: >-
@@ -460,69 +460,51 @@ automation:
   - alias: "Venus Energieintegration"
     mode: queued
     trigger:
-      - platform: time_pattern
-        seconds: "/15"
+      #      - platform: time_pattern
+      #        seconds: "/15"
+      - platform: state
+        entity_id: sensor.takt
     action:
       - parallel:
           - sequence:
               - variables:
                   power: "{{ states('sensor.marstek_venus_1_ac_leistung') | float(0) }}"
+                  own_consumption_w: "{{ state_attr('sensor.zentrale_parameter', 'venus_own_consumption') | float(10) }}"
+                  delta_t: "{{ states('input_number.tack_interval_sekunden') | float(1) }}"
                   # Eigenverbrauch von 9W hinzufügen (9W / 3600s * 15s = 0.0375 Wh pro Intervall)
-                  standby_loss: 0.0375
                   delta_wh: >-
-                    {% set meas_delta = power * 15 / 3600 %}
-                    {% set max_delta = 2500 * 15 / 3600 * 6 %}
-                    {# Wir addieren den Standby-Verlust zum gemessenen Delta #}
-                    {{ (meas_delta + standby_loss) if meas_delta < max_delta else 0 }}
+                    {% set delta_t_h = delta_t / 3600 %}
+                    {% set standby_loss = own_consumption_w * delta_t_h %}
+                    {% set delta_p = power * delta_t_h %}
+                    {% set max_delta_p = 2500 * delta_t_h  %}
+                    {# wenn delta > max_delta, dann ist etwas faul.#}
+                    {{ (delta_p + standby_loss) if delta_p < max_delta_p else standby_loss }}
               - action: input_number.set_value
                 target:
                   entity_id: input_number.venus_1_energiefluss_wh_counter
                 data:
                   value: >
-                    {{ (states('input_number.venus_1_energiefluss_wh_counter') | float(0) + delta_wh) | round(3) }}
+                    {{ states('input_number.venus_1_energiefluss_wh_counter') | float(0) + delta_wh }}
 
           - sequence:
               - variables:
                   power: "{{ states('sensor.marstek_venus_2_ac_leistung') | float(0) }}"
-                  standby_loss: 0.0375
+                  own_consumption_w: "{{ state_attr('sensor.zentrale_parameter', 'venus_own_consumption') | float(10) }}"
+                  delta_t: "{{ states('input_number.tack_interval_sekunden') | float(1) }}"
+                  # Eigenverbrauch von 9W hinzufügen (9W / 3600s * 15s = 0.0375 Wh pro Intervall)
                   delta_wh: >-
-                    {% set meas_delta = power * 15 / 3600 %}
-                    {% set max_delta = 2500 * 15 / 3600 * 6 %}
-                    {{ (meas_delta + standby_loss) if meas_delta < max_delta else 0 }}
+                    {% set delta_t_h = delta_t / 3600 %}
+                    {% set standby_loss = own_consumption_w * delta_t_h %}
+                    {% set delta_p = power * delta_t_h %}
+                    {% set max_delta_p = 2500 * delta_t_h  %}
+                    {# wenn delta > max_delta, dann ist etwas faul.#}
+                    {{ (delta_p + standby_loss) if delta_p < max_delta_p else standby_loss }}
               - action: input_number.set_value
                 target:
                   entity_id: input_number.venus_2_energiefluss_wh_counter
                 data:
                   value: >
-                    {{ (states('input_number.venus_2_energiefluss_wh_counter') | float(0) + delta_wh) | round(3) }}
-
-          - sequence:
-              - variables:
-                  power: "{{ states('sensor.marstek_venus_1_ac_leistung') | float(0) }}"
-                  delta_wh: >-
-                    {% set delta = power * 15 / 3600 %}
-                    {% set max_delta = 2500 * 15 / 3600 * 6 %}
-                    {{ delta if delta < max_delta else 0 }}
-              - service: input_number.set_value
-                target:
-                  entity_id: input_number.venus_1_energiefluss_wh_counter
-                data:
-                  value: >
-                    {{ (states('input_number.venus_1_energiefluss_wh_counter') | float(0) + delta_wh) | round(3) }}
-
-          - sequence:
-              - variables:
-                  power: "{{ states('sensor.marstek_venus_2_ac_leistung') | float(0) }}"
-                  delta_wh: >-
-                    {% set delta = power * 15 / 3600 %}
-                    {% set max_delta = 2500 * 15 / 3600 * 6 %}
-                    {{ delta if delta < max_delta else 0 }}
-              - service: input_number.set_value
-                target:
-                  entity_id: input_number.venus_2_energiefluss_wh_counter
-                data:
-                  value: >
-                    {{ (states('input_number.venus_2_energiefluss_wh_counter') | float(0) + delta_wh) | round(3) }}
+                    {{ states('input_number.venus_2_energiefluss_wh_counter') | float(0) + delta_wh }}
 
   - alias: "Sende Lade und Entladebefehle an Hardware"
     id: "sende_batterie_targets_v2"
@@ -537,11 +519,9 @@ automation:
         entity_id:
           - input_boolean.override_soc
           - input_number.manuelle_ladeleistung
-        for:
-          seconds: 3
     action:
       - delay: # ← Debounce: wartet ob noch mehr Trigger kommen
-          milliseconds: 500
+          milliseconds: 300
 
       - variables:
           # 1. --- DATEN EINMALIG ABRUFEN ---

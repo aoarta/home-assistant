@@ -206,7 +206,7 @@ template:
           {% set neu = states('sensor.pv_produktion_watt_fast') | float(0) %}
           {% set alt = this.state | float(neu) %}
 
-          {% if abs(neu - alt) >= 15 %}
+          {% if (neu - alt) | abs >= 15 %}
             {{ neu | round(0) }}
           {% else %}
             {{ alt }}
