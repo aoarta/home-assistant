@@ -481,17 +481,27 @@ automation:
   # ==========================================================
   # UPS: Last Full Zeitstempel
   # ==========================================================
-
   - alias: "UPS: Zeitstempel Batterie voll aktualisieren"
     id: ups_set_last_full_timestamp
     triggers:
       - trigger: numeric_state
         entity_id: sensor.ups_custom_soc
         above: 99.9
-        for: "00:01:00"
+        for: "00:05:00"
+      - trigger: numeric_state
+        entity_id: sensor.ups_soc
+        above: 99.9
+        for: "00:05:00"
+    conditions:
+      - condition: numeric_state
+        entity_id: sensor.ups_custom_soc
+        above: 99.9
+      - condition: numeric_state
+        entity_id: sensor.ups_soc
+        above: 99.9
     actions:
       - action: input_datetime.set_datetime
         target:
-          entity_id: "input_datetime.ups_last_full"
+          entity_id: input_datetime.ups_last_full
         data:
           timestamp: "{{ now().timestamp() }}"

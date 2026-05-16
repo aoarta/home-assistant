@@ -1,3 +1,5 @@
+# packages/control.yaml
+
 #########
 ## Die Control-Logik: Das Setzen des dynamischen SOC
 #########
@@ -150,10 +152,7 @@ template:
 
   - trigger:
       - platform: time_pattern
-        minutes: "/5"
-      - platform: homeassistant
-        event: start
-        offset: "00:00:15"
+        minutes: "/2"
     sensor:
       - name: "Dynamic SOC"
         unique_id: dynamic_soc
