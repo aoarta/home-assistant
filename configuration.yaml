@@ -43,6 +43,8 @@ recorder:
 
   exclude:
     entities:
+      - sensor.takt
+      - input_datetime.takt_base
       - automation.ups_grobregelung_laden_entladen
       - automation.sende_lade_und_entladebefehle_an_hardware
       - automation.sende_batterie_targets
