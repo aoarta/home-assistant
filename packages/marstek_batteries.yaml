@@ -74,7 +74,12 @@ sensor:
 ################################################################################
 ################################################################################
 template:
-  - sensor:
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: homeassistant
+        event: start
+    sensor:
       - name: "Venus 1 Energiefluss Wh"
         unique_id: venus_1_energiefluss_wh
         unit_of_measurement: "Wh"
@@ -83,7 +88,6 @@ template:
         state: >
           {{ states('input_number.venus_1_energiefluss_wh_counter') }}
 
-  - sensor:
       - name: "Venus 2 Energiefluss Wh"
         unique_id: venus_2_energiefluss_wh
         unit_of_measurement: "Wh"
@@ -97,7 +101,7 @@ template:
   # ==========================================================
   - triggers:
       # Only reacts to the smoothed Custom SOC to ignore bouncing
-      # of the hardware sensor (99 -> 100 -> 99).
+      # of the hardware sensor (99 -> 100 -> 99)
       - trigger: numeric_state
         entity_id: sensor.venus_1_custom_soc
         above: 99.9
@@ -475,20 +479,18 @@ automation:
       - trigger: state
         entity_id: sensor.takt
     actions:
+      - variables:
+          own_consumption_w: "{{ state_attr('sensor.zentrale_parameter', 'venus_own_consumption') | float(10) }}"
+          delta_t_h: "{{ (states('input_number.tack_interval_sekunden') | float(1)) / 3600 }}"
+
       - parallel:
           - sequence:
               - variables:
                   power: "{{ states('sensor.marstek_venus_1_ac_leistung') | float(0) }}"
-                  own_consumption_w: "{{ state_attr('sensor.zentrale_parameter', 'venus_own_consumption') | float(10) }}"
-                  delta_t: "{{ states('input_number.tack_interval_sekunden') | float(1) }}"
                   # Add self-consumption of 9W (9W / 3600s * 15s = 0.0375 Wh per interval)
                   delta_wh: >-
-                    {% set delta_t_h = delta_t / 3600 %}
-                    {% set standby_loss = own_consumption_w * delta_t_h %}
-                    {% set delta_p = power * delta_t_h %}
-                    {% set max_delta_p = 2500 * delta_t_h  %}
                     {# if delta > max_delta, something is wrong #}
-                    {{ (delta_p + standby_loss) if delta_p < max_delta_p else standby_loss }}
+                    {{ ((power + own_consumption_w) * delta_t_h) if power < 2500 else own_consumption_w * delta_t_h }}
               - action: input_number.set_value
                 target:
                   entity_id: input_number.venus_1_energiefluss_wh_counter
@@ -499,16 +501,10 @@ automation:
           - sequence:
               - variables:
                   power: "{{ states('sensor.marstek_venus_2_ac_leistung') | float(0) }}"
-                  own_consumption_w: "{{ state_attr('sensor.zentrale_parameter', 'venus_own_consumption') | float(10) }}"
-                  delta_t: "{{ states('input_number.tack_interval_sekunden') | float(1) }}"
                   # Add self-consumption of 9W (9W / 3600s * 15s = 0.0375 Wh per interval)
                   delta_wh: >-
-                    {% set delta_t_h = delta_t / 3600 %}
-                    {% set standby_loss = own_consumption_w * delta_t_h %}
-                    {% set delta_p = power * delta_t_h %}
-                    {% set max_delta_p = 2500 * delta_t_h  %}
                     {# if delta > max_delta, something is wrong #}
-                    {{ (delta_p + standby_loss) if delta_p < max_delta_p else standby_loss }}
+                    {{ ((power + own_consumption_w) * delta_t_h) if power < 2500 else own_consumption_w * delta_t_h }}
               - action: input_number.set_value
                 target:
                   entity_id: input_number.venus_2_energiefluss_wh_counter
