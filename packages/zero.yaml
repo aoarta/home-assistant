@@ -94,14 +94,11 @@ template:
 
       - name: "Zero User Override Active"
         unique_id: zero_user_override_active
-        # Helper sensor: true while the user-override window is still in the future
+        # Helper sensor: true while the user-override window is still in the future.
+        # Output is forced lowercase ('true'/'false') so state-based conditions match.
         state: >-
-          {% set until = states('input_datetime.zero_user_override_until') %}
-          {% if until in ['unknown', 'unavailable', none] %}
-            false
-          {% else %}
-            {{ as_datetime(until) > now() }}
-          {% endif %}
+          {% set ts = state_attr('input_datetime.zero_user_override_until', 'timestamp') %}
+          {{ 'true' if ts is not none and ts > now().timestamp() else 'false' }}
 
 # --- AUTOMATIONS ---
 automation:
@@ -131,6 +128,11 @@ automation:
         entity_id: sensor.zero_user_override_active
         to: "false"
         # When the override expires, re-evaluate immediately
+      # NEW: User pressed the start button on the wallbox -> recalculate target current.
+      # We trigger on the button entity (its state is a timestamp that changes on every press)
+      # because the wallbox may refuse to enter "charging" state when globalcurrent is 0.
+      - trigger: state
+        entity_id: button.warp3_2ita_startcharge
 
     conditions:
       - condition: state
@@ -140,6 +142,18 @@ automation:
       - condition: state
         entity_id: sensor.zero_user_override_active
         state: "false"
+      # If this run was triggered by the start button, make sure the press was
+      # from the user — not from the automation itself (which would loop).
+      - condition: template
+        value_template: >-
+          {% if trigger is not defined or trigger.entity_id is not defined %}
+            true
+          {% elif trigger.entity_id != 'button.warp3_2ita_startcharge' %}
+            true
+          {% else %}
+            {% set ts = state_attr('input_datetime.zero_last_automation_action', 'timestamp') %}
+            {{ ts is none or (now().timestamp() - ts) > 5 }}
+          {% endif %}
 
     variables:
       # Tunables — adjust here without touching the logic
@@ -156,13 +170,16 @@ automation:
           start_limit: "{{ states('input_number.zero_ladung_start_soc') | int(60) }}"
           current_wb_target: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
           is_charging: "{{ is_state('binary_sensor.warp3_2ita_charging', 'on') }}"
+          # Detect whether THIS run was triggered by the user pressing the wallbox start button.
+          # In that case we force the current to be re-set, ignoring the threshold.
+          user_started: >-
+            {{ trigger is defined
+               and trigger.entity_id is defined
+               and trigger.entity_id == 'button.warp3_2ita_startcharge' }}
           last_start_raw: "{{ states('input_datetime.zero_last_charge_start') }}"
           seconds_since_start: >-
-            {% if last_start_raw in ['unknown', 'unavailable', none] %}
-              99999
-            {% else %}
-              {{ (now() - as_datetime(last_start_raw)).total_seconds() | int }}
-            {% endif %}
+            {% set ts = state_attr('input_datetime.zero_last_charge_start', 'timestamp') %}
+            {{ (now().timestamp() - ts) | int if ts is not none else 99999 }}
           min_runtime_reached: "{{ seconds_since_start >= min_charge_runtime_seconds }}"
 
       - choose:
@@ -172,7 +189,7 @@ automation:
               - "{{ soc < stop_limit }}"
             sequence:
               - if:
-                  - "{{ (manual_amps - current_wb_target) | abs >= adjust_threshold_amps }}"
+                  - "{{ user_started or (manual_amps - current_wb_target) | abs >= adjust_threshold_amps }}"
                 then:
                   - action: number.set_value
                     target:
@@ -225,8 +242,9 @@ automation:
           - conditions:
               - "{{ manual_amps == 0 }}"
               - "{{ soc < stop_limit }}"
-              # Hysteresis: keep charging until stop_limit, or start fresh below start_limit
-              - "{{ is_charging or soc < start_limit }}"
+              # Hysteresis: keep charging until stop_limit, or start fresh below start_limit.
+              # User-initiated start bypasses the hysteresis (user wants to charge NOW).
+              - "{{ is_charging or soc < start_limit or user_started }}"
             sequence:
               - choose:
                   # B1: START or ADJUST when enough PV surplus
@@ -234,7 +252,7 @@ automation:
                       - "{{ pv_amps >= 6 }}"
                     sequence:
                       - if:
-                          - "{{ (pv_amps - current_wb_target) | abs >= adjust_threshold_amps }}"
+                          - "{{ user_started or (pv_amps - current_wb_target) | abs >= adjust_threshold_amps }}"
                         then:
                           - action: number.set_value
                             target:
@@ -260,9 +278,12 @@ automation:
                             data:
                               timestamp: "{{ now().timestamp() }}"
 
-                  # B2: STOP — but only if min runtime reached or SOC limit hit
+                  # B2: STOP — but only if min runtime reached or SOC limit hit.
+                  # Skip auto-stop when the user just started the wallbox: give them
+                  # the configured min_runtime window even if PV surplus is too low.
                   - conditions:
                       - "{{ is_charging }}"
+                      - "{{ not user_started }}"
                       - "{{ soc >= stop_limit or (pv_amps < 6 and min_runtime_reached) }}"
                     sequence:
                       - action: input_datetime.set_datetime
@@ -274,17 +295,31 @@ automation:
                         target:
                           entity_id: button.warp3_2ita_stopcharge
 
+              # When the user manually started the wallbox in PV mode, also stamp
+              # last_charge_start so the min-runtime protection applies.
+              - if:
+                  - "{{ user_started }}"
+                then:
+                  - action: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.zero_last_charge_start
+                    data:
+                      timestamp: "{{ now().timestamp() }}"
+
   # ============================================================
-  # User action detection: pause automation when user takes control
+  # User action detection: pause automation when user STOPS charging
+  # (Starting the wallbox is no longer treated as an override —
+  #  the user wants to charge, so the automation should help, not pause.)
   # ============================================================
-  - alias: "Zero: Detect User Manual Wallbox Action"
+  - alias: "Zero: Detect User Manual Wallbox Stop"
     id: zero_detect_user_action
     mode: queued
     max: 5
     triggers:
       - trigger: state
         entity_id: binary_sensor.warp3_2ita_charging
-        # React on any change (on->off or off->on)
+        from: "on"
+        to: "off"
     conditions:
       # Cable must be connected (otherwise charging state changes are not user actions)
       - condition: state
@@ -293,14 +328,10 @@ automation:
       # Ignore the change if the automation just triggered it (within 5 seconds)
       - condition: template
         value_template: >-
-          {% set last_auto = states('input_datetime.zero_last_automation_action') %}
-          {% if last_auto in ['unknown', 'unavailable', none] %}
-            true
-          {% else %}
-            {{ (now() - as_datetime(last_auto)).total_seconds() > 5 }}
-          {% endif %}
+          {% set ts = state_attr('input_datetime.zero_last_automation_action', 'timestamp') %}
+          {{ ts is none or (now().timestamp() - ts) > 5 }}
     actions:
-      # User pressed start/stop directly on the wallbox -> pause automation for 15 min
+      # User pressed stop directly on the wallbox -> pause automation for 15 min
       - action: input_datetime.set_datetime
         target:
           entity_id: input_datetime.zero_user_override_until
@@ -310,8 +341,8 @@ automation:
         data:
           name: "Zero Charger"
           message: >-
-            User override detected (charging -> {{ trigger.to_state.state }}).
-            Automation paused until {{ (now() + timedelta(minutes=15)).strftime('%H:%M') }}.
+            User stop detected. Automation paused until
+            {{ (now() + timedelta(minutes=15)).strftime('%H:%M') }}.
 
   # ============================================================
   # Reset user override when cable is unplugged
