@@ -26,6 +26,7 @@ sensor:
     filters:
       - filter: range
         upper_bound: 100 # Everything above 100 kWh per day is ignored
+        
   - platform: filter
     name: "PV Energy Yield Balcony Today"
     entity_id: sensor.pv_ertrag_balkon_heute_um
