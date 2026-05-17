@@ -25,69 +25,73 @@ rest:
     scan_interval: 30 # Abfrageintervall in Sekunden anpassen, falls gewünscht
     sensor:
       - name: "UPS SOC"
+        unique_id: ups_soc
         value_template: "{{ value | regex_findall('SOC:\\s*([0-9.]+)') | first | default(0) }}"
         unit_of_measurement: "%"
         device_class: battery
         state_class: measurement
 
       - name: "UPS Power"
+        unique_id: ups_power
         value_template: "{{ value | regex_findall('Power:\\s*([-0-9.]+)') | first | default(0) }}"
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
 
-      - name: "BMS Current"
-        value_template: "{{ value | regex_findall('Current:\\s*([-0-9.]+)') | first | default(0) }}"
-        unit_of_measurement: "A"
-        device_class: current
-        state_class: measurement
+      #      - name: "BMS Current"
+      #        value_template: "{{ value | regex_findall('Current:\\s*([-0-9.]+)') | first | default(0) }}"
+      #        unit_of_measurement: "A"
+      #        device_class: current
+      #        state_class: measurement
 
-      - name: "BMS Total Voltage"
-        value_template: "{{ value | regex_findall('totalVoltage:\\s*([0-9.]+)') | first | default(0) }}"
-        unit_of_measurement: "V"
-        device_class: voltage
-        state_class: measurement
+      #      - name: "BMS Total Voltage"
+      #        value_template: "{{ value | regex_findall('totalVoltage:\\s*([0-9.]+)') | first | default(0) }}"
+      #        unit_of_measurement: "V"
+      #        device_class: voltage
+      #        state_class: measurement
 
-      - name: "BMS Total Capacity"
-        value_template: "{{ value | regex_findall('totalCapacity:\\s*([0-9.]+)') | first | default(0) }}"
-        unit_of_measurement: "Ah"
-        state_class: measurement
+      #      - name: "BMS Total Capacity"
+      #        value_template: "{{ value | regex_findall('totalCapacity:\\s*([0-9.]+)') | first | default(0) }}"
+      #        unit_of_measurement: "Ah"
+      #        state_class: measurement
 
-      - name: "BMS Remaining Capacity"
-        value_template: "{{ value | regex_findall('remainingCapacity:\\s*([0-9.]+)') | first | default(0) }}"
-        unit_of_measurement: "Ah"
-        state_class: measurement
+      #      - name: "BMS Remaining Capacity"
+      #        value_template: "{{ value | regex_findall('remainingCapacity:\\s*([0-9.]+)') | first | default(0) }}"
+      #        unit_of_measurement: "Ah"
+      #        state_class: measurement
 
       - name: "UPS Highest Cell"
+        unique_id: ups_highest_cell
         value_template: "{{ value | regex_findall('highest Cell.*:\\s*([0-9.]+)') | first | default(0) }}"
         unit_of_measurement: "V"
         device_class: voltage
         state_class: measurement
 
       - name: "UPS Lowest Cell"
+        unique_id: ups_lowest_cell
         value_template: "{{ value | regex_findall('lowest Cell.*:\\s*([0-9.]+)') | first | default(0) }}"
         unit_of_measurement: "V"
         device_class: voltage
         state_class: measurement
 
-      - name: "BMS Cell Diff"
-        # Beachte: "Cell diff" hat in deiner Ausgabe keinen Doppelpunkt, daher fangen wir nur die Leerzeichen ab
-        value_template: "{{ value | regex_findall('Cell diff\\s*([0-9.]+)') | first | default(0) }}"
-        unit_of_measurement: "V"
-        device_class: voltage
-        state_class: measurement
+#      - name: "BMS Cell Diff"
+#        # Beachte: "Cell diff" hat in deiner Ausgabe keinen Doppelpunkt, daher fangen wir nur die Leerzeichen ab
+#        value_template: "{{ value | regex_findall('Cell diff\\s*([0-9.]+)') | first | default(0) }}"
+#        unit_of_measurement: "V"
+#        device_class: voltage
+#        state_class: measurement
 
-      - name: "BMS Temperature Probe 0"
-        value_template: "{{ value | regex_findall('Probe 0:\\s*([-0-9.]+)') | first | default(0) }}"
-        unit_of_measurement: "°C"
-        device_class: temperature
-        state_class: measurement
+#      - name: "BMS Temperature Probe 0"
+#        value_template: "{{ value | regex_findall('Probe 0:\\s*([-0-9.]+)') | first | default(0) }}"
+#        unit_of_measurement: "°C"
+#        device_class: temperature
+#        state_class: measurement
 
-      - name: "BMS Temperature Probe 1"
-        value_template: "{{ value | regex_findall('Probe 1:\\s*([-0-9.]+)') | first | default(0) }}"
-        unit_of_measurement: "°C"
-        device_class: temperature
-        state_class: measurement
+#      - name: "BMS Temperature Probe 1"
+#        value_template: "{{ value | regex_findall('Probe 1:\\s*([-0-9.]+)') | first | default(0) }}"
+#        unit_of_measurement: "°C"
+#        device_class: temperature
+#        state_class: measurement
 
 ################################################################################
 # 2. PLATTFORM SENSOREN (FILTER & INTEGRATION)
@@ -290,7 +294,7 @@ automation:
     variables:
       power: "{{ states('sensor.ups_ac_leistung_glatt') | float(0) }}"
       own_consumption_w: "{{ state_attr('sensor.zentrale_parameter', 'ups_own_consumption') | float(10) }}"
-      delta_t: "{{ states('input_number.tack_interval_sekunden') | float(1)  }}"
+      delta_t: "{{ states('input_number.takt_interval_sekunden') | float(1)  }}"
       delta_wh: >-
         {% set delta_t_h = delta_t / 3600 %}
         {% set standby_loss = own_consumption_w * delta_t_h %}
@@ -304,7 +308,8 @@ automation:
           entity_id: input_number.ups_energiefluss_wh_counter
         data:
           value: >
-            {{ states('input_number.ups_energiefluss_wh_counter') | float(0) + delta_wh }}
+            {% set new = states('input_number.ups_energiefluss_wh_counter') | float(0) + delta_wh %}
+            {{ [[new, -50000] | max, 50000] | min }}
 
   - alias: "UPS Grobregelung Laden & Entladen"
     id: ups_grob_control_full
