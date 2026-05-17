@@ -531,8 +531,8 @@ automation:
 
   - alias: "Sende Lade und Entladebefehle an Hardware"
     id: "sende_batterie_targets_v2"
-    mode: restart
-    #max: 3
+    mode: queued
+    max: 15
     triggers:
       - trigger: state
         entity_id: sensor.target_power_distribution_fast
@@ -542,7 +542,7 @@ automation:
           - input_number.manuelle_ladeleistung
     actions:
       - delay: # ← Debounce: waits to see if more triggers arrive
-          milliseconds: 300
+          milliseconds: 50
 
       - variables:
           # 1. --- FETCH DATA ONCE ---
@@ -589,19 +589,21 @@ automation:
                     target: { entity_id: select.marstek_venus_1_force_mode }
                     data: { option: "{{ target_mode_v1_safe }}" }
                   - delay:
-                      milliseconds: 200 # Short pause for processing
+                      milliseconds: 150 # Short pause for processing
               - action: number.set_value
                 target:
                   { entity_id: number.marstek_venus_1_ladeleistung_einstellen }
                 data: { value: "{{ v1_laden }}" }
+                continue_on_error: true
               - delay:
-                  milliseconds: 200
+                  milliseconds: 150
               - action: number.set_value
                 target:
                   {
                     entity_id: number.marstek_venus_1_entladeleistung_einstellen,
                   }
                 data: { value: "{{ v1_entladen }}" }
+                continue_on_error: true
 
           - delay:
               milliseconds: 10
@@ -609,7 +611,7 @@ automation:
           # --- Venus 2 complete ---
           - sequence:
               - delay:
-                  milliseconds: 150 # start venus 2 a tad later
+                  milliseconds: 20 # start venus 2 a tad later
               - if:
                   - condition: template
                     value_template: "{{ states('select.marstek_venus_2_force_mode') != target_mode_v2_safe }}"
@@ -618,19 +620,22 @@ automation:
                     target: { entity_id: select.marstek_venus_2_force_mode }
                     data: { option: "{{ target_mode_v2_safe }}" }
                   - delay:
-                      milliseconds: 200 # Short pause for processing
+                      milliseconds: 150
               - action: number.set_value
                 target:
                   { entity_id: number.marstek_venus_2_ladeleistung_einstellen }
                 data: { value: "{{ v2_laden }}" }
+                continue_on_error: true
+
               - delay:
-                  milliseconds: 200
+                  milliseconds: 150
               - action: number.set_value
                 target:
                   {
                     entity_id: number.marstek_venus_2_entladeleistung_einstellen,
                   }
                 data: { value: "{{ v2_entladen }}" }
+                continue_on_error: true
 
   # ==========================================================
   # Marstek: Last Full Timestamp
@@ -667,6 +672,7 @@ automation:
                   entity_id: "number.marstek_venus_{{ device_id }}_ladeleistung_einstellen"
                 data:
                   value: 0
+                continue_on_error: true
 
           - conditions:
               - condition: trigger
@@ -694,10 +700,12 @@ automation:
                             entity_id: "number.marstek_venus_{{ repeat.item.num }}_ladeleistung_einstellen"
                           data:
                             value: 0
+                          continue_on_error: true
 
   - alias: "Marstek Venus: Ladeleistung zurücksetzen wenn SOC > Target"
     id: marstek_venus_reset_charge_over_target
-    mode: single
+    mode: queued
+    max: 15
     triggers:
       - trigger: time_pattern
         minutes: "/2"
@@ -725,6 +733,7 @@ automation:
                       entity_id: number.marstek_venus_1_ladeleistung_einstellen
                     data:
                       value: 0
+                    continue_on_error: true # ← NEU
 
           - sequence:
               - delay: "00:00:00.150"
@@ -740,3 +749,4 @@ automation:
                       entity_id: number.marstek_venus_2_ladeleistung_einstellen
                     data:
                       value: 0
+                    continue_on_error: true # ← NEU
