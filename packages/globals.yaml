@@ -16,8 +16,10 @@ template:
           venus_capacity_wh: 5120
           ups_capacity_wh: 2200
           # batteries: own consumption
-          venus_own_consumption_h: 9
-          ups_own_consumption_h: 22
+          venus_own_consumption_h: 0 #9 too much
+          ups_own_consumption_h: 0 #22 too much
           # battery care
           override_soc_days: 5
           battery_care_days: 8
+          # Zero
+          zero_max_amps: 17

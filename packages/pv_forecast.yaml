@@ -131,12 +131,15 @@ input_number:
   pv_prognose_von_gestern:
     min: 0
     max: 150
+    unit_of_measurement: "kWh"
   pv_reale_ernte_von_gestern:
     min: 0
     max: 150
+    unit_of_measurement: "kWh"
   pv_prognose_festwert_heute:
     min: 0
     max: 150
+    unit_of_measurement: "kWh"
 
 ################################################################################
 # 2. API QUELLEN
@@ -362,7 +365,7 @@ template:
           {% set total_weight = sc_w + sp_w + fs_w + om_w + ml_w %}
           {% set bias = states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) %}
           {% if total_weight > 0 %}
-            {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + ml_w * ml) / total_weight * bias) | round(2) }}
+            {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + ml_w * ml) / total_weight * bias) | round() }}
           {% else %}
             {{ this.state | float(0) }}
           {% endif %}

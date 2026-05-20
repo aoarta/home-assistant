@@ -86,7 +86,8 @@ template:
             {% set amps = (surplus / 230) | round(0, 'floor') | int %}
 
             {% if amps >= 6 %}
-              {{ [[amps, 6] | max, 16] | min }}
+            {% set max_amps = state_attr('sensor.zentrale_parameter', 'zero_max_amps') | float(16) %}
+              {{ [[amps, 6] | max, max_amps] | min }}
             {% else %}
               0
             {% endif %}
