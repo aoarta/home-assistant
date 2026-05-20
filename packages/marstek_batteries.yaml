@@ -126,7 +126,7 @@ template:
             {# Sync to HW-SOC when battery is almost empty #}
             {{ current_energy - (hw_soc / 100 * capacity) }}
           {% elif hw_soc >= 100 %}
-            {# At 100% we take the smaller value (since energy flow decreases/goes negative when charging) #}
+            {# At 100% we take the higher value (since energy flow decreases/goes negative when charging) #}
             {{ [current_energy, last_reset] | max }}
           {% elif current_energy < last_reset %}
             {{ current_energy }}
@@ -158,7 +158,7 @@ template:
             {# Sync to HW-SOC when battery is almost empty #}
             {{ current_energy - (hw_soc / 100 * capacity) }}
           {% elif hw_soc >= 100 %}
-            {# At 100% we take the smaller value (since energy flow decreases/goes negative when charging) #}
+            {# At 100% we take the higher value (since energy flow decreases/goes negative when charging) #}
             {{ [current_energy, last_reset] | max }}
           {% elif current_energy < last_reset %}
             {{ current_energy }}
@@ -498,7 +498,7 @@ automation:
     actions:
       - variables:
           own_consumption_w: "{{ state_attr('sensor.zentrale_parameter', 'venus_own_consumption') | float(10) }}"
-          delta_t_h: "{{ (states('input_number.tack_interval_sekunden') | float(1)) / 3600 }}"
+          delta_t_h: "{{ (states('input_number.takt_interval_sekunden') | float(1)) / 3600 }}"
 
       - parallel:
           - sequence:

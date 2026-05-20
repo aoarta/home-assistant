@@ -160,8 +160,9 @@ template:
           {% if hw_soc < 15 %}
             {{ current_energy - (hw_soc / 100 * capacity) }}
           {# Reset wenn HW-SOC 100 oder Zelle voll #}
-          {% elif hw_soc >= 100 or high_cell >= lfp_max_voltage %}
-            {{ [current_energy, last_reset] | min }}
+          {% elif hw_soc >= 100  or high_cell > lfp_max_voltage %}
+            {# At 100% we take the higher value (since energy flow decreases/goes negative when charging) #}
+            {{ [current_energy, last_reset] | max }}
           {% elif current_energy < last_reset %}
             {{ current_energy }}
           {% else %}
@@ -313,8 +314,9 @@ automation:
 
   - alias: "UPS Grobregelung Laden & Entladen"
     id: ups_grob_control_full
-    mode: queued
-    max: 10
+    mode: single
+    #mode: queued
+    #max: 10
     trigger:
       - platform: state
         entity_id:
@@ -328,9 +330,9 @@ automation:
     action:
       # --- VARIABLEN VORZIEHEN ---
       - variables:
-          netz: "{{ states('sensor.solarnet_leistung_vom_netz') | float(0) }}"
-          bat_pwr: "{{ states('sensor.marstek_batterieleistung_gesamt') | float(0) }}"
-          ups_pwr: "{{ states('sensor.ups_ac_leistung') | float(0) | abs }}" # abs, falls Laden negativ angezeigt wird
+          netz: "{{ states('sensor.solarnet_leistung_vom_netz') | float(0) }}" # <0 wenn einspeisung
+          bat_pwr: "{{ states('sensor.marstek_batterieleistung_gesamt') | float(0) }}" # <0 wenn laden
+          ups_pwr: "{{ states('sensor.ups_ac_leistung') | float(0) }}" # <0 wenn laden
           soc: "{{ states('sensor.ups_custom_soc') | float(0) }}"
           low_cell: "{{ states('sensor.ups_lowest_cell') | float(0) }}"
           high_cell: "{{ states('sensor.ups_highest_cell') | float(0) }}"
@@ -343,6 +345,11 @@ automation:
           inverter_an: "{{ is_state('switch.battery_inverter_tasmota', 'on') }}"
           lader_an: "{{ is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on') }}"
 
+      #netz    >0: kaufen
+      #bat_pwr >0: entladen
+      #ups_pwr >0: entladen
+
+      - delay: "00:00:12"
       - choose:
           # 0 --- keine Verbindung zum BMS
           - conditions:
@@ -391,8 +398,8 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ (netz | float(0) > 10 or bat_pwr | float(0) > 170) and soc | float(0) > 25 
-                     and low_cell | float(0) > min_v | float(0) + hyst | float(0) and not inverter_an }}
+                  {{ (netz + bat_pwr > 180) and soc | float(0) > 25 
+                     and low_cell > min_v + hyst and not inverter_an }}
             sequence:
               - action: switch.turn_off
                 target:
@@ -406,11 +413,15 @@ automation:
                 data:
                   notification_id: "bms_no_connection"
 
+          #netz    >0: kaufen
+          #bat_pwr >0: entladen
+          #ups_pwr >0: entladen
+
           # 4 --- ENTLADEN STOPPEN
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ ((netz | float(0) < 10 and bat_pwr | float(0) < 150) or soc <= 20 or low_cell < min_v) 
+                  {{ ((netz + bat_pwr < 20) or soc <= 20 or low_cell < min_v) 
                      and inverter_an }}
             sequence:
               - action: switch.turn_off
@@ -419,14 +430,13 @@ automation:
                 data:
                   notification_id: "bms_no_connection"
 
-          # 5 --- LADEN STOPPEN (Inklusive < 20W Logik)
+          # 5 --- LADEN STOPPEN (Inklusive < 30W Logik)
           - conditions:
               - condition: template
                 value_template: >-
                   {# Stop wenn Netzbezug steigt, Akku voll, Zelle zu hoch ODER Ladeleistung zu gering #}
-                  {{ (netz > 10 or high_cell > max_v 
-                                or (ups_pwr < 20 and soc > 90) 
-                                or (bat_pwr > -100 and netz > -50))   
+                  {{ (netz + bat_pwr > 50 or high_cell > max_v 
+                                or (ups_pwr < -15 and soc > 95) )
                     and lader_an }}
             sequence:
               - action: switch.turn_off
@@ -439,11 +449,15 @@ automation:
                 data:
                   notification_id: "bms_no_connection"
 
+          #netz    >0: kaufen
+          #bat_pwr >0: entladen
+          #ups_pwr >0: entladen
+
           # 6 --- LADEN STARTEN
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ netz < -820 and soc < 99 and high_cell < max_v - hyst 
+                  {{ netz + bat_pwr < -820 and soc < 99 and high_cell < max_v - hyst 
                      and not inverter_an and not lader_an }}
             sequence:
               - action: switch.turn_on
