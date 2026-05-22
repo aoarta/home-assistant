@@ -117,7 +117,7 @@ automation:
       - trigger: state
         entity_id: input_number.zero_manueller_ladestrom
         for:
-          seconds: 2 # debounce slider drags
+          seconds: 5 # debounce slider drags
       - trigger: state
         entity_id: sensor.zero_motorcycles_1037976_soc
         for:
@@ -134,6 +134,16 @@ automation:
       # because the wallbox may refuse to enter "charging" state when globalcurrent is 0.
       - trigger: state
         entity_id: button.warp3_2ita_startcharge
+
+      # Safety net: periodisches Re-Evaluate
+      - trigger: time_pattern
+        minutes: "/2"
+
+      # Falls jemand direkt am Gerät startet
+      - trigger: state
+        entity_id: binary_sensor.warp3_2ita_charging
+        from: "off"
+        to: "on"
 
     conditions:
       - condition: state

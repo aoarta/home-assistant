@@ -58,7 +58,7 @@ recorder:
       - sensor.solarnet_leistung_netzeinspeisung
       - sensor.solarnet_leistung_verbrauch
       - sensor.solarnet_pv_leistung
-      - sensor.solarnet_leistung_vom_netz
+      # - sensor.solarnet_leistung_vom_netz
 
     entity_globs:
       - sensor.*defekt*
