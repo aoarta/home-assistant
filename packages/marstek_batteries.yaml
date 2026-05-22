@@ -100,6 +100,8 @@ template:
   # Venus SOC Reset Points
   # ==========================================================
   - triggers:
+      - trigger: homeassistant
+        event: start
       # Only reacts to the smoothed Custom SOC to ignore bouncing
       # of the hardware sensor (99 -> 100 -> 99)
       - trigger: numeric_state
@@ -120,14 +122,17 @@ template:
           {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
 
           {% set hw_soc = states('sensor.marstek_venus_1_batterie_ladezustand') | float(0) %}
+          {% set custom_soc = states('sensor.venus_1_custom_soc') | float(none) %}          
+          {% set stop_soc =state_attr('sensor.zentrale_parameter', 'stop_soc') | float(15) %}
           {% set capacity = state_attr('sensor.zentrale_parameter', 'venus_capacity_wh') | float(5120) %}
 
-           {% if hw_soc < 15 %}
-            {# Sync to HW-SOC when battery is almost empty #}
-            {{ current_energy - (hw_soc / 100 * capacity) }}
+          {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
+
+          {% if hw_soc <= stop_soc or drift_too_high %}
+            {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
           {% elif hw_soc >= 100 %}
             {# At 100% we take the higher value (since energy flow decreases/goes negative when charging) #}
-            {{ [current_energy, last_reset] | max }}
+            {{ current_energy }}
           {% elif current_energy < last_reset %}
             {{ current_energy }}
           {% else %}
@@ -151,15 +156,19 @@ template:
           {% set current_energy = states('sensor.venus_2_energiefluss_wh') | float(0) %}
           {% set raw_last_reset = states('sensor.venus_2_soc_reset_punkt') %}
           {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
+
           {% set hw_soc = states('sensor.marstek_venus_2_batterie_ladezustand') | float(0) %}
+          {% set custom_soc = states('sensor.venus_2_custom_soc') | float(none) %}          
+          {% set stop_soc =state_attr('sensor.zentrale_parameter', 'stop_soc') | float(15) %}
           {% set capacity = state_attr('sensor.zentrale_parameter', 'venus_capacity_wh') | float(5120) %}
 
-           {% if hw_soc < 15 %}
-            {# Sync to HW-SOC when battery is almost empty #}
-            {{ current_energy - (hw_soc / 100 * capacity) }}
+          {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
+
+          {% if hw_soc <= stop_soc or drift_too_high %}
+            {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
           {% elif hw_soc >= 100 %}
             {# At 100% we take the higher value (since energy flow decreases/goes negative when charging) #}
-            {{ [current_energy, last_reset] | max }}
+            {{ current_energy }}
           {% elif current_energy < last_reset %}
             {{ current_energy }}
           {% else %}
@@ -169,6 +178,10 @@ template:
   - triggers:
       - trigger: homeassistant
         event: start
+      - trigger: state
+        entity_id: sensor.venus_1_energiefluss_wh
+      - trigger: state
+        entity_id: sensor.venus_1_soc_reset_punkt
       - trigger: time_pattern
         minutes: "/1"
     sensor:
@@ -181,38 +194,26 @@ template:
           {% set neu_wh = states('sensor.venus_1_energiefluss_wh') | float(none) %}
           {% set reset_wh = states('sensor.venus_1_soc_reset_punkt') | float(none) %}
 
-          {# If hardware is offline or sensors are not ready -> retain old state #}
-          {% if hw_soc == -1 or neu_wh is none or reset_wh is none %}
-            {{ this.state if this.state is defined else 'unknown' }}
+          {% if neu_wh is none or reset_wh is none %}
+            {{ this.state if is_number(this.state) else hw_soc }}
+          {% elif hw_soc >= 100 %}
+            100
           {% else %}
-            {% set alt_wh = this.attributes.get('last_wh', 0) | float(0) %}
-            
-            {% if (neu_wh - alt_wh) | abs >= 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
-              {% if hw_soc >= 100 %}
-                100
-              {% else %}
-                {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
-                  {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
-                  {{ calc_soc | round(1) | clamp(0, 100) }}
-               {% endif %}
-            {% else %}
-              {{ this.state if this.state is defined else hw_soc }}
-            {% endif %}
+            {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
+            {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
+            {{ calc_soc | round(1) | clamp(0, 100) }}
           {% endif %}
-        attributes:
-          last_wh: >-
-            {% set hw_soc = states('sensor.marstek_venus_1_batterie_ladezustand') | float(-1) %}
-            {% set neu_wh = states('sensor.venus_1_energiefluss_wh') | float(none) %}
-            {% set alt_wh = this.attributes.get('last_wh', neu_wh) | float(0) %}
 
-            {% if neu_wh is none or hw_soc == -1 %}
-              {{ this.attributes.get('last_wh', 0) }}
-            {% elif (neu_wh - alt_wh) | abs >= 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
-              {{ neu_wh }}
-            {% else %}
-              {{ alt_wh }}
-            {% endif %}
-
+  - triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: sensor.venus_2_energiefluss_wh
+      - trigger: state
+        entity_id: sensor.venus_2_soc_reset_punkt
+      - trigger: time_pattern
+        minutes: "/1"
+    sensor:
       - name: "Venus 2 Custom SOC"
         unique_id: venus_2_custom_soc
         unit_of_measurement: "%"
@@ -222,39 +223,15 @@ template:
           {% set neu_wh = states('sensor.venus_2_energiefluss_wh') | float(none) %}
           {% set reset_wh = states('sensor.venus_2_soc_reset_punkt') | float(none) %}
 
-          {# If hardware is offline or sensors are not ready -> retain old state #}
-          {% if hw_soc == -1 or neu_wh is none or reset_wh is none %}
-            {{ this.state if this.state is defined else 'unknown' }}
+          {% if neu_wh is none or reset_wh is none %}
+            {{ this.state if is_number(this.state) else hw_soc }}
+          {% elif hw_soc >= 100 %}
+            100
           {% else %}
-            {% set alt_wh = this.attributes.get('last_wh', 0) | float(0) %}
-            
-            {% if (neu_wh - alt_wh) | abs >= 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
-              {% if hw_soc >= 100 %}
-                100
-              {% else %}
-                {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
-                {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
-                
-                {# Clamps the value cleanly between 0 and 100 and rounds #}
-                {{ calc_soc | round(1) | clamp(0, 100) }}
-              {% endif %}
-            {% else %}
-              {{ this.state if this.state is defined else hw_soc }}
-            {% endif %}
+            {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
+            {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
+            {{ calc_soc | round(1) | clamp(0, 100) }}
           {% endif %}
-        attributes:
-          last_wh: >-
-            {% set hw_soc = states('sensor.marstek_venus_2_batterie_ladezustand') | float(-1) %}
-            {% set neu_wh = states('sensor.venus_2_energiefluss_wh') | float(none) %}
-            {% set alt_wh = this.attributes.get('last_wh', neu_wh) | float(0) %}
-
-            {% if neu_wh is none or hw_soc == -1 %}
-              {{ this.attributes.get('last_wh', 0) }}
-            {% elif (neu_wh - alt_wh) | abs >= 5 or hw_soc >= 100 or trigger.platform == 'homeassistant' %}
-              {{ neu_wh }}
-            {% else %}
-              {{ alt_wh }}
-            {% endif %}
 
       - name: "Marstek usable Energy"
         unique_id: marstek_usable_energy
@@ -357,12 +334,19 @@ template:
                   {% endif %}
                 {% endif %}
 
-                {% if t1 > lim1 and t2 < lim2 %}
+                {# Overflow only if the receiving battery still has headroom #}
+                {% if t1 > lim1 and t2 < lim2 and s2 < 100 %}
                   {{ {'v1': lim1, 'v2': [lim2, t2 + t1 - lim1] | min | round(0) | int} }}
-                {% elif t1 < lim1 and t2 > lim2 %}
+                {% elif t1 < lim1 and t2 > lim2 and s1 < 100 %}
                   {{ {'v1': [lim1, t1 + t2 - lim2] | min | round(0) | int, 'v2': lim2} }}
                 {% elif t1 > lim1 and t2 > lim2 %}
                   {{ {'v1': lim1, 'v2': lim2} }}
+                {% elif t1 > lim1 %}
+                  {# v2 is full — cap v1, drop the excess #}
+                  {{ {'v1': lim1, 'v2': t2} }}
+                {% elif t2 > lim2 %}
+                  {# v1 is full — cap v2, drop the excess #}
+                  {{ {'v1': t1, 'v2': lim2} }}
                 {% else %}
                   {{ {'v1': t1, 'v2': t2} }}
                 {% endif %}
@@ -472,8 +456,8 @@ template:
               is_number(states('sensor.marstek_venus_1_batterie_ladezustand')) and
               is_number(states('sensor.marstek_venus_2_batterie_ladezustand')) }}
 
-      - name: "Marstek Batterieleistung Gesamt"
-        unique_id: marstek_batterieleistung_gesamt
+      - name: "Marstek AC Leistung Gesamt"
+        unique_id: marstek_ac_leistung_gesamt
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
@@ -487,6 +471,23 @@ template:
           {{ is_number(states('sensor.marstek_venus_1_ac_leistung')) and
              is_number(states('sensor.marstek_venus_2_ac_leistung')) }}
 
+      - name: "Marstek DC Leistung Gesamt"
+        # positiv wenn entladen
+        # Batterieleistung ist das Negative der AC-Leistung, wir wollen es aber einfach halten!
+        unique_id: marstek_dc_leistung_gesamt
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >-
+          {# Read raw values and set to 0 as a safety measure if a sensor is offline #}
+          {% set venus1 = states('sensor.marstek_venus_1_batterieleistung') | float(0) %}
+          {% set venus2 = states('sensor.marstek_venus_2_batterieleistung') | float(0) %}
+          {{ (-(venus1 + venus2)) | round(0) }}
+        availability: >-
+          {# The sensor is only available when at least one of the source sensors provides a valid value #}
+          {{ is_number(states('sensor.marstek_venus_1_batterieleistung')) and
+             is_number(states('sensor.marstek_venus_2_batterieleistung')) }}
+
 automation:
   - alias: "Venus Energieintegration"
     mode: queued
@@ -497,37 +498,40 @@ automation:
         entity_id: sensor.takt
     actions:
       - variables:
-          own_consumption_w: "{{ state_attr('sensor.zentrale_parameter', 'venus_own_consumption') | float(10) }}"
           delta_t_h: "{{ (states('input_number.takt_interval_sekunden') | float(1)) / 3600 }}"
 
       - parallel:
           - sequence:
               - variables:
-                  power: "{{ states('sensor.marstek_venus_1_ac_leistung') | float(0) }}"
-                  # Add self-consumption of 9W (9W / 3600s * 15s = 0.0375 Wh per interval)
+                  #power: "{{ states('sensor.marstek_venus_1_ac_leistung') | float(0) }}"
+                  power: "{{ -(states('sensor.marstek_venus_1_batterieleistung') | float(0)) }}"
+                  # No self-consumption here
                   delta_wh: >-
                     {# if delta > max_delta, something is wrong #}
-                    {{ ((power + own_consumption_w) * delta_t_h) if power < 2500 else own_consumption_w * delta_t_h }}
+                    {{ (power * delta_t_h) if (power | abs) < 2500 else 0 }}
               - action: input_number.set_value
                 target:
                   entity_id: input_number.venus_1_energiefluss_wh_counter
                 data:
                   value: >
-                    {{ states('input_number.venus_1_energiefluss_wh_counter') | float(0) + delta_wh }}
+                    {% set new = states('input_number.venus_1_energiefluss_wh_counter') | float(0) + delta_wh %}
+                    {{ [[new, -50000] | max, 50000] | min }}
 
           - sequence:
               - variables:
-                  power: "{{ states('sensor.marstek_venus_2_ac_leistung') | float(0) }}"
+                  #power: "{{ states('sensor.marstek_venus_2_ac_leistung') | float(0) }}"
+                  power: "{{ -(states('sensor.marstek_venus_2_batterieleistung') | float(0)) }}"
                   # Add self-consumption of 9W (9W / 3600s * 15s = 0.0375 Wh per interval)
                   delta_wh: >-
                     {# if delta > max_delta, something is wrong #}
-                    {{ ((power + own_consumption_w) * delta_t_h) if power < 2500 else own_consumption_w * delta_t_h }}
+                    {{ (power * delta_t_h) if (power | abs) < 2500 else 0 }}
               - action: input_number.set_value
                 target:
                   entity_id: input_number.venus_2_energiefluss_wh_counter
                 data:
                   value: >
-                    {{ states('input_number.venus_2_energiefluss_wh_counter') | float(0) + delta_wh }}
+                    {% set new = states('input_number.venus_2_energiefluss_wh_counter') | float(0) + delta_wh %}
+                    {{ [[new, -50000] | max, 50000] | min }}
 
   - alias: "Sende Lade und Entladebefehle an Hardware"
     id: "sende_batterie_targets_v2"
@@ -648,6 +652,7 @@ automation:
           - sensor.marstek_venus_1_batterie_ladezustand
           - sensor.marstek_venus_2_batterie_ladezustand
         above: 99
+        for: "00:00:10"
         id: "sensor_update"
 
       - trigger: time_pattern
@@ -750,3 +755,26 @@ automation:
                     data:
                       value: 0
                     continue_on_error: true # ← NEU
+
+  - alias: "Venus SOC Counter Reset"
+    description: "Setzt den Wh-Counter auf Max-Kapazität, wenn die Hardware 100% meldet"
+    trigger:
+      - platform: numeric_state
+        entity_id:
+          - sensor.marstek_venus_1_batterie_soc
+          - sensor.marstek_venus_2_batterie_soc
+        above: 99.5
+    action:
+      - service: input_number.set_value
+        target:
+          # Wir wählen dynamisch den richtigen Counter passend zum Trigger
+          entity_id: >
+            {% if 'venus_1' in trigger.entity_id %}
+              input_number.venus_1_energiefluss_wh_counter
+            {% else %}
+              input_number.venus_2_energiefluss_wh_counter
+            {% endif %}
+        data:
+          value: >
+            {% set key = 'venus_1' if 'venus_1' in trigger.entity_id else 'venus_2' %}
+            {{ state_attr('sensor.zentrale_parameter', key).capacity | float(5120) }}

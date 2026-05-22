@@ -15,9 +15,11 @@ template:
           # batteries: capacity
           venus_capacity_wh: 5120
           ups_capacity_wh: 2200
+          # batteries: safety
+          lowest_soc: 12 # below that emergency start
+          stop_soc: 15
           # batteries: own consumption
-          venus_own_consumption_h: 0 #9 too much
-          ups_own_consumption_h: 0 #22 too much
+          ups_own_consumption_w: 0 #22 too much
           # battery care
           override_soc_days: 5
           battery_care_days: 8

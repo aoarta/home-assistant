@@ -137,12 +137,12 @@ template:
         state_class: measurement
         availability: >-
           {{ has_value('sensor.solarnet_leistung_vom_netz') and
-             has_value('sensor.marstek_batterieleistung_gesamt') and
+             has_value('sensor.marstek_ac_leistung_gesamt') and
              has_value('sensor.pv_produktion_watt_fast')
              }}
         state: >-
           {{ ( states('sensor.solarnet_leistung_vom_netz') | float(0)
-               + states('sensor.marstek_batterieleistung_gesamt') | float(0)
+               + states('sensor.marstek_ac_leistung_gesamt') | float(0)
                + states('sensor.pv_produktion_watt_fast') | float(0)
               ) | round(0) }}
 
@@ -154,10 +154,10 @@ template:
         state_class: measurement
         availability: >-
           {{ has_value('sensor.solarnet_leistung_vom_netz') and
-             has_value('sensor.marstek_batterieleistung_gesamt') }}
+             has_value('sensor.marstek_ac_leistung_gesamt') }}
         state: >-
           {{ ( states('sensor.solarnet_leistung_vom_netz') | float(0) +
-               states('sensor.marstek_batterieleistung_gesamt') | float(0)
+               states('sensor.marstek_ac_leistung_gesamt') | float(0)
               ) | round(0) }}
 
   #  - sensor:
