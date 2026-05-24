@@ -289,9 +289,8 @@ automation:
 
   - alias: "UPS Grobregelung Laden & Entladen"
     id: ups_grob_control_full
-    mode: single
-    #mode: queued
-    #max: 10
+    mode: queued
+    max: 12
     trigger:
       - platform: state
         entity_id:
@@ -302,13 +301,22 @@ automation:
           - sensor.ups_lowest_cell
           - sensor.ups_highest_cell
           - input_number.manuelle_ladeleistung
+      - platform: time_pattern
+        seconds: "/10" # Fallback: läuft alle 15 s vom Minutenstart aus
+    condition:
+      - condition: template
+        value_template: >-
+          {% set lt = state_attr(this.entity_id, 'last_triggered') %}          
+          {{ lt is none or (now() - lt).total_seconds() >= 12 }}
     action:
+      #      - delay: "00:00:12"
       # --- VARIABLEN VORZIEHEN ---
       - variables:
           netz: "{{ states('sensor.solarnet_leistung_vom_netz') | float(0) }}" # <0 wenn einspeisung
           bat_pwr: "{{ states('sensor.marstek_ac_leistung_gesamt') | float(0) }}" # <0 wenn laden
           ups_pwr: "{{ states('sensor.ups_ac_leistung') | float(0) }}" # <0 wenn laden
           soc: "{{ states('sensor.ups_custom_soc') | float(0) }}"
+          hw_soc: "{{ states('sensor.ups_soc') | float(0) }}"
           low_cell: "{{ states('sensor.ups_lowest_cell') | float(0) }}"
           high_cell: "{{ states('sensor.ups_highest_cell') | float(0) }}"
           lowest_soc: "{{ state_attr('sensor.zentrale_parameter', 'lowest_soc') | float(12) }}"
@@ -326,7 +334,6 @@ automation:
       #bat_pwr >0: entladen
       #ups_pwr >0: entladen
 
-      - delay: "00:00:12"
       - choose:
           # 0 --- keine Verbindung zum BMS
           - conditions:
@@ -413,7 +420,7 @@ automation:
                 value_template: >-
                   {# Stop wenn Netzbezug steigt, Akku voll, Zelle zu hoch ODER Ladeleistung zu gering #}
                   {{ (netz + bat_pwr > 50 or high_cell > max_v 
-                                or (ups_pwr < -15 and soc > 95) )
+                                or (ups_pwr > -15 and soc > 95) )
                     and lader_an and soc >= stop_soc }}
             sequence:
               - action: switch.turn_off
@@ -434,14 +441,14 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ netz + bat_pwr < -820 and soc < 99 and high_cell < max_v - hyst 
+                  {{ netz + bat_pwr < -820 and soc < 100 and high_cell < max_v - hyst 
                      and not inverter_an and not lader_an }}
             sequence:
               - action: switch.turn_on
                 target: { entity_id: switch.battery_charger }
               - if:
                   - condition: template
-                    value_template: "{{ netz + bat_pwr < -1200 and soc < 99 }}"
+                    value_template: "{{ netz + bat_pwr < -1200 and (soc < 99 or hw_soc < 100) }}"
                 then:
                   - delay: "00:00:01"
                   - action: switch.turn_on

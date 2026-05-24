@@ -270,7 +270,7 @@ template:
           - input_number.manuelle_ladeleistung
           - input_boolean.override_soc
         for:
-          seconds: 3
+          seconds: 1
       - trigger: time_pattern
         seconds: "/15"
     # trigger: 15s, start, manuelle_ladeleistung, override_soc
@@ -546,7 +546,7 @@ automation:
           - input_number.manuelle_ladeleistung
     actions:
       - delay: # ← Debounce: waits to see if more triggers arrive
-          milliseconds: 50
+          milliseconds: 100
 
       - variables:
           # 1. --- FETCH DATA ONCE ---

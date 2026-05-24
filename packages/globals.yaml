@@ -24,4 +24,6 @@ template:
           override_soc_days: 5
           battery_care_days: 8
           # Zero
+          zero_capacity_kwh: 14.400
+          zero_charge_efficienty: 0.88 # AC-DC efficiency
           zero_max_amps: 17

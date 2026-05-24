@@ -27,6 +27,24 @@ input_number:
     unit_of_measurement: "A"
     icon: mdi:car-speed-limiter
 
+  zero_calibrated_soc:
+    name: "Zero Calibrated SoC (snapshot)"
+    # SOC value at the moment of the last calibration
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-sync
+
+  zero_calibration_energy_kwh:
+    name: "Zero Calibration Energy (snapshot)"
+    # Absolute wallbox meter reading at the moment of the last calibration
+    min: 0
+    max: 999999
+    step: 0.001
+    unit_of_measurement: "kWh"
+    icon: mdi:counter
+
 # --- INPUT DATETIME ---
 input_datetime:
   zero_last_charge_start:
@@ -101,6 +119,40 @@ template:
           {% set ts = state_attr('input_datetime.zero_user_override_until', 'timestamp') %}
           {{ 'true' if ts is not none and ts > now().timestamp() else 'false' }}
 
+  - triggers:
+      - trigger: state
+        entity_id: sensor.warp3_2ita_energyabs # verify entity name!
+      - trigger: time_pattern
+        seconds: "/30"
+    sensor:
+      - name: "Zero Estimated SoC"
+        unique_id: zero_estimated_soc
+        unit_of_measurement: "%"
+        device_class: battery
+        state_class: measurement
+        state: >-
+          {% set base_soc = states('input_number.zero_calibrated_soc') | float(-1) %}
+          {% set base_kwh = states('input_number.zero_calibration_energy_kwh') | float(-1) %}
+          {% set meter   = states('sensor.warp3_2ita_energyabs') | float(-1) %}
+          {# Fallback: if no calibration yet, mirror the raw bike SoC #}
+          {% if base_soc < 0 or base_kwh < 0 or meter < 0 %}
+            {{ states('sensor.zero_motorcycles_1037976_soc') }}
+          {% else %}
+            {% set capacity = state_attr('sensor.zentrale_parameter', 'zero_capacity') | float(14.4) %}          
+            {% set efficiency = state_attr('sensor.zentrale_parameter', 'zero_charge_efficiency') | float(0.88) %}          
+
+            {% set added_kwh = [meter - base_kwh, 0] | max %}
+            {% set delta_pct = (added_kwh * efficiency / capacity) * 100 %}
+            {{ [base_soc + delta_pct, 100] | min | round(1) }}
+          {% endif %}
+        attributes:
+          base_soc: "{{ states('input_number.zero_calibrated_soc') }}"
+          base_kwh: "{{ states('input_number.zero_calibration_energy_kwh') }}"
+          added_kwh: >-
+            {% set b = states('input_number.zero_calibration_energy_kwh') | float(0) %}
+            {% set m = states('sensor.warp3_2ita_energyabs') | float(0) %}
+            {{ [m - b, 0] | max | round(3) }}
+
 # --- AUTOMATIONS ---
 automation:
   # ============================================================
@@ -119,7 +171,7 @@ automation:
         for:
           seconds: 5 # debounce slider drags
       - trigger: state
-        entity_id: sensor.zero_motorcycles_1037976_soc
+        entity_id: sensor.zero_estimated_soc
         for:
           seconds: 10 # SOC changes slowly
       - trigger: state
@@ -174,7 +226,7 @@ automation:
 
     actions:
       - variables:
-          soc: "{{ states('sensor.zero_motorcycles_1037976_soc') | int(0) }}"
+          soc: "{{ states('sensor.zero_estimated_soc') | float(0) }}"
           manual_amps: "{{ states('input_number.zero_manueller_ladestrom') | int(0) }}"
           pv_amps: "{{ states('sensor.zero_dynamischer_ladestrom') | int(0) }}"
           stop_limit: "{{ states('input_number.zero_ladung_stop_soc') | int(100) }}"
@@ -251,11 +303,9 @@ automation:
 
           # --- MODE B: PV AUTOMATIC (when manual is 0) ---
           - conditions:
-              - "{{ manual_amps == 0 }}"
-              - "{{ soc < stop_limit }}"
-              # Hysteresis: keep charging until stop_limit, or start fresh below start_limit.
-              # User-initiated start bypasses the hysteresis (user wants to charge NOW).
-              - "{{ is_charging or soc < start_limit or user_started }}"
+              - "{{ is_charging }}"
+              - "{{ not user_started }}"
+              - "{{ soc >= stop_limit or (pv_amps < 6 and min_runtime_reached) }}"
             sequence:
               - choose:
                   # B1: START or ADJUST when enough PV surplus
@@ -396,3 +446,37 @@ automation:
           entity_id: input_number.zero_manueller_ladestrom
         data:
           value: 0
+
+  - alias: "Zero: Calibrate SoC snapshot"
+    id: zero_soc_calibrate
+    mode: single
+    triggers:
+      # 1) New real SoC value arrives from the bike
+      - trigger: state
+        entity_id: sensor.zero_motorcycles_1037976_soc
+      # 2) Cable plugged in -> take a fresh snapshot at session start
+      - trigger: state
+        entity_id: binary_sensor.warp3_2ita_cable
+        from: "off"
+        to: "on"
+    conditions:
+      # Ignore unknown/unavailable SoC values
+      - condition: template
+        value_template: >
+          {{ states('sensor.zero_motorcycles_1037976_soc')
+             not in ['unknown', 'unavailable', 'none', None] }}
+      - condition: template
+        value_template: >-
+          {{ states('sensor.warp3_2ita_energyabs')
+             not in ['unknown', 'unavailable', 'none', None] }}
+    actions:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.zero_calibrated_soc
+        data:
+          value: "{{ states('sensor.zero_motorcycles_1037976_soc') | float(0) }}"
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.zero_calibration_energy_kwh
+        data:
+          value: "{{ states('sensor.warp3_2ita_energyabs') | float(0) }}"
