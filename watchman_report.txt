@@ -1,0 +1,15 @@
+-== Watchman Report ==- 
+
+-== Congratulations, all 15 actions from your config are available!
+
+-== Missing 1 entity(ies) from 172 found in your config:
++--------------------------------+----------+---------------------------------------------------------------+
+| Entity ID                      | State    | Location                                                      |
++--------------------------------+----------+---------------------------------------------------------------+
+| sensor.average_consumption_las | unknown  | 📄 packages/consumption.yaml:157,166                          |
+| t_1h_fast                      |          |                                                               |
++--------------------------------+----------+---------------------------------------------------------------+
+
+-== Report created on 29 May 2026 14:35:40
+-== Parsed 20 files in 0.01s., ignored 0 files 
+-== Generated in: 0.06s. Validated in: 0.00s.

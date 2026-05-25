@@ -1,41 +1,44 @@
 # --- UTILITY METER (Consumption Statistics) ---
 utility_meter:
-  pv_ertrag_heute_um:
-    unique_id: pv_ertrag_heute_um
+  pv_energy_yield_today_um:
+    name: "PV Energy Yield Today UM"
+    unique_id: pv_energy_yield_today_um
     source: sensor.pv_energy_total_realtime
-    name: "PV Yield Today UM"
     cycle: daily
 
-  pv_ertrag_balkon_heute_um:
-    unique_id: pv_ertrag_balkon_heute_um
-    source: sensor.pv_energy_balkon_realtime
-    name: "PV Yield Balcony Today UM"
+  pv_energy_yield_balcony_today_um:
+    name: "PV Energy Yield Balcony Today UM"
+    unique_id: pv_energy_yield_balcony_today_um
+    source: sensor.pv_energy_balcony_realtime
     cycle: daily
 
-  pv_ertrag_dach_heute_um:
-    unique_id: pv_ertrag_dach_heute_um
-    source: sensor.dach_energie_clean
-    name: "PV Yield Roof Today UM"
+  pv_energy_yield_roof_today_um:
+    name: "PV Energy Yield Roof Today UM"
+    unique_id: pv_energy_yield_roof_today_um
+    source: sensor.roof_energy
     cycle: daily
 
 sensor:
   - platform: filter
     name: "PV Energy Yield Today"
-    unique_id: pv_ertrag_heute
-    entity_id: sensor.pv_ertrag_heute_um
+    unique_id: pv_energy_yield_today
+    entity_id: sensor.pv_energy_yield_today_um
     filters:
       - filter: range
         upper_bound: 100 # Everything above 100 kWh per day is ignored
-        
+
   - platform: filter
     name: "PV Energy Yield Balcony Today"
-    entity_id: sensor.pv_ertrag_balkon_heute_um
+    unique_id: pv_energy_yield_balcony_today
+    entity_id: sensor.pv_energy_yield_balcony_today_um
     filters:
       - filter: range
         upper_bound: 15 # Everything above 15 kWh per day is ignored
+
   - platform: filter
     name: "PV Energy Yield Roof Today"
-    entity_id: sensor.pv_ertrag_dach_heute_um
+    unique_id: pv_energy_yield_roof_today
+    entity_id: sensor.pv_energy_yield_roof_today_um
     filters:
       - filter: range
         upper_bound: 60 # Everything above 60 kWh per day is ignored
@@ -44,8 +47,8 @@ template:
   - sensor:
       # --- SINGLE FILTERS (Inverter Energy) ---
       # These sensors prevent the counter from ever decreasing or jumping to 0 on errors.
-      - name: "Balkon Inverter 1 Clean"
-        unique_id: balkon_inverter_1_clean
+      - name: "Balcony Inverter 1 Energy"
+        unique_id: balcony_inverter_1_energy
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
@@ -59,8 +62,8 @@ template:
             {{ val }}
           {% endif %}
 
-      - name: "Balkon Inverter 2 Clean"
-        unique_id: balkon_inverter_2_clean
+      - name: "Balcony Inverter 2 Energy"
+        unique_id: balcony_inverter_2_energy
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
@@ -74,8 +77,8 @@ template:
             {{ val }}
           {% endif %}
 
-      - name: "Garage Inverter Clean"
-        unique_id: garage_inverter_clean
+      - name: "Garage Inverter Energy"
+        unique_id: garage_inverter_energy
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
@@ -89,8 +92,8 @@ template:
             {{ val }}
           {% endif %}
 
-      - name: "PV Production Balcony Watt Fast"
-        unique_id: pv_produktion_balkon_watt_fast
+      - name: "PV Production Balcony power"
+        unique_id: pv_production_balcony_power
         unit_of_measurement: "W"
         device_class: power
         availability: >-
@@ -104,8 +107,8 @@ template:
           {# Only add values that are actually available as numbers #}
           {{ (s1 + s2 + s3) | round(0) }}
 
-      - name: "Roof Energy Clean"
-        unique_id: dach_energie_clean
+      - name: "Roof Energy"
+        unique_id: roof_energy
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
@@ -125,26 +128,27 @@ template:
             {{ last }}
           {% endif %}
 
-      - name: "PV Production Watt Fast"
-        unique_id: pv_produktion_watt_fast
+      - name: "PV Production Power"
+        unique_id: pv_production_power
         unit_of_measurement: "W"
         device_class: power
+        state_class: measurement
         availability: >-
           {{ is_number(states('sensor.zwicknagl_martin_leistung_ac')) and
-             is_number(states('sensor.pv_produktion_balkon_watt_fast')) }}
+             is_number(states('sensor.pv_production_balcony_power')) }}
         state: >-
           {% set s1 = states('sensor.zwicknagl_martin_leistung_ac') | float(0) %}
-          {% set s2 = states('sensor.pv_produktion_balkon_watt_fast') | float(0) %}
+          {% set s2 = states('sensor.pv_production_balcony_power') | float(0) %}
           {# Only add values that are actually available as numbers #}
           {{ (s1 + s2) | round(0) }}
 
   - triggers:
       - trigger: state
         entity_id:
-          - sensor.balkon_inverter_1_clean
-          - sensor.balkon_inverter_2_clean
-          - sensor.garage_inverter_clean
-          - sensor.dach_energie_clean
+          - sensor.balcony_inverter_1_energy
+          - sensor.balcony_inverter_2_energy
+          - sensor.garage_inverter_energy
+          - sensor.roof_energy
     sensor:
       - name: "PV Energy Realtime Aggregator"
         unique_id: pv_energy_realtime_aggregator
@@ -152,19 +156,19 @@ template:
         state: "OK"
         attributes:
           # THE TRICK: Fetch all values once here
-          balkon_1: "{{ states('sensor.balkon_inverter_1_clean') | float(0) }}"
-          balkon_2: "{{ states('sensor.balkon_inverter_2_clean') | float(0) }}"
-          garage: "{{ states('sensor.garage_inverter_clean') | float(0) }}"
-          dach: "{{ states('sensor.dach_energie_clean') | float(0) }}"
+          balcony_1: "{{ states('sensor.balcony_inverter_1_energy') | float(0) }}"
+          balcony_2: "{{ states('sensor.balcony_inverter_2_energy') | float(0) }}"
+          garage: "{{ states('sensor.garage_inverter_energy') | float(0) }}"
+          roof: "{{ states('sensor.roof_energy') | float(0) }}"
 
       - name: "PV Energy Balcony Realtime"
-        unique_id: pv_energy_balkon_realtime
+        unique_id: pv_energy_balcony_realtime
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
         state: >-
-          {% set b1 = state_attr('sensor.pv_energy_realtime_aggregator', 'balkon_1') | float(0) %}
-          {% set b2 = state_attr('sensor.pv_energy_realtime_aggregator', 'balkon_2') | float(0) %}
+          {% set b1 = state_attr('sensor.pv_energy_realtime_aggregator', 'balcony_1') | float(0) %}
+          {% set b2 = state_attr('sensor.pv_energy_realtime_aggregator', 'balcony_2') | float(0) %}
           {% set g = state_attr('sensor.pv_energy_realtime_aggregator', 'garage') | float(0) %}
           {{ (b1 + b2 + g) | round(2) }}
 
@@ -174,40 +178,6 @@ template:
         device_class: energy
         state_class: total_increasing
         state: >-
-          {% set b_total = states('sensor.pv_energy_balkon_realtime') | float(0) %}
-          {% set dach = state_attr('sensor.pv_energy_realtime_aggregator', 'dach') | float(0) %}
-          {{ (b_total + dach) | round(2) }}
-
-  #  - triggers:
-  #      - trigger: time_pattern
-  #        seconds: "/15"
-  #    sensor:
-  #      - name: "PV Production Watt"
-  #        unique_id: pv_produktion_watt
-  #        unit_of_measurement: "W"
-  #        device_class: power
-  #        state_class: measurement
-  #        # rounded value to multiples of 15
-  #        state: >-
-  #          {{ ((states('sensor.pv_produktion_watt_fast') | float(0)) / 15) | int * 15 }}
-
-  - triggers:
-      - trigger: state
-        entity_id: sensor.pv_produktion_watt_fast
-
-    sensor:
-      - name: "PV Production Watt"
-        unique_id: pv_produktion_watt
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-
-        state: >
-          {% set neu = states('sensor.pv_produktion_watt_fast') | float(0) %}
-          {% set alt = this.state | float(neu) %}
-
-          {% if (neu - alt) | abs >= 15 %}
-            {{ neu | round(0) }}
-          {% else %}
-            {{ alt }}
-          {% endif %}
+          {% set b_total = states('sensor.pv_energy_balcony_realtime') | float(0) %}
+          {% set roof = state_attr('sensor.pv_energy_realtime_aggregator', 'roof') | float(0) %}
+          {{ (b_total + roof) | round(2) }}

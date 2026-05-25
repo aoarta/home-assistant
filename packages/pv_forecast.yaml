@@ -495,7 +495,7 @@ automation:
       - platform: time
         at: "23:55:00"
     variables:
-      real: "{{ states('sensor.pv_ertrag_heute_um') | float(0) }}"
+      real: "{{ states('sensor.pv_energy_yield_today_um') | float(0) }}"
       forecast_heute: "{{ states('input_number.pv_prognose_festwert_heute') | float(0) }}"
       Q_bias: 0.001
       R_bias: 0.04

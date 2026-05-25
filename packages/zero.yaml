@@ -2,24 +2,24 @@
 input_number:
   zero_ladung_stop_soc:
     name: "Zero Stop SoC"
-    initial: 90
+    #    initial: 90
     min: 50
-    max: 100
+    max: 101
     step: 1
     unit_of_measurement: "%"
     icon: mdi:battery-check
 
   zero_ladung_start_soc:
     name: "Zero Start SoC"
-    initial: 60
+    #   initial: 60
     min: 30
     max: 100
     step: 1
     unit_of_measurement: "%"
     icon: mdi:battery-check
 
-  zero_manueller_ladestrom:
-    name: "Manual Charging Current (0 = Automatic)"
+  ev_manual_charging_curent:
+    name: "EV Manual Charging Current (0 = Automatic)"
     initial: 0
     min: 0
     max: 32
@@ -75,11 +75,11 @@ template:
         entity_id:
           - sensor.warp3_2ita_powernow
           - sensor.solarnet_leistung_vom_netz
-          - sensor.marstek_venus_1_ac_leistung
-          - sensor.marstek_venus_2_ac_leistung
+          - sensor.marstek_venus_1_ac_power
+          - sensor.marstek_venus_2_ac_power
     sensor:
       - name: "Zero Dynamic Charging Current"
-        unique_id: zero_dynamischer_ladestrom
+        unique_id: zero_dynamic_charging_current
         unit_of_measurement: "A"
         device_class: current
         state_class: measurement
@@ -97,8 +97,8 @@ template:
             #}
             {% set charger_power = states('sensor.warp3_2ita_powernow') | float(0) %}
             {% set power_from_net = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
-            {% set venus1 = states('sensor.marstek_venus_1_ac_leistung') | float(0) %}
-            {% set venus2 = states('sensor.marstek_venus_2_ac_leistung') | float(0) %}
+            {% set venus1 = states('sensor.marstek_venus_1_ac_power') | float(0) %}
+            {% set venus2 = states('sensor.marstek_venus_2_ac_power') | float(0) %}
 
             {% set surplus = charger_power - power_from_net - venus1 - venus2 %}
             {% set amps = (surplus / 230) | round(0, 'floor') | int %}
@@ -163,11 +163,11 @@ automation:
     mode: restart
     triggers:
       - trigger: state
-        entity_id: sensor.zero_dynamischer_ladestrom
+        entity_id: sensor.zero_dynamic_charging_current
         for:
           seconds: 30 # only react to surplus changes that are stable for 30s
       - trigger: state
-        entity_id: input_number.zero_manueller_ladestrom
+        entity_id: input_number.ev_manual_charging_curent
         for:
           seconds: 5 # debounce slider drags
       - trigger: state
@@ -227,8 +227,8 @@ automation:
     actions:
       - variables:
           soc: "{{ states('sensor.zero_estimated_soc') | float(0) }}"
-          manual_amps: "{{ states('input_number.zero_manueller_ladestrom') | int(0) }}"
-          pv_amps: "{{ states('sensor.zero_dynamischer_ladestrom') | int(0) }}"
+          manual_amps: "{{ states('input_number.ev_manual_charging_curent') | int(0) }}"
+          pv_amps: "{{ states('sensor.zero_dynamic_charging_current') | int(0) }}"
           stop_limit: "{{ states('input_number.zero_ladung_stop_soc') | int(100) }}"
           start_limit: "{{ states('input_number.zero_ladung_start_soc') | int(60) }}"
           current_wb_target: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
@@ -297,7 +297,7 @@ automation:
               # Reset manual to 0 -> falls back to PV auto mode next time
               - action: input_number.set_value
                 target:
-                  entity_id: input_number.zero_manueller_ladestrom
+                  entity_id: input_number.ev_manual_charging_curent
                 data:
                   value: 0
 
@@ -434,16 +434,16 @@ automation:
     mode: restart
     triggers:
       - trigger: state
-        entity_id: input_number.zero_manueller_ladestrom
+        entity_id: input_number.ev_manual_charging_curent
     conditions:
       - condition: numeric_state
-        entity_id: input_number.zero_manueller_ladestrom
+        entity_id: input_number.ev_manual_charging_curent
         above: 0
         below: 6
     actions:
       - action: input_number.set_value
         target:
-          entity_id: input_number.zero_manueller_ladestrom
+          entity_id: input_number.ev_manual_charging_curent
         data:
           value: 0
 
