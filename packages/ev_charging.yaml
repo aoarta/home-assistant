@@ -1,0 +1,429 @@
+# ============================================================
+# PV surplus wallbox charging (WARP3) — simplified
+# with manual override, per-session counter and per-vehicle target.
+#
+# Dashboard controls:
+#   * input_select.ev_vehicle_mode   : "off" | "zero" | "honda_e"
+#   * input_number.ev_charge_percent : 0..100 % of battery to add this session
+#   * input_number.ev_manual_charging_current : 0 or 6..32 A (0 = automatic)
+#
+# Behaviour:
+#   * Mode = "off"   -> wallbox stays off (running session is stopped).
+#   * Mode = "zero"  -> energy limit = zero_capacity   * pct / efficiency
+#     Mode = "honda_e" -> energy limit = honda_e_capacity * pct / efficiency
+#     (capacities and efficiencies are read from sensor.global_parameter)
+#   * Manual mode (manual current >= 6 A) charges at the fixed current;
+#     automatic mode follows PV surplus (>=6 A for 5 min to start,
+#     <6 A for 2 min to stop).
+#   * Session energy resets to 0 on every cable plug-in. Once the limit is
+#     reached, charging stops and stays off until the cable is unplugged.
+# ============================================================
+
+# --- INPUT SELECTS ---
+input_select:
+  ev_vehicle_mode:
+    name: "EV Vehicle Mode"
+    options:
+      - "off"
+      - "zero"
+      - "honda_e"
+    initial: "off"
+    icon: mdi:car-electric
+
+# --- INPUT NUMBERS ---
+input_number:
+  ev_manual_charging_current:
+    name: "EV Manual Charging Current (0 = Automatic)"
+    initial: 0
+    min: 0
+    max: 32
+    step: 1
+    unit_of_measurement: "A"
+    icon: mdi:car-speed-limiter
+
+  ev_charge_percent:
+    name: "EV Charge Target (% of battery)"
+    initial: 50
+    min: 0
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:battery-charging-50
+
+  ev_session_start_energy_kwh:
+    name: "EV Session Start Energy (snapshot)"
+    # Absolute wallbox meter reading captured at the last cable plug-in.
+    min: 0
+    max: 9999999
+    step: 0.001
+    unit_of_measurement: "kWh"
+    icon: mdi:counter
+
+# --- TEMPLATE SENSORS ---
+template:
+  # PV surplus expressed in Amps
+  - triggers:
+      - trigger: time_pattern
+        seconds: "/30"
+      - trigger: state
+        entity_id:
+          - sensor.warp3_2ita_powernow
+          - sensor.solarnet_leistung_vom_netz
+          - sensor.marstek_venus_1_ac_power
+          - sensor.marstek_venus_2_ac_power
+    sensor:
+      - name: "PV Dynamic Charging Current"
+        unique_id: pv_dynamic_charging_current
+        unit_of_measurement: "A"
+        device_class: current
+        state_class: measurement
+        state: >-
+          {% set cable_connected = is_state('binary_sensor.warp3_2ita_cable', 'on') %}
+          {% if not cable_connected %}
+            0
+          {% else %}
+            {# Sign conventions:
+                 - charger_power : positive = consumption
+                 - power_from_net: positive = grid import, negative = grid export
+                 - venus1/2      : positive = discharging, negative = charging
+               True PV surplus available for the wallbox (home batteries treated
+               as flexible):
+                 surplus = charger_power - power_from_net - venus1 - venus2
+            #}
+            {% set charger_power = states('sensor.warp3_2ita_powernow') | float(0) %}
+            {% set power_from_net = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
+            {% set venus1 = states('sensor.marstek_venus_1_ac_power') | float(0) %}
+            {% set venus2 = states('sensor.marstek_venus_2_ac_power') | float(0) %}
+
+            {% set surplus = charger_power - power_from_net - venus1 - venus2 %}
+            {% set amps = (surplus / 230) | round(0, 'floor') | int %}
+
+            {# Maximum charging current of the wallbox — adjust to your installation #}
+            {% set max_amps = state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) %}
+
+            {% if amps >= 6 %}
+              {{ [amps, max_amps] | min }}
+            {% else %}
+              0
+            {% endif %}
+          {% endif %}
+
+  # Energy delivered in the current charging session (since last plug-in)
+  - triggers:
+      - trigger: state
+        entity_id: sensor.warp3_2ita_energyabs
+      - trigger: state
+        entity_id: input_number.ev_session_start_energy_kwh
+    sensor:
+      - name: "EV Session Energy"
+        unique_id: ev_session_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        state: >-
+          {% set meter = states('sensor.warp3_2ita_energyabs') | float(-1) %}
+          {% set start = states('input_number.ev_session_start_energy_kwh') | float(-1) %}
+          {% if meter < 0 or start < 0 %}
+            0
+          {% else %}
+            {{ [meter - start, 0] | max | round(3) }}
+          {% endif %}
+        attributes:
+          start_energy_kwh: "{{ states('input_number.ev_session_start_energy_kwh') }}"
+          meter_kwh: "{{ states('sensor.warp3_2ita_energyabs') }}"
+
+  # Energy limit for the current session, derived from vehicle mode and percent
+  - sensor:
+      - name: "EV Max Charge Energy"
+        unique_id: ev_max_charge_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        state: >-
+          {% set mode = states('input_select.ev_vehicle_mode') %}
+          {% set pct = states('input_number.ev_charge_percent') | float(0) %}
+          {% if mode == 'off' or pct == 0 %}
+            0
+          {% else %}
+            {% if mode == 'zero' %}
+              {% set capacity = state_attr('sensor.global_parameter', 'zero_capacity') | float(0) %}
+              {% set efficiency = state_attr('sensor.global_parameter', 'zero_charge_efficiency') | float(0.88) %}
+            {% elif mode == 'honda_e' %}
+              {% set capacity = state_attr('sensor.global_parameter', 'honda_e_capacity') | float(0) %}
+              {% set efficiency = state_attr('sensor.global_parameter', 'honda_e_charge_efficiency') | float(0.88) %}
+            {% else %}
+              {% set capacity = 0 %}
+              {% set efficiency = 1 %}
+            {% endif %}
+            {% if capacity == 0 or efficiency == 0 %}
+              0
+            {% else %}
+              {{ (capacity * pct / 100 / efficiency) | round(2) }}
+            {% endif %}
+          {% endif %}
+        attributes:
+          mode: "{{ states('input_select.ev_vehicle_mode') }}"
+          percent: "{{ states('input_number.ev_charge_percent') }}"
+
+# --- AUTOMATIONS ---
+automation:
+  # ============================================================
+  # SESSION RESET: zero the session counter when the cable is plugged in
+  # ============================================================
+  - alias: "Wallbox: Reset session energy on cable plug-in"
+    id: wallbox_reset_session_energy
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.warp3_2ita_cable
+        from: "off"
+        to: "on"
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ states('sensor.warp3_2ita_energyabs')
+             not in ['unknown', 'unavailable', 'none', None] }}
+    actions:
+      # Snapshot the absolute meter -> ev_session_energy becomes 0.
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.ev_session_start_energy_kwh
+        data:
+          value: "{{ states('sensor.warp3_2ita_energyabs') | float(0) }}"
+      - action: logbook.log
+        data:
+          name: "Wallbox"
+          message: "Cable plugged in — session energy counter reset to 0."
+
+  # ============================================================
+  # MANUAL: fixed-current charging (overrides PV automatic)
+  # Active whenever ev_manual_charging_current >= 6 A and mode != off.
+  # ============================================================
+  - alias: "Wallbox: Manual fixed-current charging"
+    id: wallbox_manual_charge
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: input_number.ev_manual_charging_current
+      - trigger: state
+        entity_id: binary_sensor.warp3_2ita_cable
+        to: "on"
+      # Re-evaluate when the energy target is changed (mode/percent).
+      - trigger: state
+        entity_id: input_select.ev_vehicle_mode
+      - trigger: state
+        entity_id: input_number.ev_charge_percent
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.warp3_2ita_cable
+        state: "on"
+      - condition: numeric_state
+        entity_id: input_number.ev_manual_charging_current
+        above: 5 # >= 6 A => manual mode active
+      # Block when vehicle mode is off.
+      - condition: template
+        value_template: "{{ not is_state('input_select.ev_vehicle_mode', 'off') }}"
+      # Do not (re)start once the per-session energy limit is reached.
+      - condition: template
+        value_template: >-
+          {{ states('sensor.ev_session_energy') | float(0)
+             < states('sensor.ev_max_charge_energy') | float(0) }}
+    variables:
+      manual_amps: "{{ states('input_number.ev_manual_charging_current') | int(0) }}"
+      current_amps: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
+      is_charging: "{{ is_state('binary_sensor.warp3_2ita_charging', 'on') }}"
+    actions:
+      # Apply the manual current if it differs from the current target.
+      - if:
+          - "{{ manual_amps != current_amps }}"
+        then:
+          - action: number.set_value
+            target:
+              entity_id: number.warp3_2ita_globalcurrent
+            data:
+              value: "{{ manual_amps }}"
+      # Start the wallbox if it is not already charging.
+      - if:
+          - "{{ not is_charging }}"
+        then:
+          - delay:
+              milliseconds: 500
+          - action: button.press
+            target:
+              entity_id: button.warp3_2ita_startcharge
+          - action: logbook.log
+            data:
+              name: "Wallbox"
+              message: "Manual charging started at {{ manual_amps }} A."
+
+  # ============================================================
+  # START: enough PV surplus for 5 minutes -> begin charging
+  # (Automatic mode only; manual current must be 0; mode != off.)
+  # ============================================================
+  - alias: "Wallbox: Start charging on sustained PV surplus"
+    id: wallbox_pv_start
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.pv_dynamic_charging_current
+        above: 5 # i.e. >= 6 A (sensor only ever reports 0 or 6..max_amps)
+        for:
+          minutes: 5
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.warp3_2ita_cable
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.warp3_2ita_charging
+        state: "off"
+      # Skip when manual override is active.
+      - condition: numeric_state
+        entity_id: input_number.ev_manual_charging_current
+        below: 6
+      # Block when vehicle mode is off.
+      - condition: template
+        value_template: "{{ not is_state('input_select.ev_vehicle_mode', 'off') }}"
+      # Do not start once the per-session energy limit is reached.
+      - condition: template
+        value_template: >-
+          {{ states('sensor.ev_session_energy') | float(0)
+             < states('sensor.ev_max_charge_energy') | float(0) }}
+    actions:
+      # Set the target current to the currently available surplus...
+      - action: number.set_value
+        target:
+          entity_id: number.warp3_2ita_globalcurrent
+        data:
+          value: "{{ states('sensor.pv_dynamic_charging_current') | int(6) }}"
+      # ...give the wallbox a moment to apply it, then press start.
+      - delay:
+          milliseconds: 500
+      - action: button.press
+        target:
+          entity_id: button.warp3_2ita_startcharge
+      - action: logbook.log
+        data:
+          name: "Wallbox"
+          message: >-
+            PV surplus charging started at
+            {{ states('sensor.pv_dynamic_charging_current') }} A.
+
+  # ============================================================
+  # TRACK: while charging, follow the available PV surplus
+  # (Automatic mode only; manual current must be 0.)
+  # ============================================================
+  - alias: "Wallbox: Follow PV surplus while charging"
+    id: wallbox_pv_track
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: sensor.pv_dynamic_charging_current
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.warp3_2ita_charging
+        state: "on"
+      # Only adjust while >= 6 A is available; stopping is handled separately.
+      - condition: numeric_state
+        entity_id: sensor.pv_dynamic_charging_current
+        above: 5
+      # Skip when manual override is active.
+      - condition: numeric_state
+        entity_id: input_number.ev_manual_charging_current
+        below: 6
+    variables:
+      target_amps: "{{ states('sensor.pv_dynamic_charging_current') | int(6) }}"
+      current_amps: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
+      adjust_threshold_amps: 2 # avoid constant tiny writes for small fluctuations
+    actions:
+      # Only write a new value when the change is meaningful.
+      - condition: template
+        value_template: "{{ (target_amps - current_amps) | abs >= adjust_threshold_amps }}"
+      - action: number.set_value
+        target:
+          entity_id: number.warp3_2ita_globalcurrent
+        data:
+          value: "{{ target_amps }}"
+
+  # ============================================================
+  # STOP: surplus below 6 A for 2 minutes -> stop charging
+  # (Automatic mode only; manual override keeps charging.)
+  # ============================================================
+  - alias: "Wallbox: Stop charging on sustained PV deficit"
+    id: wallbox_pv_stop
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.pv_dynamic_charging_current
+        below: 6
+        for:
+          minutes: 2
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.warp3_2ita_charging
+        state: "on"
+      # Skip when manual override is active.
+      - condition: numeric_state
+        entity_id: input_number.ev_manual_charging_current
+        below: 6
+    actions:
+      - action: button.press
+        target:
+          entity_id: button.warp3_2ita_stopcharge
+      - action: logbook.log
+        data:
+          name: "Wallbox"
+          message: "PV surplus below 6 A for 2 min — charging stopped."
+
+  # ============================================================
+  # ENERGY / MODE STOP:
+  # stop charging when the energy limit is reached or mode is set to "off".
+  # Applies to both manual and automatic charging.
+  # ============================================================
+  - alias: "Wallbox: Stop charging at limit or when mode is off"
+    id: wallbox_stop_on_limit_or_off
+    mode: single
+    triggers:
+      - trigger: template
+        value_template: >-
+          {{ states('sensor.ev_session_energy') | float(0)
+             >= states('sensor.ev_max_charge_energy') | float(0) }}
+      - trigger: state
+        entity_id: input_select.ev_vehicle_mode
+        to: "off"
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.warp3_2ita_charging
+        state: "on"
+    actions:
+      - action: button.press
+        target:
+          entity_id: button.warp3_2ita_stopcharge
+      - action: logbook.log
+        data:
+          name: "Wallbox"
+          message: >-
+            Charging stopped — mode={{ states('input_select.ev_vehicle_mode') }},
+            session={{ states('sensor.ev_session_energy') }} kWh,
+            limit={{ states('sensor.ev_max_charge_energy') }} kWh.
+
+  # ============================================================
+  # Slider correction: force the manual current to 0 or >= 6
+  # (the wallbox cannot charge below 6 A)
+  # ============================================================
+  - alias: "Wallbox: Correct manual charging current"
+    id: wallbox_correct_manual_current
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: input_number.ev_manual_charging_current
+    conditions:
+      - condition: numeric_state
+        entity_id: input_number.ev_manual_charging_current
+        above: 0
+        below: 6
+    actions:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.ev_manual_charging_current
+        data:
+          value: 0

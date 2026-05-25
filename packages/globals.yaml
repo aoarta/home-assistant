@@ -4,8 +4,8 @@
 
 template:
   - sensor:
-      - name: "Central Parameters"
-        unique_id: zentrale_parameter
+      - name: "Global Parameter"
+        unique_id: global_parameter
         state: "OK"
         attributes:
           # chemistry
@@ -23,7 +23,11 @@ template:
           # battery care
           override_soc_days: 5
           battery_care_days: 8
+          # Wallbox
+          wallbox_max_amps: 18
           # Zero
           zero_capacity_kwh: 14.400
           zero_charge_efficienty: 0.88 # AC-DC efficiency
-          zero_max_amps: 17
+          # Honda e
+          honda_e_capacity: 35.5 # NEU — Honda e: 35,5 kWh brutto
+          honda_e_charge_efficiency: 0.88 # NEU — anpassen wenn gemessen

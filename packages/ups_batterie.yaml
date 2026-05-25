@@ -14,7 +14,7 @@
 #      value_template: "{{ value }}"
 
 input_number:
-  ups_energiefluss_wh_counter:
+  ups_energyflow_wh_counter:
     name: UPS Energiefluss Counter
     min: -50000
     max: 50000
@@ -31,8 +31,8 @@ rest:
         device_class: battery
         state_class: measurement
 
-      - name: "UPS BMS Power"
-        unique_id: ups_bms_power
+      - name: "UPS DC Power"
+        unique_id: ups_dc_power
         # BMS meldet größer null beim Entladen!
         value_template: "{{ value | regex_findall('Power:\\s*([-0-9.]+)') | first | default(0) }}"
         unit_of_measurement: "W"
@@ -99,13 +99,13 @@ rest:
 ################################################################################
 template:
   - sensor:
-      - name: "UPS Energiefluss Wh"
-        unique_id: ups_energiefluss_wh
+      - name: "UPS EnergyFlow Wh"
+        unique_id: ups_energyflow_wh
         unit_of_measurement: "Wh"
         device_class: energy
         state_class: total
         state: >
-          {{ states('input_number.ups_energiefluss_wh_counter') }}
+          {{ states('input_number.ups_energyflow_wh_counter') }}
 
   - trigger:
       - platform: numeric_state
@@ -124,18 +124,18 @@ template:
       - platform: homeassistant
         event: start
     sensor:
-      - name: "UPS SOC Reset Punkt"
-        unique_id: ups_soc_reset_punkt
+      - name: "UPS SOC Reset Point"
+        unique_id: ups_soc_reset_point
         unit_of_measurement: "Wh"
         state: >-
-          {% set current_energy = states('sensor.ups_energiefluss_wh') | float(0) %}
-          {% set raw_last_reset = states('sensor.ups_soc_reset_punkt') %}
+          {% set current_energy = states('sensor.ups_energyflow_wh') | float(0) %}
+          {% set raw_last_reset = states('sensor.ups_soc_reset_point') %}
           {% set hw_soc = states('sensor.ups_soc') | float(0) %}
           {% set custom_soc = states('sensor.ups_custom_soc') | float(none) %}          
           {% set high_cell = states('sensor.ups_highest_cell') | float(0) %}
-          {% set stop_soc = state_attr('sensor.zentrale_parameter', 'stop_soc') | float(15) %}     
-          {% set lfp_max_voltage = state_attr('sensor.zentrale_parameter', 'lfp_max_voltage') | float(3.60) %}          
-          {% set capacity = state_attr('sensor.zentrale_parameter', 'ups_capacity_wh') | float(2200) %}
+          {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}     
+          {% set lfp_max_voltage = state_attr('sensor.global_parameter', 'lfp_max_voltage') | float(3.60) %}          
+          {% set capacity = state_attr('sensor.global_parameter', 'ups_capacity_wh') | float(2200) %}
 
           {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
 
@@ -156,9 +156,9 @@ template:
 
   - trigger:
       - platform: state
-        entity_id: sensor.ups_energiefluss_wh
+        entity_id: sensor.ups_energyflow_wh
       - platform: state
-        entity_id: sensor.ups_soc_reset_punkt
+        entity_id: sensor.ups_soc_reset_point
       - platform: homeassistant
         event: start
       - platform: time_pattern
@@ -170,44 +170,18 @@ template:
         device_class: battery
         state: >-
           {% set hw_soc = states('sensor.ups_soc') | float(-1) %}
-          {% set neu_wh = states('sensor.ups_energiefluss_wh') | float(none) %}
-          {% set reset_wh = states('sensor.ups_soc_reset_punkt') | float(none) %}
+          {% set neu_wh = states('sensor.ups_energyflow_wh') | float(none) %}
+          {% set reset_wh = states('sensor.ups_soc_reset_point') | float(none) %}
 
           {% if neu_wh is none or reset_wh is none %}
             {{ this.state if is_number(this.state) else hw_soc }}
           {% elif hw_soc >= 100 %}
             100
           {% else %}
-            {% set capacity = state_attr('sensor.zentrale_parameter', 'ups_capacity_wh') | float(2200) %}
+            {% set capacity = state_attr('sensor.global_parameter', 'ups_capacity_wh') | float(2200) %}
             {% set calc_soc = 100 - ((neu_wh - reset_wh) / capacity * 100) %}
             {{ calc_soc | round(1) | clamp(0, 100) }}
           {% endif %}
-
-  #  - trigger:
-  #      - platform: state
-  #        entity_id: sensor.ups_raw_data
-  #    sensor:
-  #      - name: "UPS SOC"
-  #        unique_id: ups_soc
-  #        unit_of_measurement: "%"
-  #        device_class: battery
-  #        state: "{{ trigger.to_state.state | regex_findall('SOC:\\s*([0-9.]+)') | first | default(states('sensor.ups_soc')) | float(0) }}"
-
-  #      - name: "UPS Power"
-  #        unique_id: ups_power
-  #        unit_of_measurement: "W"
-  #        device_class: power
-  #        state: "{{ trigger.to_state.state | regex_findall('Power:\\s*(-?[0-9.]+)') | first | default(states('sensor.ups_power')) | float(0) }}"
-
-  #        - name: "UPS Highest Cell"
-  #          unique_id: ups_highest_cell
-  #          unit_of_measurement: "V"
-  #          state: "{{ trigger.to_state.state | regex_findall('highest Cell\\s*\\[\\s*\\d+\\s*\\]:\\s*([0-9.]+)') | first | default(states('sensor.ups_highest_cell')) | float(0) }}"
-
-  #        - name: "UPS Lowest Cell"
-  #          unique_id: ups_lowest_cell
-  #          unit_of_measurement: "V"
-  #          state: "{{ trigger.to_state.state | regex_findall('lowest Cell\\s*\\[\\s*\\d+\\s*\\]:\\s*([0-9.]+)') | first | default(states('sensor.ups_lowest_cell')) | float(0) }}"
 
   - trigger:
       - platform: state
@@ -220,7 +194,7 @@ template:
         unit_of_measurement: "kWh"
         device_class: energy
         state: >-
-          {% set capacity = state_attr('sensor.zentrale_parameter', 'ups_capacity_wh') | float(2200) %}
+          {% set capacity = state_attr('sensor.global_parameter', 'ups_capacity_wh') | float(2200) %}
           {% set total_kwh = capacity / 1000 %} 
 
           {% set soc = states('sensor.ups_custom_soc') | float(-1) %}
@@ -237,8 +211,8 @@ template:
           {% set p2 = states('sensor.battery_charger2_energy_power') | float(0) %}
           {{ (p1 + p2) | round(-1) }}
 
-      - name: "UPS AC Leistung"
-        unique_id: ups_ac_leistung
+      - name: "UPS AC Power"
+        unique_id: ups_ac_power
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
@@ -246,16 +220,6 @@ template:
           {% set charging = states('sensor.battery_total_charge_power') | float(0) %}
           {% set discharging = states('sensor.battery_inverter_energy_power') | float(0) %}
           {{ (discharging - charging) | round(-1) }}
-
-      - name:
-          "UPS DC Power"
-          # wir wollen >0 beim entladen
-        unique_id: ups_dc_power
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        state: >-
-          {{ states('sensor.ups_bms_power') | float(0) | round(0) }}
 
 ################################################################################
 # 4. AUTOMATIONEN
@@ -269,7 +233,7 @@ automation:
         entity_id: sensor.takt
     variables:
       power: "{{ states('sensor.ups_dc_power') | float(0) }}"
-      own_consumption_w: "{{ state_attr('sensor.zentrale_parameter', 'ups_own_consumption_w') | float(10) }}"
+      own_consumption_w: "{{ state_attr('sensor.global_parameter', 'ups_own_consumption_w') | float(10) }}"
       delta_t: "{{ states('input_number.takt_interval_sekunden') | float(1)  }}"
       delta_wh: >-
         {% set delta_t_h = delta_t / 3600 %}
@@ -281,26 +245,26 @@ automation:
     action:
       - service: input_number.set_value
         target:
-          entity_id: input_number.ups_energiefluss_wh_counter
+          entity_id: input_number.ups_energyflow_wh_counter
         data:
           value: >
-            {% set new = states('input_number.ups_energiefluss_wh_counter') | float(0) + delta_wh %}
+            {% set new = states('input_number.ups_energyflow_wh_counter') | float(0) + delta_wh %}
             {{ [[new, -50000] | max, 50000] | min }}
 
-  - alias: "UPS Grobregelung Laden & Entladen"
-    id: ups_grob_control_full
+  - alias: "UPS coarse_control"
+    id: ups_coarse_control
     mode: queued
     max: 12
     trigger:
       - platform: state
         entity_id:
           - sensor.solarnet_leistung_vom_netz
-          - sensor.marstek_ac_leistung_gesamt
-          - sensor.ups_ac_leistung
+          - sensor.marstek_ac_power_total
+          - sensor.ups_ac_power
           - sensor.ups_custom_soc
           - sensor.ups_lowest_cell
           - sensor.ups_highest_cell
-          - input_number.manuelle_ladeleistung
+          - input_number.manual_charge_power
       - platform: time_pattern
         seconds: "/10" # Fallback: läuft alle 15 s vom Minutenstart aus
     condition:
@@ -313,19 +277,19 @@ automation:
       # --- VARIABLEN VORZIEHEN ---
       - variables:
           netz: "{{ states('sensor.solarnet_leistung_vom_netz') | float(0) }}" # <0 wenn einspeisung
-          bat_pwr: "{{ states('sensor.marstek_ac_leistung_gesamt') | float(0) }}" # <0 wenn laden
-          ups_pwr: "{{ states('sensor.ups_ac_leistung') | float(0) }}" # <0 wenn laden
+          bat_pwr: "{{ states('sensor.marstek_ac_power_total') | float(0) }}" # <0 wenn laden
+          ups_pwr: "{{ states('sensor.ups_ac_power') | float(0) }}" # <0 wenn laden
           soc: "{{ states('sensor.ups_custom_soc') | float(0) }}"
           hw_soc: "{{ states('sensor.ups_soc') | float(0) }}"
           low_cell: "{{ states('sensor.ups_lowest_cell') | float(0) }}"
           high_cell: "{{ states('sensor.ups_highest_cell') | float(0) }}"
-          lowest_soc: "{{ state_attr('sensor.zentrale_parameter', 'lowest_soc') | float(12) }}"
-          stop_soc: "{{ state_attr('sensor.zentrale_parameter', 'stop_soc') | float(15) }}"
+          lowest_soc: "{{ state_attr('sensor.global_parameter', 'lowest_soc') | float(12) }}"
+          stop_soc: "{{ state_attr('sensor.global_parameter', 'stop_soc') | float(15) }}"
           # Parameter
-          max_v: "{{ state_attr('sensor.zentrale_parameter', 'lfp_max_voltage') | float(3.60) }}"
-          min_v: "{{ state_attr('sensor.zentrale_parameter', 'lfp_min_voltage') | float(2.90) }}"
-          hyst: "{{ state_attr('sensor.zentrale_parameter', 'lfp_hysteresis') | float(0.2) }}"
-          wartung_aktiv: "{{ states('input_number.manuelle_ladeleistung') | float(0) >= 1000 }}"
+          max_v: "{{ state_attr('sensor.global_parameter', 'lfp_max_voltage') | float(3.60) }}"
+          min_v: "{{ state_attr('sensor.global_parameter', 'lfp_min_voltage') | float(2.90) }}"
+          hyst: "{{ state_attr('sensor.global_parameter', 'lfp_hysteresis') | float(0.2) }}"
+          wartung_aktiv: "{{ states('input_number.manual_charge_power') | float(0) >= 1000 }}"
           # Schalter Zustände
           inverter_an: "{{ is_state('switch.battery_inverter_tasmota', 'on') }}"
           lader_an: "{{ is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on') }}"
@@ -484,7 +448,7 @@ automation:
   # ==========================================================
   # UPS: Last Full Zeitstempel
   # ==========================================================
-  - alias: "UPS: Zeitstempel Batterie voll aktualisieren"
+  - alias: "UPS: last full timestamp"
     id: ups_set_last_full_timestamp
     triggers:
       - trigger: numeric_state
@@ -524,11 +488,11 @@ automation:
     action:
       - service: input_number.set_value
         target:
-          entity_id: input_number.ups_energiefluss_wh_counter
+          entity_id: input_number.ups_energyflow_wh_counter
         data:
           value: >
             {# Kapazität aus deinen zentralen Parametern auslesen #}
-            {{ state_attr('sensor.zentrale_parameter', 'ups_capacity_wh') | float(2200) }}
+            {{ state_attr('sensor.global_parameter', 'ups_capacity_wh') | float(2200) }}
 
       # Optional: Benachrichtigung im Logbuch
       - service: logbook.log

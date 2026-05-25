@@ -1,6 +1,6 @@
-- alias: "Venus Control Mode Enable (30 Min After Sunrise)"
+- alias: "Venus: Enable Control Mode After Sunrise"
+  id: set_venus_control_mode
   description: "Enables the Marstek Venus control mode switches 30 minutes after sunrise."
-  id: "1773505418790"
   triggers:
     - trigger: sun
       event: sunrise
@@ -13,8 +13,9 @@
           - switch.marstek_venus2_modbus_rs485_steuermodus
   mode: single
 
-- alias: "Set CPU Schedutil"
-  description: "Set CPU governor to schedutil"
+- alias: "System: Set CPU Governor Schedutil"
+  id: set_cpu_schedutil
+  description: "Set CPU governor to schedutil on HA startup."
   triggers:
     - trigger: homeassistant
       event: start
@@ -23,9 +24,8 @@
       metadata: {}
       data: {}
   mode: single
-  id: 2ec11fc5fd5147ca9a2ab304ef7b4b8c
 
-- alias: "Tasmota: Global Setup Broadcast"
+- alias: "Tasmota: Broadcast Global Setup"
   id: tasmota_global_broadcast
   triggers:
     - trigger: homeassistant
@@ -37,17 +37,17 @@
     - action: mqtt.publish
       data:
         topic: cmnd/tasmotas/Backlog
-        payload: "{% set lat = state_attr('zone.home', 'latitude') | float(0) |
-          round(6) %} {% set lon = state_attr('zone.home', 'longitude') | float(0)
-          | round(6) %} Latitude {{ lat }}; Longitude {{ lon }}; PowerDelta 110; WattRes
-          1; TelePeriod 15; Sunrise 1"
+        payload: >-
+          {% set lat = state_attr('zone.home', 'latitude') | float(0) | round(6) %}
+          {% set lon = state_attr('zone.home', 'longitude') | float(0) | round(6) %}
+          Latitude {{ lat }}; Longitude {{ lon }}; PowerDelta 110; WattRes 1; TelePeriod 15; Sunrise 1
 
-- alias: "Battery Maintenance: Force Night Charge"
-  id: batterie_wartung_nachtladung
+- alias: "Battery Maintenance: Start Night Charge"
+  id: battery_maintenance_night_charge
   triggers:
     - trigger: sun
       event: sunset
-      offset: "00:05:00" # start in the evening or at night
+      offset: "00:05:00"
     - trigger: state
       entity_id: binary_sensor.battery_maintenance_required
       to: "on"
@@ -60,38 +60,34 @@
   actions:
     - action: input_number.set_value
       target:
-        entity_id: input_number.manuelle_ladeleistung
+        entity_id: input_number.manual_charge_power
       data:
         value: 1000.0
 
 - alias: "Battery Maintenance: Stop When Full"
-  id: batterie_wartung_beenden
+  id: battery_maintenance_stop_when_full
   triggers:
     - trigger: numeric_state
       entity_id:
-        - sensor.marstek_venus_1_batterie_ladezustand
-        - sensor.marstek_venus_2_batterie_ladezustand
+        - sensor.marstek_venus_1_soc
+        - sensor.marstek_venus_2_soc
       above: 99
   conditions:
-    # Only run if manual charging is currently active
     - condition: numeric_state
-      entity_id: input_number.manuelle_ladeleistung
+      entity_id: input_number.manual_charge_power
       above: 0
-    # Ensure BOTH batteries are full before stopping
     - condition: numeric_state
-      entity_id: sensor.marstek_venus_1_batterie_ladezustand
+      entity_id: sensor.marstek_venus_1_soc
       above: 99
     - condition: numeric_state
-      entity_id: sensor.marstek_venus_2_batterie_ladezustand
+      entity_id: sensor.marstek_venus_2_soc
       above: 99
   actions:
-    # 1. Reset charging power to 0
     - action: input_number.set_value
       target:
-        entity_id: input_number.manuelle_ladeleistung
+        entity_id: input_number.manual_charge_power
       data:
         value: 0
-    # 2. Clear maintenance flag (set timestamp to NOW)
     - action: input_datetime.set_datetime
       target:
         entity_id:
@@ -100,10 +96,10 @@
       data:
         timestamp: "{{ now().timestamp() }}"
 
-- alias: "SOC Override Demand-Controlled"
+- alias: "Battery Maintenance: Enable SOC Override When Overdue"
   description: >
-    Sets Override to ON if any battery has not been full for over 5 days,
-    otherwise sets it OFF.
+    Turns on SOC override if any battery has not been fully charged within
+    the configured number of days; turns it off once all are fresh.
   id: soc_override_weekly_control
   triggers:
     - trigger: time_pattern
@@ -115,10 +111,9 @@
         - conditions:
             - condition: template
               value_template: >-
-                {% set days = state_attr('sensor.zentrale_parameter', 'override_soc_days') | float(5) %}
+                {% set days = state_attr('sensor.global_parameter', 'override_soc_days') | float(5) %}
                 {% set threshold = days * 86400 %}
                 {% set now_ts = as_timestamp(now()) %}
-                {# Use 0 instead of 9999999 to avoid false triggers when unavailable #}
                 {% set ages = [
                   (now_ts - as_timestamp(states('input_datetime.venus_1_last_full'), 0)) if has_value('input_datetime.venus_1_last_full') else 0,
                   (now_ts - as_timestamp(states('input_datetime.venus_2_last_full'), 0)) if has_value('input_datetime.venus_2_last_full') else 0,
@@ -129,7 +124,6 @@
             - action: input_boolean.turn_on
               target:
                 entity_id: input_boolean.override_soc
-
       default:
         - condition: template
           value_template: >-
