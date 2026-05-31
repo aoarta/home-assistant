@@ -1,0 +1,48 @@
+template:
+  - trigger:
+      - platform: time_pattern
+        minutes: "/1"
+    sensor:
+      - name: "PV Prognose Stundenprofil"
+        unique_id: pv_prognose_stundenprofil
+        unit_of_measurement: "kW"
+        state: >-
+          {% set roof = state_attr('sensor.home_energy_pv_dach_production_today', 'wh_period') %}
+          {% set facade = state_attr('sensor.home_energy_pv_fassade_production_today', 'wh_period') %}
+          {% if roof is mapping and facade is mapping %}
+            {% set ns = namespace(peak=0) %}
+            {% for ts, rv in roof.items() %}
+              {% set combined = (rv | float(0)) + (facade[ts] | float(0) if ts in facade else 0) %}
+              {% if combined > ns.peak %}{% set ns.peak = combined %}{% endif %}
+            {% endfor %}
+            {{ (ns.peak / 1000) | round(2) }}
+          {% else %}
+            {{ this.state | float(0) }}
+          {% endif %}
+        attributes:
+          forecast: >-
+            {% set roof = state_attr('sensor.home_energy_pv_dach_production_today', 'wh_period') %}
+            {% set facade = state_attr('sensor.home_energy_pv_fassade_production_today', 'wh_period') %}
+            {% set ensemble_rest = states('sensor.pv_forecast_weighted') | float(0) %}
+            {% if roof is mapping and facade is mapping %}
+              {% set today = now().strftime('%Y-%m-%d') %}
+              {% set cur = now().replace(minute=0, second=0, microsecond=0).timestamp() %}
+              {% set ns = namespace(rest_sum=0) %}
+              {% for ts, rv in roof.items() if ts.startswith(today) %}
+                {% if as_timestamp(ts) >= cur %}
+                  {% set ns.rest_sum = ns.rest_sum + (rv | float(0)) + (facade[ts] | float(0) if ts in facade else 0) %}
+                {% endif %}
+              {% endfor %}
+              {% set factor = (ensemble_rest * 1000 / ns.rest_sum) if ns.rest_sum > 0 else 0 %}
+              {% set points = namespace(list=[]) %}
+              {% for ts, rv in roof.items() | sort if ts.startswith(today) %}
+                {% if as_timestamp(ts) >= cur %}
+                  {% set combined = (rv | float(0)) + (facade[ts] | float(0) if ts in facade else 0) %}
+                  {% set kw = (combined * factor / 1000) | round(3) %}
+                  {% set points.list = points.list + [[ (as_timestamp(ts) * 1000) | int, kw ]] %}
+                {% endif %}
+              {% endfor %}
+              {{ points.list }}
+            {% else %}
+              {{ [] }}
+            {% endif %}
