@@ -163,7 +163,7 @@ input_number:
     unit_of_measurement: "kWh"
 
 ################################################################################
-# 2. API QUELLEN
+# 2. API SOURCES
 ################################################################################
 sensor:
   - platform: rest
@@ -186,7 +186,7 @@ sensor:
     name: "Forecastsolar API Source Dach"
     unique_id: forecastsolar_api_source_dach
     resource: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/30/-45/7.5"
-    scan_interval: 86400
+    scan_interval: 31536000
     json_attributes: [result]
     value_template: "{{ value_json.message.info.place if value_json is defined else 'OK' }}"
 
@@ -194,7 +194,7 @@ sensor:
     name: "Forecastsolar API Source Fassade"
     unique_id: forecastsolar_api_source_fassade
     resource: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/85/90/2.4"
-    scan_interval: 86400
+    scan_interval: 31536000
     json_attributes: [result]
     value_template: "{{ value_json.message.info.place if value_json is defined else 'OK' }}"
 
@@ -263,23 +263,23 @@ template:
 
   # --- BERECHNUNGS-SENSOREN ---
   - sensor:
-      - name: "PV Forecast ML alles"
-        unique_id: pv_forecast_ml_alles
+      - name: "PV Forecast ML All"
+        unique_id: pv_forecast_ml_all
         unit_of_measurement: "kWh"
         state: "{{ states('sensor.prognose_heute') | float(0) | round(1) }}"
 
-      - name: "PV Forecast ML morgen"
-        unique_id: pv_forecast_ml_morgen
+      - name: "PV Forecast ML tomorrow"
+        unique_id: pv_forecast_ml_tomorrow
         unit_of_measurement: "kWh"
         state: "{{ states('sensor.prognose_morgen') | float(0) | round(1) }}"
 
-      - name: "PV Forecast ML ubermorgen"
-        unique_id: pv_forecast_ml_ubermorgen
+      - name: "PV Forecast ML day after"
+        unique_id: pv_forecast_ml_day_after
         unit_of_measurement: "kWh"
         state: "{{ states('sensor.prognose_ubermorgen') | float(0) | round(1) }}"
 
-      - name: "PV Forecast Solcast alles"
-        unique_id: pv_forecast_solcast_alles
+      - name: "PV Forecast Solcast all"
+        unique_id: pv_forecast_solcast_all
         unit_of_measurement: "kWh"
         availability: "{{ is_number(states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute')) }}"
         state: "{{ states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute') | float(0) | round(1) }}"
@@ -288,8 +288,8 @@ template:
       - platform: time_pattern
         minutes: "/5"
     sensor:
-      - name: "PV Forecast Solarprognose alles"
-        unique_id: pv_forecast_solarprognose_alles
+      - name: "PV Forecast Solarprognose all"
+        unique_id: pv_forecast_solarprognose_all
         unit_of_measurement: "kWh"
         state: >-
           {% set dach = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
@@ -315,8 +315,8 @@ template:
             {{ this.state | float(0) }}
           {% endif %}
 
-      - name: "PV Forecast Forecastsolar alles"
-        unique_id: pv_forecast_forecastsolar_alles
+      - name: "PV Forecast Forecastsolar all"
+        unique_id: pv_forecast_forecastsolar_all
         unit_of_measurement: "kWh"
         state: >-
           {% set today = now().strftime('%Y-%m-%d') %}
@@ -352,11 +352,11 @@ template:
             {{ this.state | float(0) }}
           {% endif %}
 
-      - name: "PV Forecast openmeteo alles"
-        unique_id: pv_forecast_openmeteo_alles
+      - name: "PV Forecast openmeteo all"
+        unique_id: pv_forecast_openmeteo_all
         unit_of_measurement: "kWh"
         state: >-
-          {% set dach = state_attr('sensor.home_energy_pv_dach_production_today', 'wh_period') %}
+          {% set dach = state_attr('sensor.home_energy_pv_roof_production_today', 'wh_period') %}
           {% set fassade = state_attr('sensor.home_energy_pv_fassade_production_today', 'wh_period') %}
           {% if dach is mapping and fassade is mapping %}
             {% set ns = namespace(total=0) %}
@@ -377,8 +377,8 @@ template:
           {% endif %}
 
       # --- DWD: open-meteo-solar-forecast instance with model=dwd_icon ---
-      - name: "PV Forecast DWD alles"
-        unique_id: pv_forecast_dwd_alles
+      - name: "PV Forecast DWD all"
+        unique_id: pv_forecast_dwd_all
         unit_of_measurement: "kWh"
         state: >-
           {% set dach = state_attr('sensor.pv_dach_dwd_production_today', 'wh_period') %}
@@ -405,12 +405,12 @@ template:
         unique_id: pv_forecast_weighted
         unit_of_measurement: "kWh"
         state: >-
-          {% set sc = states('sensor.pv_forecast_solcast_alles') | float(0) %}
-          {% set sp = states('sensor.pv_forecast_solarprognose_alles') | float(0) %}
-          {% set fs = states('sensor.pv_forecast_forecastsolar_alles') | float(0) %}
-          {% set om = states('sensor.pv_forecast_openmeteo_alles') | float(0) %}
-          {% set ml = states('sensor.pv_forecast_ml_alles') | float(0) %}
-          {% set dw = states('sensor.pv_forecast_dwd_alles') | float(0) %}
+          {% set sc = states('sensor.pv_forecast_solcast_all') | float(0) %}
+          {% set sp = states('sensor.pv_forecast_solarprognose_all') | float(0) %}
+          {% set fs = states('sensor.pv_forecast_forecastsolar_all') | float(0) %}
+          {% set om = states('sensor.pv_forecast_openmeteo_all') | float(0) %}
+          {% set ml = states('sensor.pv_forecast_ml_all') | float(0) %}
+          {% set dw = states('sensor.pv_forecast_dwd_all') | float(0) %}
           {% set sc_w = states('input_number.pv_kalman_score_solcast') | float(0) if sc > 0 else 0 %}
           {% set sp_w = states('input_number.pv_kalman_score_solarprognose') | float(0) if sp > 0 else 0 %}
           {% set fs_w = states('input_number.pv_kalman_score_forecastsolar') | float(0) if fs > 0 else 0 %}
@@ -426,15 +426,15 @@ template:
           {% endif %}
 
       # --- PROGNOSEN MORGEN ---
-      - name: "PV Forecast Solcast morgen"
-        unique_id: pv_forecast_solcast_morgen
+      - name: "PV Forecast Solcast Tomorrow"
+        unique_id: pv_forecast_solcast_tomorrow
         unit_of_measurement: "kWh"
         state: >-
           {% set val = states('sensor.solcast_pv_forecast_prognose_morgen') %}
           {{ val if is_number(val) else this.state | float(0) }}
 
-      - name: "PV Forecast Solarprognose Morgen"
-        unique_id: pv_forecast_solarprognose_morgen
+      - name: "PV Forecast Solarprognose Tomorrow"
+        unique_id: pv_forecast_solarprognose_tomorrow
         unit_of_measurement: "kWh"
         state: >-
           {% set dach_data = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
@@ -453,8 +453,8 @@ template:
             0.0
           {% endif %}
 
-      - name: "PV Forecast ForecastSolar Morgen"
-        unique_id: pv_forecast_forecastsolar_morgen
+      - name: "PV Forecast ForecastSolar Tomorrow"
+        unique_id: pv_forecast_forecastsolar_tomorrow
         unit_of_measurement: "kWh"
         state: >-
           {% set tomorrow = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
@@ -474,32 +474,32 @@ template:
             0.0
           {% endif %}
 
-      - name: "PV Forecast Openmeteo Morgen"
-        unique_id: pv_forecast_openmeteo_morgen
+      - name: "PV Forecast Openmeteo Tomorrow"
+        unique_id: pv_forecast_openmeteo_tomorrow
         unit_of_measurement: "kWh"
         state: >-
           {% set dach = states('sensor.home_energy_pv_dach_production_tomorrow') | float(0) %}
           {% set fassade = states('sensor.home_energy_pv_fassade_production_tomorrow') | float(0) %}
           {{ dach + fassade }}
 
-      - name: "PV Forecast DWD Morgen"
-        unique_id: pv_forecast_dwd_morgen
+      - name: "PV Forecast DWD tomorrow"
+        unique_id: pv_forecast_dwd_tomorrow
         unit_of_measurement: "kWh"
         state: >-
           {% set dach = states('sensor.pv_dach_dwd_production_tomorrow') | float(0) %}
           {% set fassade = states('sensor.pv_fassade_dwd_production_tomorrow') | float(0) %}
           {{ dach + fassade }}
 
-      - name: "PV Forecast Weighted Morgen"
-        unique_id: pv_forecast_weighted_morgen
+      - name: "PV Forecast Weighted Tomorrow"
+        unique_id: pv_forecast_weighted_tomorrow
         unit_of_measurement: "kWh"
         state: >-
-          {% set sc = states('sensor.pv_forecast_solcast_morgen') | float(0) %}
-          {% set sp = states('sensor.pv_forecast_solarprognose_morgen') | float(0) %}
-          {% set fs = states('sensor.pv_forecast_forecastsolar_morgen') | float(0) %}
-          {% set om = states('sensor.pv_forecast_openmeteo_morgen') | float(0) %}
-          {% set ml = states('sensor.pv_forecast_ml_morgen') | float(0) %}
-          {% set dw = states('sensor.pv_forecast_dwd_morgen') | float(0) %}
+          {% set sc = states('sensor.pv_forecast_solcast_tomorrow') | float(0) %}
+          {% set sp = states('sensor.pv_forecast_solarprognose_tomorrow') | float(0) %}
+          {% set fs = states('sensor.pv_forecast_forecastsolar_tomorrow') | float(0) %}
+          {% set om = states('sensor.pv_forecast_openmeteo_tomorrow') | float(0) %}
+          {% set ml = states('sensor.pv_forecast_ml_tomorrow') | float(0) %}
+          {% set dw = states('sensor.pv_forecast_dwd_tomorrow') | float(0) %}
           {% set sc_w = states('input_number.pv_kalman_score_solcast') | float(0) if sc > 0 else 0 %}
           {% set sp_w = states('input_number.pv_kalman_score_solarprognose') | float(0) if sp > 0 else 0 %}
           {% set fs_w = states('input_number.pv_kalman_score_forecastsolar') | float(0) if fs > 0 else 0 %}
@@ -532,7 +532,7 @@ automation:
             - sensor.forecastsolar_api_source_dach
             - sensor.forecastsolar_api_source_fassade
 
-  - alias: "PV: Tagesprognosen morgens fixieren"
+  - alias: "PV: Fix Daily Forecast Morning"
     id: pv_fix_daily_forecast_morning
     trigger:
       - platform: time
@@ -558,7 +558,7 @@ automation:
               target:
                 entity_id: "input_number.pv_save_{{ repeat.item }}_morgens"
               data:
-                value: "{{ states('sensor.pv_forecast_' ~ repeat.item ~ '_alles') | float(0) }}"
+                value: "{{ states('sensor.pv_forecast_' ~ repeat.item ~ '_all') | float(0) }}"
 
   - alias: "PV: Kalman-Update am Ende des Tages"
     id: pv_daily_kalman_update
