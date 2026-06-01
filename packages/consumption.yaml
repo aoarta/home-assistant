@@ -3,7 +3,7 @@ input_number:
     name: "Storage Weekday"
     min: 0
     max: 10000
-    step: 0.1
+    step: 0.01
     mode: box
     unit_of_measurement: "kWh"
     icon: mdi:calendar-range
@@ -12,7 +12,7 @@ input_number:
     name: "Storage Saturday"
     min: 0
     max: 10000
-    step: 0.1
+    step: 0.01
     mode: box
     unit_of_measurement: "kWh"
     icon: mdi:calendar-weekend
@@ -21,7 +21,7 @@ input_number:
     name: "Storage Sunday/Holiday"
     min: 0
     max: 10000
-    step: 0.1
+    step: 0.01
     mode: box
     unit_of_measurement: "kWh"
     icon: mdi:calendar-star
@@ -234,84 +234,67 @@ template:
           {% endif %}
 
   - triggers:
-      - trigger: time
-        at: "00:31:00"
+      - trigger: sun
+        event: sunrise
+        offset: "00:30:00" # same anchor as the counter reset
       - trigger: homeassistant
         event: start
       - trigger: state
         entity_id:
-          - binary_sensor.workday
-          - binary_sensor.workday_tomorrow
           - input_number.consumption_storage_weekday
           - input_number.consumption_storage_saturday
           - input_number.consumption_storage_sunday
-
     sensor:
       - name: "Expected daily consumption"
         unique_id: expected_daily_consumption
         unit_of_measurement: "kWh"
         device_class: energy
         availability: >-
-          {{ has_value('input_number.consumption_storage_weekday') and
-             has_value('binary_sensor.workday') }}
+          {{ has_value('input_number.consumption_storage_weekday') }}
         state: >-
-          {% set is_sunday         = now().weekday() == 6 %}
-          {% set holiday            = is_state('binary_sensor.workday', 'off') %}
-          {% set is_saturday         = now().weekday() == 5 %}
-          {% set tomorrow_is_a_day_off = is_state('binary_sensor.workday_tomorrow', 'off') %}
-
-          {% if is_sunday or holiday %}
+          {% from 'holidays.jinja' import day_category %}
+          {% set category = day_category(now()) | trim %}
+          {% if category == 'sunday_holiday' %}
             {{ states('input_number.consumption_storage_sunday') | float(0) | round(1) }}
-          {% elif is_saturday or tomorrow_is_a_day_off %}
+          {% elif category == 'saturday_preholiday' %}
             {{ states('input_number.consumption_storage_saturday') | float(0) | round(1) }}
           {% else %}
             {{ states('input_number.consumption_storage_weekday') | float(0) | round(1) }}
           {% endif %}
         attributes:
           day_type: >-
-            {% set is_sunday         = now().weekday() == 6 %}
-            {% set holiday            = is_state('binary_sensor.workday', 'off') %}
-            {% set is_saturday         = now().weekday() == 5 %}
-            {% set tomorrow_is_a_day_off = is_state('binary_sensor.workday_tomorrow', 'off') %}
-            {% if is_sunday or holiday %}Sunday/Holiday
-            {% elif is_saturday or tomorrow_is_a_day_off %}Saturday/Pre-holiday
+            {% from 'holidays.jinja' import day_category %}
+            {% set category = day_category(now()) | trim %}
+            {% if category == 'sunday_holiday' %}Sunday/Holiday
+            {% elif category == 'saturday_preholiday' %}Saturday/Pre-holiday
             {% else %}Weekday
             {% endif %}
-          weekday_kwh: "{{ states('input_number.consumption_storage_weekday') | float(0) | round(1) }}"
-          saturday_kwh: "{{ states('input_number.consumption_storage_saturday')   | float(0) | round(1) }}"
-          sunday_kwh: "{{ states('input_number.consumption_storage_sunday')   | float(0) | round(1) }}"
+          weekday_kwh: "{{ states('input_number.consumption_storage_weekday') | float(0) | round(2) }}"
+          saturday_kwh: "{{ states('input_number.consumption_storage_saturday') | float(0) | round(2) }}"
+          sunday_kwh: "{{ states('input_number.consumption_storage_sunday') | float(0) | round(2) }}"
 
       - name: "Expected daily consumption tomorrow"
         unique_id: expected_daily_consumption_tomorrow
         unit_of_measurement: "kWh"
         device_class: energy
         availability: >-
-          {{ has_value('input_number.consumption_storage_weekday') and
-             has_value('binary_sensor.workday_tomorrow') }}
+          {{ has_value('input_number.consumption_storage_weekday') }}
         state: >-
-          {% set weekday     = (now().weekday() + 1) % 7 %}
-          {% set is_sunday   = weekday == 6 %}
-          {% set is_saturday = weekday == 5 %}
-          {% set holiday     = is_state('binary_sensor.workday_tomorrow', 'off') %}
-          {# Pre-holiday: no workday+2 sensor → only checkable by weekday #}
-          {% set pre_holiday     = (now().weekday() + 2) % 7 == 6 %}
-
-          {% if is_sunday or holiday %}
-            {{ states('input_number.consumption_storage_sunday') | float(0) | round(1) }}
-          {% elif is_saturday or pre_holiday %}
-            {{ states('input_number.consumption_storage_saturday') | float(0) | round(1) }}
+          {% from 'holidays.jinja' import day_category %}
+          {% set category = day_category(now() + timedelta(days=1)) | trim %}
+          {% if category == 'sunday_holiday' %}
+            {{ states('input_number.consumption_storage_sunday') | float(0) | round(2) }}
+          {% elif category == 'saturday_preholiday' %}
+            {{ states('input_number.consumption_storage_saturday') | float(0) | round(2) }}
           {% else %}
-            {{ states('input_number.consumption_storage_weekday') | float(0) | round(1) }}
+            {{ states('input_number.consumption_storage_weekday') | float(0) | round(2) }}
           {% endif %}
         attributes:
           day_type: >-
-            {% set weekday     = (now().weekday() + 1) % 7 %}
-            {% set is_sunday   = weekday == 6 %}
-            {% set is_saturday = weekday == 5 %}
-            {% set holiday    = is_state('binary_sensor.workday_tomorrow', 'off') %}
-            {% set pre_holiday = (now().weekday() + 2) % 7 == 6 %}
-            {% if is_sunday or holiday %}Sunday/Holiday
-            {% elif is_saturday or pre_holiday %}Saturday/Pre-holiday
+            {% from 'holidays.jinja' import day_category %}
+            {% set category = day_category(now() + timedelta(days=1)) | trim %}
+            {% if category == 'sunday_holiday' %}Sunday/Holiday
+            {% elif category == 'saturday_preholiday' %}Saturday/Pre-holiday
             {% else %}Weekday
             {% endif %}
 
@@ -322,43 +305,21 @@ template:
         availability: >-
           {{ has_value('input_number.consumption_storage_weekday') }}
         state: >-
-          {% set fixed_holidays = [
-              '01-01', '01-06', '03-19', '05-01',
-              '08-15', '10-26', '11-01', '12-08',
-              '12-24', '12-25', '12-26'
-            ] %}
-          {% set target = now() + timedelta(days=2) %}
-          {% set next_day = now() + timedelta(days=3) %}
-          {% set is_holiday  = target.strftime('%m-%d') in fixed_holidays %}
-          {% set is_sunday   = target.weekday() == 6 %}
-          {% set is_saturday = target.weekday() == 5 %}
-          {# pre_holiday: day after target is Sunday or a holiday #}
-          {% set pre_holiday = next_day.weekday() == 6
-                              or next_day.strftime('%m-%d') in fixed_holidays %}
-
-          {% if is_sunday or is_holiday %}
-            {{ states('input_number.consumption_storage_sunday') | float(0) | round(1) }}
-          {% elif is_saturday or pre_holiday %}
-            {{ states('input_number.consumption_storage_saturday') | float(0) | round(1) }}
+          {% from 'holidays.jinja' import day_category %}
+          {% set category = day_category(now() + timedelta(days=2)) | trim %}
+          {% if category == 'sunday_holiday' %}
+            {{ states('input_number.consumption_storage_sunday') | float(0) | round(2) }}
+          {% elif category == 'saturday_preholiday' %}
+            {{ states('input_number.consumption_storage_saturday') | float(0) | round(2) }}
           {% else %}
-            {{ states('input_number.consumption_storage_weekday') | float(0) | round(1) }}
+            {{ states('input_number.consumption_storage_weekday') | float(0) | round(2) }}
           {% endif %}
         attributes:
           day_type: >-
-            {% set fixed_holidays = [
-                '01-01', '01-06', '03-19', '05-01',
-                '08-15', '10-26', '11-01', '12-08',
-                '12-24', '12-25', '12-26'
-              ] %}
-            {% set target = now() + timedelta(days=2) %}
-            {% set next_day = now() + timedelta(days=3) %}
-            {% set is_holiday  = target.strftime('%m-%d') in fixed_holidays %}
-            {% set is_sunday   = target.weekday() == 6 %}
-            {% set is_saturday = target.weekday() == 5 %}
-            {% set pre_holiday = next_day.weekday() == 6
-                                or next_day.strftime('%m-%d') in fixed_holidays %}
-            {% if is_sunday or is_holiday %}Sunday/Holiday
-            {% elif is_saturday or pre_holiday %}Saturday/Pre-holiday
+            {% from 'holidays.jinja' import day_category %}
+            {% set category = day_category(now() + timedelta(days=2)) | trim %}
+            {% if category == 'sunday_holiday' %}Sunday/Holiday
+            {% elif category == 'saturday_preholiday' %}Saturday/Pre-holiday
             {% else %}Weekday
             {% endif %}
 
@@ -374,41 +335,37 @@ automation:
     actions:
       # Step 1: Calculate variables
       - variables:
-          vortag: "{{ now() - timedelta(hours=12) }}"
-          is_saturday: "{{ (now() - timedelta(hours=12)).weekday() == 5 }}"
-          is_sunday: "{{ (now() - timedelta(hours=12)).weekday() == 6 }}"
-          holiday: "{{ is_state('binary_sensor.workday', 'off') }}"
-          tomorrow_is_a_day_off: "{{ is_state('binary_sensor.workday_tomorrow', 'off') }}"
-          # Current value before reset:
-          neu: "{{ states('sensor.house_consumption_energy_today') | float(0) }}"
+          # Current value before reset
+          new_value: "{{ states('sensor.house_consumption_energy_today') | float(0) }}"
+          # Classify the day that just ended (shift back 12h so an early
+          # sunrise still maps to the previous calendar day)
+          category: >-
+            {% from 'holidays.jinja' import day_category %}
+            {{ day_category(now() - timedelta(hours=12)) | trim }}
 
       # Step 2: Write to the correct storage bucket
       - choose:
           # CASE 1: Sunday or public holiday
-          - conditions:
-              - condition: template
-                value_template: "{{ is_sunday or holiday }}"
+          - conditions: "{{ category == 'sunday_holiday' }}"
             sequence:
               - action: input_number.set_value
                 target:
                   entity_id: input_number.consumption_storage_sunday
                 data:
                   value: >
-                    {% set alt = states('input_number.consumption_storage_sunday') | float(0) %}
-                    {{ (2 * alt + neu) / 3 }}
+                    {% set old = states('input_number.consumption_storage_sunday') | float(0) %}
+                    {{ (2 * old + new_value) / 3 }}
 
-          # CASE 2: Saturday or day BEFORE a public holiday
-          - conditions:
-              - condition: template
-                value_template: "{{ is_saturday or tomorrow_is_a_day_off }}"
+          # CASE 2: Saturday or day before a day off
+          - conditions: "{{ category == 'saturday_preholiday' }}"
             sequence:
               - action: input_number.set_value
                 target:
                   entity_id: input_number.consumption_storage_saturday
                 data:
                   value: >
-                    {% set alt = states('input_number.consumption_storage_saturday') | float(0) %}
-                    {{ (2 * alt + neu) / 3 }}
+                    {% set old = states('input_number.consumption_storage_saturday') | float(0) %}
+                    {{ (2 * old + new_value) / 3 }}
 
         # CASE 3: Normal weekday
         default:
@@ -417,18 +374,13 @@ automation:
               entity_id: input_number.consumption_storage_weekday
             data:
               value: >
-                {% set alt = states('input_number.consumption_storage_weekday') | float(0) %}
-                {{ (4 * alt + neu) / 5 }}
+                {% set old = states('input_number.consumption_storage_weekday') | float(0) %}
+                {{ (4 * old + new_value) / 5 }}
 
       # Step 3: Short safety delay (10 seconds)
       - delay: "00:00:10"
 
       # Step 4: Reset the counter for the new day to zero
-      #      - action: utility_meter.calibrate
-      #        target:
-      #          entity_id: sensor.house_consumption_energy_today_um
-      #        data:
-      #          value: "0.00"
       - action: utility_meter.reset
         target:
           entity_id: sensor.house_consumption_energy_today_um
