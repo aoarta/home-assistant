@@ -7,8 +7,8 @@ template:
         unique_id: pv_prognose_stundenprofil
         unit_of_measurement: "kW"
         state: >-
-          {% set roof = state_attr('sensor.home_energy_pv_roof_production_today', 'wh_period') %}
-          {% set facade = state_attr('sensor.home_energy_pv_fassade_production_today', 'wh_period') %}
+          {% set roof = state_attr('sensor.pv_roof_openmeteo_production_today', 'wh_period') %}
+          {% set facade = state_attr('sensor.pv_fassade_openmeteo_production_today', 'wh_period') %}
           {% if roof is mapping and facade is mapping %}
             {% set ns = namespace(peak=0) %}
             {% for ts, rv in roof.items() %}
@@ -21,8 +21,8 @@ template:
           {% endif %}
         attributes:
           forecast: >-
-            {% set roof = state_attr('sensor.home_energy_pv_roof_production_today', 'wh_period') %}
-            {% set facade = state_attr('sensor.home_energy_pv_fassade_production_today', 'wh_period') %}
+            {% set roof = state_attr('sensor.pv_roof_openmeteo_production_today', 'wh_period') %}
+            {% set facade = state_attr('sensor.pv_roof_openmeteo_production_today', 'wh_period') %}
             {% set ensemble_rest = states('sensor.pv_forecast_weighted') | float(0) %}
             {% if roof is mapping and facade is mapping %}
               {% set today = now().strftime('%Y-%m-%d') %}

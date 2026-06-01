@@ -288,13 +288,13 @@ template:
       limits_map: >-
         {% set default = {'v1': 2500, 'v2': 2500} %}
         {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
-        {% set b_set = state_attr('sensor.solar_zeit_logik', 'b_set') | float(0) %}
+        {% set sun_set_minus_3h = state_attr('sensor.solar_zeit_logik', 'sun_set_minus_3h') | float(0) %}
         {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
         {% set ziel_soc = states('sensor.target_soc') | float(80) %}
 
-        {% if ts >= t1130 and ts < b_set and ziel_soc < 100 %}
+        {% if ts >= t1130 and ts < sun_set_minus_3h and ziel_soc < 100 %}
           {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
-          {% set dauer = [(b_set - ts) / 3600, 0.01] | max %}
+          {% set dauer = [(sun_set_minus_3h - ts) / 3600, 0.01] | max %}
           {% set fak = capacity / 100 / dauer * 1.25 %}
           {% set soc1 = states('sensor.venus_1_custom_soc') | float(20) %}
           {% set soc2 = states('sensor.venus_2_custom_soc') | float(20) %}
