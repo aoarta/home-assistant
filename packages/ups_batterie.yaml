@@ -23,21 +23,44 @@ input_number:
 rest:
   - resource: http://192.168.0.13/show
     scan_interval: 30 # Abfrageintervall in Sekunden anpassen, falls gewünscht
+    timeout: 8
     sensor:
       - name: "UPS SOC"
         unique_id: ups_soc
-        value_template: "{{ value | regex_findall('SOC:\\s*([0-9.]+)') | first | default(0) }}"
         unit_of_measurement: "%"
         device_class: battery
         state_class: measurement
+        # Keep last valid value instead of falling back to 0 on a malformed read
+        value_template: >-
+          {% set m = (value | default('')) | regex_findall('SOC:\s*([0-9.]+)') %}
+          {{ m[0] if m else states('sensor.ups_soc') }}
 
       - name: "UPS DC Power"
         unique_id: ups_dc_power
-        # BMS meldet größer null beim Entladen!
-        value_template: "{{ value | regex_findall('Power:\\s*([-0-9.]+)') | first | default(0) }}"
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
+        # BMS reports positive while discharging.
+        # Falling back to 0 here is intentional: it halts energy integration on a bad read.
+        value_template: "{{ value | regex_findall('Power:\\s*([-0-9.]+)') | first | default(0) }}"
+
+      - name: "UPS Highest Cell"
+        unique_id: ups_highest_cell
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+        value_template: >-
+          {% set m = (value | default('')) | regex_findall('highest Cell.*:\s*([0-9.]+)') %}
+          {{ m[0] if m else states('sensor.ups_highest_cell') }}
+
+      - name: "UPS Lowest Cell"
+        unique_id: ups_lowest_cell
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+        value_template: >-
+          {% set m = (value | default('')) | regex_findall('lowest Cell.*:\s*([0-9.]+)') %}
+          {{ m[0] if m else states('sensor.ups_lowest_cell') }}
 
       #      - name: "BMS Current"
       #        value_template: "{{ value | regex_findall('Current:\\s*([-0-9.]+)') | first | default(0) }}"
@@ -60,20 +83,6 @@ rest:
       #        value_template: "{{ value | regex_findall('remainingCapacity:\\s*([0-9.]+)') | first | default(0) }}"
       #        unit_of_measurement: "Ah"
       #        state_class: measurement
-
-      - name: "UPS Highest Cell"
-        unique_id: ups_highest_cell
-        value_template: "{{ value | regex_findall('highest Cell.*:\\s*([0-9.]+)') | first | default(0) }}"
-        unit_of_measurement: "V"
-        device_class: voltage
-        state_class: measurement
-
-      - name: "UPS Lowest Cell"
-        unique_id: ups_lowest_cell
-        value_template: "{{ value | regex_findall('lowest Cell.*:\\s*([0-9.]+)') | first | default(0) }}"
-        unit_of_measurement: "V"
-        device_class: voltage
-        state_class: measurement
 
 #      - name: "BMS Cell Diff"
 #        # Beachte: "Cell diff" hat in deiner Ausgabe keinen Doppelpunkt, daher fangen wir nur die Leerzeichen ab
