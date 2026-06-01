@@ -1,13 +1,13 @@
 template:
   - trigger:
       - platform: time_pattern
-        minutes: "/1"
+        minutes: "/15"
     sensor:
       - name: "PV Prognose Stundenprofil"
         unique_id: pv_prognose_stundenprofil
         unit_of_measurement: "kW"
         state: >-
-          {% set roof = state_attr('sensor.home_energy_pv_dach_production_today', 'wh_period') %}
+          {% set roof = state_attr('sensor.home_energy_pv_roof_production_today', 'wh_period') %}
           {% set facade = state_attr('sensor.home_energy_pv_fassade_production_today', 'wh_period') %}
           {% if roof is mapping and facade is mapping %}
             {% set ns = namespace(peak=0) %}
@@ -21,7 +21,7 @@ template:
           {% endif %}
         attributes:
           forecast: >-
-            {% set roof = state_attr('sensor.home_energy_pv_dach_production_today', 'wh_period') %}
+            {% set roof = state_attr('sensor.home_energy_pv_roof_production_today', 'wh_period') %}
             {% set facade = state_attr('sensor.home_energy_pv_fassade_production_today', 'wh_period') %}
             {% set ensemble_rest = states('sensor.pv_forecast_weighted') | float(0) %}
             {% if roof is mapping and facade is mapping %}

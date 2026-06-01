@@ -78,8 +78,8 @@ template:
           - input_boolean.override_soc
           - binary_sensor.battery_maintenance_required
           - sensor.pv_forecast_weighted
-          - sensor.pv_forecast_weighted_morgen
-          - sensor.pv_forecast_ml_ubermorgen
+          - sensor.pv_forecast_weighted_tomorrow
+          - sensor.pv_forecast_ml_day_after
           - sensor.pv_energy_yield_today_um
           - sensor.expected_daily_consumption
           - sensor.expected_daily_consumption_tomorrow
@@ -132,7 +132,7 @@ template:
             {% set consumption_tomorrow = states('sensor.expected_daily_consumption_tomorrow') | float(expected_daily_consumption) * consumption_buffer %}
 
             {# === Day after tomorrow === #}
-            {% set pv_day_after = states('sensor.pv_forecast_ml_ubermorgen') | float(0) * pv_factor %}
+            {% set pv_day_after = states('sensor.pv_forecast_ml_day_after') | float(0) * pv_factor %}
             {% set consumption_day_after = states('sensor.expected_daily_consumption_day_after') | float(expected_daily_consumption) * consumption_buffer %}
 
             {# === Rolling balance: simulate battery state over the next days === #}

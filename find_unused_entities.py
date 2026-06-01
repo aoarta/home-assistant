@@ -14,7 +14,7 @@ import json
 import re
 from pathlib import Path
 
-CONFIG_DIR = Path("/.")
+CONFIG_DIR = Path("/config")
 STORAGE_DIR = CONFIG_DIR / ".storage"
 
 # Domains you usually do NOT want flagged even if unreferenced

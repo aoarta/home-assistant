@@ -34,7 +34,7 @@ recorder:
     entities:
       # your daily PV production sensor:
       - sensor.pv_forecast_weighted
-      - sensor.pv_forecast_weighted_morgen
+      - sensor.pv_forecast_weighted_tomorrow
       - sensor.solar_forecast_ml_planungsprognose_p10_blend
       - sensor.prognose_heute
       - sensor.prognose_morgen
