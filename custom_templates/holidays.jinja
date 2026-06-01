@@ -1,0 +1,83 @@
+{# config/custom_templates/holidays.jinja #}
+
+{# --- Easter Sunday via Computus (Anonymous Gregorian algorithm) --- #}
+{# Returns an ISO date string 'YYYY-MM-DD' for the given year.        #}
+{% macro easter_sunday(year) %}
+  {%- set a = year % 19 -%}
+  {%- set b = year // 100 -%}
+  {%- set c = year % 100 -%}
+  {%- set d = b // 4 -%}
+  {%- set e = b % 4 -%}
+  {%- set f = (b + 8) // 25 -%}
+  {%- set g = (b - f + 1) // 3 -%}
+  {%- set h = (19 * a + b - d - g + 15) % 30 -%}
+  {%- set i = c // 4 -%}
+  {%- set k = c % 4 -%}
+  {%- set l = (32 + 2 * e + 2 * i - h - k) % 7 -%}
+  {%- set m = (a + 11 * h + 22 * l) // 451 -%}
+  {%- set month = (h + l - 7 * m + 114) // 31 -%}
+  {%- set day = ((h + l - 7 * m + 114) % 31) + 1 -%}
+  {{- '%04d-%02d-%02d' | format(year, month, day) -}}
+{% endmacro %}
+
+{# --- Movable feast days for a given year (JSON list of ISO dates) -- #}
+{# Easter Monday (+1), Ascension (+39), Pentecost Monday (+50),        #}
+{# Corpus Christi (+60).                                               #}
+{% macro movable_holidays(year) %}
+  {%- set easter = strptime(easter_sunday(year) | trim, '%Y-%m-%d') -%}
+  {%- set ns = namespace(dates=[]) -%}
+  {%- for offset in [1, 39, 50, 60] -%}
+    {%- set ns.dates = ns.dates + [(easter + timedelta(days=offset)).strftime('%Y-%m-%d')] -%}
+  {%- endfor -%}
+  {{- ns.dates | to_json -}}
+{% endmacro %}
+
+{# --- Fixed holidays as 'MM-DD' strings ----------------------------- #}
+{% macro fixed_holidays() %}
+  {{- [
+        '01-01',
+        '01-02',
+        '01-03',
+        '01-04',
+        '01-05',
+        '01-06',
+        '03-19',
+        '05-01',
+        '08-15',
+        '10-26',
+        '11-01',
+        '12-08',
+        '12-24',
+        '12-25',
+        '12-26',
+        '12-27',
+        '12-28',
+        '12-29',
+        '12-30',
+        '12-21'
+      ] | to_json -}}
+{% endmacro %}
+
+{# --- True if the given datetime is a fixed or movable holiday ------ #}
+{% macro is_holiday(d) %}
+  {%- set fixed = fixed_holidays() | from_json -%}
+  {%- set movable = movable_holidays(d.year) | from_json -%}
+  {{- (d.strftime('%m-%d') in fixed) or (d.strftime('%Y-%m-%d') in movable) -}}
+{% endmacro %}
+
+{# --- Classify a date into a consumption profile -------------------- #}
+{#   sunday_holiday      -> Sunday or a holiday                        #}
+{#   saturday_preholiday -> Saturday, or the day before a day off      #}
+{#   weekday             -> everything else                            #}
+{% macro day_category(d) %}
+  {%- set next_day = d + timedelta(days=1) -%}
+  {%- set is_hol = is_holiday(d) | trim == 'True' -%}
+  {%- set next_off = (next_day.weekday() == 6) or (is_holiday(next_day) | trim == 'True') -%}
+  {%- if d.weekday() == 6 or is_hol -%}
+    sunday_holiday
+  {%- elif d.weekday() == 5 or next_off -%}
+    saturday_preholiday
+  {%- else -%}
+    weekday
+  {%- endif -%}
+{% endmacro %}
