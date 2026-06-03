@@ -138,7 +138,7 @@ template:
         unique_id: ev_max_charge_energy
         unit_of_measurement: "kWh"
         device_class: energy
-        state_class: measurement
+        state_class: total
         state: >-
           {% set mode = states('input_select.ev_vehicle_mode') %}
           {% set pct = states('input_number.ev_charge_percent') | float(0) %}
