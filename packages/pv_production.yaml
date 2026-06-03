@@ -25,7 +25,7 @@ sensor:
     entity_id: sensor.pv_energy_yield_today_um
     filters:
       - filter: range
-        upper_bound: 100 # Everything above 100 kWh per day is ignored
+        upper_bound: 100
 
   - platform: filter
     name: "PV Energy Yield Balcony Today"
@@ -33,7 +33,7 @@ sensor:
     entity_id: sensor.pv_energy_yield_balcony_today_um
     filters:
       - filter: range
-        upper_bound: 15 # Everything above 15 kWh per day is ignored
+        upper_bound: 15
 
   - platform: filter
     name: "PV Energy Yield Roof Today"
@@ -41,7 +41,7 @@ sensor:
     entity_id: sensor.pv_energy_yield_roof_today_um
     filters:
       - filter: range
-        upper_bound: 60 # Everything above 60 kWh per day is ignored
+        upper_bound: 70
 
 template:
   - sensor:
@@ -152,10 +152,8 @@ template:
     sensor:
       - name: "PV Energy Realtime Aggregator"
         unique_id: pv_energy_realtime_aggregator
-        # This helper sensor uses variables to feed the downstream sensors
         state: "OK"
         attributes:
-          # THE TRICK: Fetch all values once here
           balcony_1: "{{ states('sensor.balcony_inverter_1_energy') | float(0) }}"
           balcony_2: "{{ states('sensor.balcony_inverter_2_energy') | float(0) }}"
           garage: "{{ states('sensor.garage_inverter_energy') | float(0) }}"
@@ -170,7 +168,10 @@ template:
           {% set b1 = state_attr('sensor.pv_energy_realtime_aggregator', 'balcony_1') | float(0) %}
           {% set b2 = state_attr('sensor.pv_energy_realtime_aggregator', 'balcony_2') | float(0) %}
           {% set g = state_attr('sensor.pv_energy_realtime_aggregator', 'garage') | float(0) %}
-          {{ (b1 + b2 + g) | round(2) }}
+          {% set computed = (b1 + b2 + g) | round(2) %}
+          {% set last = this.state | float(none) %}
+          {# Sum must never decrease - prevents phantom utility_meter resets #}
+          {{ [computed, last] | max if last is not none else computed }}
 
       - name: "PV Energy Total Realtime"
         unique_id: pv_energy_total_realtime
@@ -178,6 +179,11 @@ template:
         device_class: energy
         state_class: total_increasing
         state: >-
-          {% set b_total = states('sensor.pv_energy_balcony_realtime') | float(0) %}
+          {% set b1 = state_attr('sensor.pv_energy_realtime_aggregator', 'balcony_1') | float(0) %}
+          {% set b2 = state_attr('sensor.pv_energy_realtime_aggregator', 'balcony_2') | float(0) %}
+          {% set g = state_attr('sensor.pv_energy_realtime_aggregator', 'garage') | float(0) %}
           {% set roof = state_attr('sensor.pv_energy_realtime_aggregator', 'roof') | float(0) %}
-          {{ (b_total + roof) | round(2) }}
+          {% set computed = (b1 + b2 + g + roof) | round(2) %}
+          {% set last = this.state | float(none) %}
+          {# Sum must never decrease - prevents phantom utility_meter resets #}
+          {{ [computed, last] | max if last is not none else computed }}

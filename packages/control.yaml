@@ -79,7 +79,7 @@ template:
           - binary_sensor.battery_maintenance_required
           - sensor.pv_forecast_weighted
           - sensor.pv_forecast_weighted_tomorrow
-          - sensor.pv_forecast_ml_day_after
+          - sensor.pv_forecast_weighted_day_after
           - sensor.pv_energy_yield_today_um
           - sensor.expected_daily_consumption
           - sensor.expected_daily_consumption_tomorrow

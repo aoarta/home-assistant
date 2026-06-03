@@ -25,15 +25,15 @@ rest:
     scan_interval: 30 # Abfrageintervall in Sekunden anpassen, falls gewünscht
     timeout: 8
     sensor:
-      - name: "UPS SOC"
-        unique_id: ups_soc
+      - name: "UPS SOC Rest"
+        unique_id: ups_soc_rest
         unit_of_measurement: "%"
         device_class: battery
         state_class: measurement
         # Keep last valid value instead of falling back to 0 on a malformed read
         value_template: >-
           {% set m = (value | default('')) | regex_findall('SOC:\s*([0-9.]+)') %}
-          {{ m[0] if m else states('sensor.ups_soc') }}
+          {{ m[0] if m else states('sensor.ups_soc_rest') }}
 
       - name: "UPS DC Power"
         unique_id: ups_dc_power
@@ -115,6 +115,34 @@ template:
         state_class: total
         state: >
           {{ states('input_number.ups_energyflow_wh_counter') }}
+
+  - trigger:
+      - platform: state
+        entity_id: sensor.ups_soc_rest
+        not_to:
+          - unknown
+          - unavailable
+      - platform: homeassistant
+        event: start
+      - platform: time_pattern
+        minutes: "/1"
+    sensor:
+      - name: "UPS SOC"
+        unique_id: ups_soc
+        unit_of_measurement: "%"
+        device_class: battery
+        state_class: measurement
+        # Holds the last valid hardware SOC. The raw REST sensor reads 'unknown'
+        # right after a restart (REST sensors are not restored), which used to
+        # make every consumer read 0. This trigger-based sensor restores its own
+        # last state on restart, so we fall back to it when the raw value is gone.
+        state: >-
+          {% set raw = states('sensor.ups_soc_rest') %}
+          {% if is_number(raw) %}
+            {{ raw | float }}
+          {% else %}
+            {{ this.state if is_number(this.state) else 'unknown' }}
+          {% endif %}
 
   - trigger:
       - platform: numeric_state

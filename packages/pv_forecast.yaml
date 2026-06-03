@@ -157,7 +157,7 @@ input_number:
     min: 0
     max: 150
     unit_of_measurement: "kWh"
-  pv_prognose_festwert_heute:
+  pv_prognose_this_morning:
     min: 0
     max: 150
     unit_of_measurement: "kWh"
@@ -570,14 +570,15 @@ automation:
   - alias: "PV: Fix Daily Forecast Morning"
     id: pv_fix_daily_forecast_morning
     trigger:
+      # Fixed time, as the modells are calculated before 6:00
       - platform: time
         at: "06:30:00"
     action:
       - action: input_number.set_value
         target:
-          entity_id: input_number.pv_prognose_festwert_heute
+          entity_id: input_number.pv_prognose_this_morning
         data:
-          value: "{{ (states('sensor.pv_forecast_weighted') | float(0) / (states('input_number.pv_forecast_bias_korrekturfaktor') | float(1))) | round(2) }}"
+          value: "{{ states('sensor.pv_forecast_weighted') | float(0) | round(2) }}"
       - repeat:
           for_each:
             [
@@ -603,7 +604,7 @@ automation:
         at: "23:55:00"
     variables:
       real: "{{ states('sensor.pv_energy_yield_today_um') | float(0) }}"
-      forecast_heute: "{{ states('input_number.pv_prognose_festwert_heute') | float(0) }}"
+      forecast_heute: "{{ states('input_number.pv_prognose_this_morning') | float(0) }}"
       Q_bias: 0.001
       R_bias: 0.04
       Q_w: 0.005
