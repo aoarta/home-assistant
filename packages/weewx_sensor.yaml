@@ -89,7 +89,7 @@ mqtt:
       unit_of_measurement: "mm"
       value_template: "{{ (value_json.rain24_cm | float(0) * 10) | round(1) }}"
       device_class: precipitation
-      state_class: total_increasing
+      state_class: measurement
       device: *ws_device
 
     - name: "Solar Radiation"
