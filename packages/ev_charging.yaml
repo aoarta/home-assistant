@@ -8,7 +8,10 @@
 #   * input_number.ev_manual_charging_current : 0 or 6..32 A (0 = automatic)
 #
 # Behaviour:
-#   * Mode = "off"   -> wallbox stays off (running session is stopped).
+#   * Mode = "off"   -> wallbox NEVER charges. Any running session is stopped
+#     and the global current is forced to 0 A. This is enforced even when the
+#     WARP3 firmware auto-starts on cable plug-in (which bypasses the HA start
+#     automations).
 #   * Mode = "zero"  -> energy limit = zero_capacity   * pct / efficiency
 #     Mode = "honda_e" -> energy limit = honda_e_capacity * pct / efficiency
 #     (capacities and efficiencies are read from sensor.global_parameter)
@@ -17,6 +20,8 @@
 #     <6 A for 2 min to stop).
 #   * Session energy resets to 0 on every cable plug-in. Once the limit is
 #     reached, charging stops and stays off until the cable is unplugged.
+#     The limit stop also fires immediately at charge start if the limit is
+#     already reached or is 0 (e.g. percent = 0 or capacity not set).
 # ============================================================
 
 # --- INPUT SELECTS ---
@@ -196,6 +201,47 @@ automation:
           message: "Cable plugged in — session energy counter reset to 0."
 
   # ============================================================
+  # ENFORCE OFF: vehicle mode "off" must never charge.
+  # Catches every entry point, including WARP3 firmware auto-start
+  # on cable plug-in (which bypasses the HA start automations).
+  # ============================================================
+  - alias: "Wallbox: Enforce OFF mode (never charge when vehicle = off)"
+    id: wallbox_enforce_off
+    mode: restart
+    triggers:
+      # Vehicle mode switched to off.
+      - trigger: state
+        entity_id: input_select.ev_vehicle_mode
+        to: "off"
+      # Charging started for ANY reason (e.g. wallbox auto-start).
+      - trigger: state
+        entity_id: binary_sensor.warp3_2ita_charging
+        to: "on"
+      # Cable plugged in while already in off mode.
+      - trigger: state
+        entity_id: binary_sensor.warp3_2ita_cable
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: input_select.ev_vehicle_mode
+        state: "off"
+    actions:
+      # Block delivery (0 A) so the wallbox cannot re-deliver power...
+      - action: number.set_value
+        target:
+          entity_id: number.warp3_2ita_globalcurrent
+        data:
+          value: 0
+      # ...and explicitly stop the session.
+      - action: button.press
+        target:
+          entity_id: button.warp3_2ita_stopcharge
+      - action: logbook.log
+        data:
+          name: "Wallbox"
+          message: "Vehicle mode = off — charging blocked and stopped."
+
+  # ============================================================
   # MANUAL: fixed-current charging (overrides PV automatic)
   # Active whenever ev_manual_charging_current >= 6 A and mode != off.
   # ============================================================
@@ -257,6 +303,65 @@ automation:
               message: "Manual charging started at {{ manual_amps }} A."
 
   # ============================================================
+  # START ON MODE ACTIVATION: vehicle switched from "off" to active.
+  # Starts charging immediately if PV surplus is available (>= 6 A),
+  # instead of waiting for the 5-minute sustained-surplus trigger.
+  # Manual fixed-current mode is handled by wallbox_manual_charge.
+  # ============================================================
+  - alias: "Wallbox: Start charging when vehicle activated (off -> on)"
+    id: wallbox_start_on_mode_activation
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: input_select.ev_vehicle_mode
+        from: "off"
+    conditions:
+      # New mode must be an active vehicle.
+      - condition: template
+        value_template: "{{ not is_state('input_select.ev_vehicle_mode', 'off') }}"
+      - condition: state
+        entity_id: binary_sensor.warp3_2ita_cable
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.warp3_2ita_charging
+        state: "off"
+      # Automatic mode only (manual override starts via its own automation).
+      - condition: numeric_state
+        entity_id: input_number.ev_manual_charging_current
+        below: 6
+      # Energy target not yet reached (and target > 0).
+      - condition: template
+        value_template: >-
+          {{ states('sensor.ev_session_energy') | float(0)
+             < states('sensor.ev_max_charge_energy') | float(0) }}
+      # PV surplus currently available. Remove THIS condition if you want to
+      # start regardless of surplus (will import from grid until the PV-follow
+      # and PV-stop automations take over).
+      - condition: numeric_state
+        entity_id: sensor.pv_dynamic_charging_current
+        above: 5
+    actions:
+      # Apply the currently available surplus current...
+      - action: number.set_value
+        target:
+          entity_id: number.warp3_2ita_globalcurrent
+        data:
+          value: "{{ states('sensor.pv_dynamic_charging_current') | int(6) }}"
+      # ...give the wallbox a moment, then press start.
+      - delay:
+          milliseconds: 500
+      - action: button.press
+        target:
+          entity_id: button.warp3_2ita_startcharge
+      - action: logbook.log
+        data:
+          name: "Wallbox"
+          message: >-
+            Vehicle activated ({{ states('input_select.ev_vehicle_mode') }})
+            — charging started at
+            {{ states('sensor.pv_dynamic_charging_current') }} A.
+
+  # ============================================================
   # START: enough PV surplus for 5 minutes -> begin charging
   # (Automatic mode only; manual current must be 0; mode != off.)
   # ============================================================
@@ -310,7 +415,7 @@ automation:
 
   # ============================================================
   # TRACK: while charging, follow the available PV surplus
-  # (Automatic mode only; manual current must be 0.)
+  # (Automatic mode only; manual current must be 0; mode != off.)
   # ============================================================
   - alias: "Wallbox: Follow PV surplus while charging"
     id: wallbox_pv_track
@@ -330,6 +435,9 @@ automation:
       - condition: numeric_state
         entity_id: input_number.ev_manual_charging_current
         below: 6
+      # Block when vehicle mode is off.
+      - condition: template
+        value_template: "{{ not is_state('input_select.ev_vehicle_mode', 'off') }}"
     variables:
       target_amps: "{{ states('sensor.pv_dynamic_charging_current') | int(6) }}"
       current_amps: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
@@ -378,22 +486,43 @@ automation:
   # ENERGY / MODE STOP:
   # stop charging when the energy limit is reached or mode is set to "off".
   # Applies to both manual and automatic charging.
+  #
+  # Hardened: re-checks on charge start and on limit changes, so an
+  # already-reached or zero limit (percent = 0 / capacity not set) stops
+  # charging immediately instead of relying on a false->true transition.
   # ============================================================
   - alias: "Wallbox: Stop charging at limit or when mode is off"
     id: wallbox_stop_on_limit_or_off
     mode: single
     triggers:
+      # Session energy crosses the limit while charging.
       - trigger: template
         value_template: >-
           {{ states('sensor.ev_session_energy') | float(0)
              >= states('sensor.ev_max_charge_energy') | float(0) }}
+      # Vehicle mode set to off.
       - trigger: state
         entity_id: input_select.ev_vehicle_mode
         to: "off"
+      # Charging just started -> re-check immediately. Catches the case where
+      # the limit is already reached or is 0 at start (no false->true
+      # transition would otherwise fire the template trigger).
+      - trigger: state
+        entity_id: binary_sensor.warp3_2ita_charging
+        to: "on"
+      # Limit changed (mode/percent edited) — may now be below charged energy.
+      - trigger: state
+        entity_id: sensor.ev_max_charge_energy
     conditions:
       - condition: state
         entity_id: binary_sensor.warp3_2ita_charging
         state: "on"
+      # Stop if mode is off OR the session has reached the energy limit.
+      - condition: template
+        value_template: >-
+          {{ is_state('input_select.ev_vehicle_mode', 'off')
+             or states('sensor.ev_session_energy') | float(0)
+                >= states('sensor.ev_max_charge_energy') | float(0) }}
     actions:
       - action: button.press
         target:
