@@ -1,0 +1,116 @@
+# packages/pv_forecast_fetch.yaml
+#
+# Data-acquisition layer: REST API sources, raw-data stabilisation, and the
+# scheduled fetch automation. The four sensor.*_stable entities below are the
+# only interface to the calculation layer; pv_forecast_calc.yaml consumes them
+# purely by entity_id, so the two files are otherwise independent.
+
+################################################################################
+# API SOURCES
+################################################################################
+sensor:
+  - platform: rest
+    name: "Solarprognose API Source Dach"
+    unique_id: solarprognose_api_source_dach
+    resource: "https://www.solarprognose.de/web/solarprediction/api/v1?access-token=c2a2da7b09c3c2e2a20651a2223e7fa7&item=module_field&id=14443&type=hourly"
+    scan_interval: 31536000
+    json_attributes: [data]
+    value_template: "{{ value_json.status if value_json is defined else 'OK' }}"
+
+  - platform: rest
+    name: "Solarprognose API Source Fassade"
+    unique_id: solarprognose_api_source_fassade
+    resource: "https://www.solarprognose.de/web/solarprediction/api/v1?access-token=c2a2da7b09c3c2e2a20651a2223e7fa7&item=module_field&id=14337&type=hourly"
+    scan_interval: 31536000
+    json_attributes: [data]
+    value_template: "{{ value_json.status if value_json is defined else 'OK' }}"
+
+  - platform: rest
+    name: "Forecastsolar API Source Dach"
+    unique_id: forecastsolar_api_source_dach
+    resource: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/30/-45/7.5"
+    scan_interval: 31536000
+    json_attributes: [result]
+    value_template: "{{ value_json.message.info.place if value_json is defined else 'OK' }}"
+
+  - platform: rest
+    name: "Forecastsolar API Source Fassade"
+    unique_id: forecastsolar_api_source_fassade
+    resource: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/85/90/2.4"
+    scan_interval: 31536000
+    json_attributes: [result]
+    value_template: "{{ value_json.message.info.place if value_json is defined else 'OK' }}"
+
+################################################################################
+# RAW DATA STABILISATION (template sensors -> sensor.*_stable)
+################################################################################
+template:
+  - triggers:
+      - platform: time_pattern
+        minutes: "/5"
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id:
+          - sensor.solarprognose_api_source_dach
+          - sensor.solarprognose_api_source_fassade
+    sensor:
+      - name: "Solarprognose Api Raw Dach Stable"
+        unique_id: solarprognose_api_raw_dach_stable
+        state: "OK"
+        attributes:
+          data: >-
+            {% set val = state_attr('sensor.solarprognose_api_source_dach', 'data') %}
+            {{ val if val is mapping else state_attr(this.entity_id, 'data') }}
+
+      - name: "Solarprognose Api Raw Fassade Stable"
+        unique_id: solarprognose_api_raw_fassade_stable
+        state: "OK"
+        attributes:
+          data: >-
+            {% set val = state_attr('sensor.solarprognose_api_source_fassade', 'data') %}
+            {{ val if val is mapping else state_attr(this.entity_id, 'data') }}
+
+  - triggers:
+      - platform: time_pattern
+        minutes: "/5"
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id:
+          - sensor.forecastsolar_api_source_dach
+          - sensor.forecastsolar_api_source_fassade
+    sensor:
+      - name: "Forecastsolar API Raw Dach Stable"
+        unique_id: forecastsolar_api_raw_dach_stable
+        state: "OK"
+        attributes:
+          result: >-
+            {% set val = state_attr('sensor.forecastsolar_api_source_dach', 'result') %}
+            {{ val if val is mapping else state_attr(this.entity_id, 'result') }}
+
+      - name: "Forecastsolar API Raw Fassade Stable"
+        unique_id: forecastsolar_api_raw_fassade_stable
+        state: "OK"
+        attributes:
+          result: >-
+            {% set val = state_attr('sensor.forecastsolar_api_source_fassade', 'result') %}
+            {{ val if val is mapping else state_attr(this.entity_id, 'result') }}
+
+################################################################################
+# FETCH AUTOMATION
+################################################################################
+automation:
+  - alias: "PV: API Daten gezielt holen"
+    id: pv_fetch_api_data_updates
+    trigger:
+      - platform: time
+        at: ["06:00:00", "11:30:00", "17:30:00"]
+    action:
+      - action: homeassistant.update_entity
+        target:
+          entity_id:
+            - sensor.solarprognose_api_source_dach
+            - sensor.solarprognose_api_source_fassade
+            - sensor.forecastsolar_api_source_dach
+            - sensor.forecastsolar_api_source_fassade
