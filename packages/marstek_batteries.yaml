@@ -540,23 +540,56 @@ automation:
                     {% set new = states('input_number.venus_2_energy_wh_counter') | float(0) + delta_wh %}
                     {{ [[new, -50000] | max, 50000] | min }}
 
+  # ==========================================================
+  # Sende Lade- und Entladebefehle an Hardware
+  # ==========================================================
+  # Topology: each Venus has its OWN EW11 on its OWN IP -> two independent
+  # TCP/Modbus sockets. Writing both batteries in parallel is therefore safe;
+  # the desync seen in the log happens WITHIN a single EW11's request stream
+  # (a read times out, the late RS485 reply gets mis-paired to the next
+  # request -> "received pdu without a corresponding request" -> half-open ->
+  # write timeout on 0xA424).
+  #
+  # Changes vs. the original:
+  #   1. Added a periodic reconcile trigger (time_pattern /30). Re-sends
+  #      targets so a write lost to a half-open connection self-heals within
+  #      30 s, AND catches per-battery redistributions that keep the sensor's
+  #      TOTAL state unchanged (attribute-only changes never fire a state
+  #      trigger).
+  #   2. Every set_value is guarded: it only writes when the target differs
+  #      from the hardware read-back. Keeps per-socket traffic minimal despite
+  #      the periodic trigger.
+  #   3. parallel: KEPT (two independent sockets). Within each battery the
+  #      sequence mode -> charge -> discharge stays serial with 150 ms gaps.
+  #
+  # CAVEAT on point 2: lost-write self-heal relies on the number.* entities
+  # reflecting the polled register read-back, NOT an optimistic state. If
+  # marstek_modbus updates optimistically on write, the guard skips the retry;
+  # the periodic trigger then still helps with redistribution, but lost-write
+  # recovery would need a read-back verify instead.
   - alias: "Sende Lade und Entladebefehle an Hardware"
     id: "sende_batterie_targets_v2"
     mode: queued
     max: 15
     triggers:
+      # Immediate path: react the moment a target changes
       - trigger: state
         entity_id: sensor.target_power_distribution_fast
       - trigger: state
         entity_id:
           - input_boolean.override_soc
           - input_number.manual_charge_power
+      # Safety net: periodic reconcile (recover lost writes + attribute-only
+      # redistributions). On this path the 100 ms debounce below is harmless.
+      - trigger: time_pattern
+        seconds: "/30"
+
     actions:
-      - delay: # ← Debounce: waits to see if more triggers arrive
+      - delay: # Debounce the event-driven path
           milliseconds: 100
 
       - variables:
-          # 1. --- FETCH + SAFE MAPPING in one go (atomic per variable) ---
+          # 1. --- FETCH + SAFE MAPPING ---
           c: >-
             {% set raw = state_attr('sensor.target_power_distribution_fast', 'charge') %}
             {{ raw if raw is mapping else {'v1': 0, 'v2': 0} }}
@@ -573,7 +606,6 @@ automation:
           # 3. --- CALCULATE POWER VALUES ---
           v1_laden: "{{ [c1, 2500] | min if c1 >= 20 else 0 }}"
           v1_entladen: "{{ [d1, 2500] | min if d1 >= 20 and c1 < 20 else 0 }}"
-
           v2_laden: "{{ [c2, 2500] | min if c2 >= 20 else 0 }}"
           v2_entladen: "{{ [d2, 2500] | min if d2 >= 20 and c2 < 20 else 0 }}"
 
@@ -585,12 +617,11 @@ automation:
           is_conflict: >-
             {{ (target_mode_v1 == 'charge' and target_mode_v2 == 'discharge') or
                (target_mode_v1 == 'discharge' and target_mode_v2 == 'charge') }}
-
           target_mode_v1_safe: "{{ 'standby' if is_conflict else target_mode_v1 }}"
           target_mode_v2_safe: "{{ 'standby' if is_conflict else target_mode_v2 }}"
 
       - parallel:
-          # --- Venus 1 complete ---
+          # --- Venus 1 (own EW11 / own socket) ---
           - sequence:
               - if:
                   - condition: template
@@ -599,20 +630,31 @@ automation:
                   - action: select.select_option
                     target: { entity_id: select.marstek_venus_1_force_mode }
                     data: { option: "{{ target_mode_v1_safe }}" }
-                  - delay:
-                      milliseconds: 150 # Short pause for processing
-              - action: number.set_value
-                target: { entity_id: number.marstek_venus_1_charge_power }
-                data: { value: "{{ v1_laden }}" }
-                continue_on_error: true
-              - delay:
-                  milliseconds: 150
-              - action: number.set_value
-                target: { entity_id: number.marstek_venus_1_discharge_power }
-                data: { value: "{{ v1_entladen }}" }
-                continue_on_error: true
+                  - delay: { milliseconds: 150 }
 
-          # --- Venus 2 complete ---
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ (states('number.marstek_venus_1_charge_power') | float(-1)) | round(0) != v1_laden }}
+                then:
+                  - action: number.set_value
+                    target: { entity_id: number.marstek_venus_1_charge_power }
+                    data: { value: "{{ v1_laden }}" }
+                    continue_on_error: true
+                  - delay: { milliseconds: 150 }
+
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ (states('number.marstek_venus_1_discharge_power') | float(-1)) | round(0) != v1_entladen }}
+                then:
+                  - action: number.set_value
+                    target:
+                      { entity_id: number.marstek_venus_1_discharge_power }
+                    data: { value: "{{ v1_entladen }}" }
+                    continue_on_error: true
+
+          # --- Venus 2 (own EW11 / own socket) ---
           - sequence:
               - delay:
                   milliseconds: 20 # start venus 2 a tad later
@@ -623,19 +665,29 @@ automation:
                   - action: select.select_option
                     target: { entity_id: select.marstek_venus_2_force_mode }
                     data: { option: "{{ target_mode_v2_safe }}" }
-                  - delay:
-                      milliseconds: 150
-              - action: number.set_value
-                target: { entity_id: number.marstek_venus_2_charge_power }
-                data: { value: "{{ v2_laden }}" }
-                continue_on_error: true
+                  - delay: { milliseconds: 150 }
 
-              - delay:
-                  milliseconds: 150
-              - action: number.set_value
-                target: { entity_id: number.marstek_venus_2_discharge_power }
-                data: { value: "{{ v2_entladen }}" }
-                continue_on_error: true
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ (states('number.marstek_venus_2_charge_power') | float(-1)) | round(0) != v2_laden }}
+                then:
+                  - action: number.set_value
+                    target: { entity_id: number.marstek_venus_2_charge_power }
+                    data: { value: "{{ v2_laden }}" }
+                    continue_on_error: true
+                  - delay: { milliseconds: 150 }
+
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ (states('number.marstek_venus_2_discharge_power') | float(-1)) | round(0) != v2_entladen }}
+                then:
+                  - action: number.set_value
+                    target:
+                      { entity_id: number.marstek_venus_2_discharge_power }
+                    data: { value: "{{ v2_entladen }}" }
+                    continue_on_error: true
 
   # ==========================================================
   # Marstek: Last Full Timestamp
@@ -751,4 +803,3 @@ automation:
                     data:
                       value: 0
                     continue_on_error: true # ← NEU
-
