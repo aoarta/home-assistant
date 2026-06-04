@@ -165,32 +165,33 @@ template:
         unique_id: ups_soc_reset_point
         unit_of_measurement: "Wh"
         state: >-
-          {% set current_energy = states('sensor.ups_energyflow_wh') | float(0) %}
-          {% set raw_last_reset = states('sensor.ups_soc_reset_point') %}
-          {% set hw_soc = states('sensor.ups_soc') | float(0) %}
-          {% set custom_soc = states('sensor.ups_custom_soc') | float(none) %}          
-          {% set high_cell = states('sensor.ups_highest_cell') | float(0) %}
-          {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}     
-          {% set lfp_max_voltage = state_attr('sensor.global_parameter', 'lfp_max_voltage') | float(3.60) %}          
-          {% set capacity = state_attr('sensor.global_parameter', 'ups_capacity_wh') | float(2200) %}
-
-          {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
-
-          {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
-
-          {# Sync auf HW-SOC wenn Batterie fast leer #}
-          {% if hw_soc <= stop_soc or drift_too_high %}
-            {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-          {# Reset wenn HW-SOC 100 oder Zelle voll #}
-          {% elif hw_soc >= 100  or high_cell > lfp_max_voltage %}
-            {# At 100% we take the higher value (since energy flow decreases/goes negative when charging) #}
-            {{ current_energy }}
-          {% elif current_energy < last_reset %}
-            {{ current_energy }}
+          {% set raw_energy = states('sensor.ups_energyflow_wh') %}
+          {% if not is_number(raw_energy) %}
+            {# Energy flow not available yet (e.g. right after restart). Hold the last
+              reset point. Falling back to 0 here would trigger the
+              'current_energy < last_reset' branch and snap the point to 0. #}
+            {{ this.state }}
           {% else %}
-            {{ last_reset }}
+            {% set current_energy = raw_energy | float %}
+            {% set raw_last_reset = states('sensor.ups_soc_reset_point') %}
+            {% set hw_soc = states('sensor.ups_soc') | float(0) %}
+            {% set custom_soc = states('sensor.ups_custom_soc') | float(none) %}
+            {% set high_cell = states('sensor.ups_highest_cell') | float(0) %}
+            {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
+            {% set lfp_max_voltage = state_attr('sensor.global_parameter', 'lfp_max_voltage') | float(3.60) %}
+            {% set capacity = state_attr('sensor.global_parameter', 'ups_capacity_wh') | float(2200) %}
+            {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
+            {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
+            {% if hw_soc <= stop_soc or drift_too_high %}
+              {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
+            {% elif hw_soc >= 100 or high_cell > lfp_max_voltage %}
+              {{ current_energy }}
+            {% elif current_energy < last_reset %}
+              {{ current_energy }}
+            {% else %}
+              {{ last_reset }}
+            {% endif %}
           {% endif %}
-
   - trigger:
       - platform: state
         entity_id: sensor.ups_energyflow_wh
