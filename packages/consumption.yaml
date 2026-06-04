@@ -188,12 +188,10 @@ template:
         state_class: total
         state: >-
           {% set watt = states('sensor.average_consumption_last_1h') | float(none) %}
-          {% set sun_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(none) %}
+          {% set sunrise = as_timestamp(state_attr('sun.sun', 'next_rising'), none) %}
           {% set now_ts = as_timestamp(now()) %}
-          {% if watt is not none and sun_set is not none and sun_set > now_ts %}
-            {{ (watt * (sun_set - now_ts) / 3600 / 1000) | round(2) }}
-          {% elif sun_set is not none and sun_set <= now_ts %}
-            0.0
+          {% if watt is not none and sunrise is not none and sunrise > now_ts %}
+            {{ (watt * (sunrise - now_ts) / 3600 / 1000) | round(2) }}
           {% elif this.state is defined and is_number(this.state) %}
             {{ this.state }}
           {% else %}
@@ -201,9 +199,9 @@ template:
           {% endif %}
         attributes:
           remaining_time_h: >-
-            {% set sun_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
+            {% set sunrise = as_timestamp(state_attr('sun.sun', 'next_rising'), none) %}
             {% set now_ts = as_timestamp(now()) %}
-            {{ ((sun_set - now_ts) / 3600) | round(2) if sun_set > now_ts else 0 }}
+            {{ ((sunrise - now_ts) / 3600) | round(2) if sunrise is not none and sunrise > now_ts else 0 }}
 
   - triggers:
       - trigger: time
