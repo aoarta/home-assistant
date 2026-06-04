@@ -85,6 +85,42 @@ input_number:
     max: 1
     step: 0.0001
 
+  # --- Kalman R-Werte (adaptives Messrauschen, Stufe 3) ---
+  # Holds the smoothed innovation variance per source (EWMA of innovation^2).
+  # Used as the adaptive measurement noise R in the daily score update.
+  # A source whose daily quality metric jumps around grows a large R and is
+  # trusted less (smaller gain); a consistent source keeps R small.
+  pv_kalman_r_solcast:
+    name: "Kalman R Solcast"
+    min: 0.0001
+    max: 50
+    step: 0.001
+  pv_kalman_r_solarprognose:
+    name: "Kalman R Solarprognose"
+    min: 0.0001
+    max: 50
+    step: 0.001
+  pv_kalman_r_forecastsolar:
+    name: "Kalman R ForecastSolar"
+    min: 0.0001
+    max: 50
+    step: 0.001
+  pv_kalman_r_openmeteo:
+    name: "Kalman R OpenMeteo"
+    min: 0.0001
+    max: 50
+    step: 0.001
+  pv_kalman_r_ml:
+    name: "Kalman R ML"
+    min: 0.0001
+    max: 50
+    step: 0.001
+  pv_kalman_r_dwd:
+    name: "Kalman R DWD"
+    min: 0.0001
+    max: 50
+    step: 0.001
+
   # --- Normierte Gewichte (Visualisierung) ---
   weight_solcast:
     name: "Gewicht Solcast"
@@ -411,12 +447,14 @@ template:
           {% set om = states('sensor.pv_forecast_openmeteo_all') | float(0) %}
           {% set ml = states('sensor.pv_forecast_ml_all') | float(0) %}
           {% set dw = states('sensor.pv_forecast_dwd_all') | float(0) %}
-          {% set sc_w = states('input_number.pv_kalman_score_solcast') | float(0) if sc > 0 else 0 %}
-          {% set sp_w = states('input_number.pv_kalman_score_solarprognose') | float(0) if sp > 0 else 0 %}
-          {% set fs_w = states('input_number.pv_kalman_score_forecastsolar') | float(0) if fs > 0 else 0 %}
-          {% set om_w = states('input_number.pv_kalman_score_openmeteo') | float(0) if om > 0 else 0 %}
-          {% set ml_w = states('input_number.pv_kalman_score_ml') | float(0) if ml > 0 else 0 %}
-          {% set dw_w = states('input_number.pv_kalman_score_dwd') | float(0) if dw > 0 else 0 %}
+          {# Stufe 4: inverse-variance weighting -> weight = score / (R + r_reg) #}
+          {% set r_reg = 0.1 %}
+          {% set sc_w = (states('input_number.pv_kalman_score_solcast') | float(0)) / (states('input_number.pv_kalman_r_solcast') | float(0.1) + r_reg) if sc > 0 else 0 %}
+          {% set sp_w = (states('input_number.pv_kalman_score_solarprognose') | float(0)) / (states('input_number.pv_kalman_r_solarprognose') | float(0.1) + r_reg) if sp > 0 else 0 %}
+          {% set fs_w = (states('input_number.pv_kalman_score_forecastsolar') | float(0)) / (states('input_number.pv_kalman_r_forecastsolar') | float(0.1) + r_reg) if fs > 0 else 0 %}
+          {% set om_w = (states('input_number.pv_kalman_score_openmeteo') | float(0)) / (states('input_number.pv_kalman_r_openmeteo') | float(0.1) + r_reg) if om > 0 else 0 %}
+          {% set ml_w = (states('input_number.pv_kalman_score_ml') | float(0)) / (states('input_number.pv_kalman_r_ml') | float(0.1) + r_reg) if ml > 0 else 0 %}
+          {% set dw_w = (states('input_number.pv_kalman_score_dwd') | float(0)) / (states('input_number.pv_kalman_r_dwd') | float(0.1) + r_reg) if dw > 0 else 0 %}
           {% set total_weight = sc_w + sp_w + fs_w + om_w + ml_w + dw_w %}
           {% set bias = states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) %}
           {% if total_weight > 0 %}
@@ -500,12 +538,14 @@ template:
           {% set om = states('sensor.pv_forecast_openmeteo_tomorrow') | float(0) %}
           {% set ml = states('sensor.pv_forecast_ml_tomorrow') | float(0) %}
           {% set dw = states('sensor.pv_forecast_dwd_tomorrow') | float(0) %}
-          {% set sc_w = states('input_number.pv_kalman_score_solcast') | float(0) if sc > 0 else 0 %}
-          {% set sp_w = states('input_number.pv_kalman_score_solarprognose') | float(0) if sp > 0 else 0 %}
-          {% set fs_w = states('input_number.pv_kalman_score_forecastsolar') | float(0) if fs > 0 else 0 %}
-          {% set om_w = states('input_number.pv_kalman_score_openmeteo') | float(0) if om > 0 else 0 %}
-          {% set ml_w = states('input_number.pv_kalman_score_ml') | float(0) if ml > 0 else 0 %}
-          {% set dw_w = states('input_number.pv_kalman_score_dwd') | float(0) if dw > 0 else 0 %}
+          {# Stufe 4: inverse-variance weighting -> weight = score / (R + r_reg) #}
+          {% set r_reg = 0.1 %}
+          {% set sc_w = (states('input_number.pv_kalman_score_solcast') | float(0)) / (states('input_number.pv_kalman_r_solcast') | float(0.1) + r_reg) if sc > 0 else 0 %}
+          {% set sp_w = (states('input_number.pv_kalman_score_solarprognose') | float(0)) / (states('input_number.pv_kalman_r_solarprognose') | float(0.1) + r_reg) if sp > 0 else 0 %}
+          {% set fs_w = (states('input_number.pv_kalman_score_forecastsolar') | float(0)) / (states('input_number.pv_kalman_r_forecastsolar') | float(0.1) + r_reg) if fs > 0 else 0 %}
+          {% set om_w = (states('input_number.pv_kalman_score_openmeteo') | float(0)) / (states('input_number.pv_kalman_r_openmeteo') | float(0.1) + r_reg) if om > 0 else 0 %}
+          {% set ml_w = (states('input_number.pv_kalman_score_ml') | float(0)) / (states('input_number.pv_kalman_r_ml') | float(0.1) + r_reg) if ml > 0 else 0 %}
+          {% set dw_w = (states('input_number.pv_kalman_score_dwd') | float(0)) / (states('input_number.pv_kalman_r_dwd') | float(0.1) + r_reg) if dw > 0 else 0 %}
           {% set total_weight = sc_w + sp_w + fs_w + om_w + ml_w + dw_w %}
           {% set bias = states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) %}
           {% if total_weight > 0 %}
@@ -538,9 +578,11 @@ template:
           {% set om = states('sensor.pv_forecast_openmeteo_day_after') | float(0) %}
           {% set dw = states('sensor.pv_forecast_dwd_day_after') | float(0) %}
           {% set ml = states('sensor.pv_forecast_ml_day_after') | float(0) %}
-          {% set om_w = states('input_number.pv_kalman_score_openmeteo') | float(0) if om > 0 else 0 %}
-          {% set dw_w = states('input_number.pv_kalman_score_dwd') | float(0) if dw > 0 else 0 %}
-          {% set ml_w = states('input_number.pv_kalman_score_ml') | float(0) if ml > 0 else 0 %}
+          {# Stufe 4: inverse-variance weighting -> weight = score / (R + r_reg) #}
+          {% set r_reg = 0.1 %}
+          {% set om_w = (states('input_number.pv_kalman_score_openmeteo') | float(0)) / (states('input_number.pv_kalman_r_openmeteo') | float(0.1) + r_reg) if om > 0 else 0 %}
+          {% set dw_w = (states('input_number.pv_kalman_score_dwd') | float(0)) / (states('input_number.pv_kalman_r_dwd') | float(0.1) + r_reg) if dw > 0 else 0 %}
+          {% set ml_w = (states('input_number.pv_kalman_score_ml') | float(0)) / (states('input_number.pv_kalman_r_ml') | float(0.1) + r_reg) if ml > 0 else 0 %}
           {% set total_weight = om_w + dw_w + ml_w %}
           {% set bias = states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) %}
           {% if total_weight > 0 %}
@@ -608,9 +650,11 @@ automation:
       Q_bias: 0.001
       R_bias: 0.04
       Q_w: 0.005
-      R_w: 0.1
+      # Stufe 3: adaptive R parameters for the provider scores
+      beta_r: 0.9 # EWMA smoothing of the innovation variance
+      R_floor: 0.05 # lower bound for R, caps the maximum gain (prevents overfit)
     action:
-      # 1. Bias Update
+      # 1. Bias Update (clean scalar Kalman, no forgetting)
       - if:
           - condition: template
             value_template: "{{ forecast_heute > 2 and real > 0 }}"
@@ -618,7 +662,7 @@ automation:
           - variables:
               bias_alt: "{{ states('input_number.pv_forecast_bias_korrekturfaktor') | float(1.0) }}"
               P_bias_alt: "{{ states('input_number.pv_kalman_p_bias') | float(0.02) }}"
-              messung_bias: "{{ real / forecast_heute }}"
+              messung_bias: "{{ real * bias_alt / forecast_heute }}"
           - variables:
               P_bias_pred: "{{ P_bias_alt + Q_bias }}"
           - variables:
@@ -664,6 +708,7 @@ automation:
                     saved_forecast: "{{ states('input_number.pv_save_' ~ repeat.item.id ~ '_morgens') | float(0) }}"
                     score_alt: "{{ states('input_number.pv_kalman_score_' ~ repeat.item.id) | float(1.0) }}"
                     P_alt: "{{ states('input_number.pv_kalman_p_' ~ repeat.item.id) | float(0.1) }}"
+                    R_alt: "{{ states('input_number.pv_kalman_r_' ~ repeat.item.id) | float(0.1) }}"
                 - variables:
                     obs_val: >-
                       {% set rel_err = ((saved_forecast - real) | abs) / (real | float(1)) %}
@@ -672,14 +717,22 @@ automation:
                     - condition: template
                       value_template: "{{ obs_val >= 0 }}"
                   then:
+                    # Stufe 3: scalar Kalman update with adaptive measurement noise R.
+                    # R = smoothed innovation variance (EWMA of innovation^2), so a
+                    # source whose daily quality jumps around grows a large R and is
+                    # smoothed harder (small gain). No forgetting factor: a positive
+                    # Q_w keeps P (and thus the gain) from collapsing, which is what
+                    # keeps the filter permanently reactive.
                     - variables:
                         kalman_calc: >-
+                          {% set innovation = obs_val - score_alt %}
+                          {% set inno_var_new = R_alt * beta_r + (innovation ** 2) * (1 - beta_r) %}
                           {% set p_pred = P_alt + Q_w %}
-                          {% set k = p_pred / (p_pred + R_w) %}
-                          {% set score_forget = score_alt * 0.987 %}
-                          {% set s_neu = score_forget + k * (obs_val - score_forget) %}
+                          {% set r_eff = [inno_var_new - p_pred, R_floor] | max %}
+                          {% set k = p_pred / (p_pred + r_eff) %}
+                          {% set s_neu = score_alt + k * innovation %}
                           {% set p_neu = (1 - k) * p_pred %}
-                          {{ {'s': s_neu | round(5), 'p': p_neu | round(5)}  }}
+                          {{ {'s': s_neu | round(5), 'p': p_neu | round(5), 'r': inno_var_new | round(5)} }}
                     - action: input_number.set_value
                       target:
                         entity_id: "input_number.pv_kalman_score_{{ repeat.item.id }}"
@@ -690,6 +743,11 @@ automation:
                         entity_id: "input_number.pv_kalman_p_{{ repeat.item.id }}"
                       data:
                         value: "{{ kalman_calc.p | clamp(0.0001, 1.0) }}"
+                    - action: input_number.set_value
+                      target:
+                        entity_id: "input_number.pv_kalman_r_{{ repeat.item.id }}"
+                      data:
+                        value: "{{ kalman_calc.r | clamp(0.0001, 50) }}"
 
           # 4. Normierung Gewichte für Dashboard
           - variables:
