@@ -117,6 +117,9 @@ template:
             {# === Usable energy in battery (discharge capacity, incl. safety margin) === #}
             {% set usable_energy = states('sensor.marstek_usable_energy') | float(0) %}
 
+            {# === Max storable energy (battery cap) === #}
+            {% set max_storage = state_attr('sensor.global_parameter', 'max_usable_energy') | float(10) %}
+
             {# === Safety factors === #}
             {% set pv_factor = 0.85 %}
             {% set consumption_buffer = 1.10 %}
@@ -125,7 +128,15 @@ template:
             {% set pv_remaining_today = states('sensor.pv_forecast_weighted') | float(0) * pv_factor %}
             {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
             {% set consumption_today = states('sensor.house_consumption_energy_today') | float(0) %}
-            {% set consumption_remaining_today = ([0, expected_daily_consumption - consumption_today] | max) * consumption_buffer %}
+
+            {# Static estimate: learned daily bucket minus what's already used this cycle #}
+            {% set consumption_static = [0, expected_daily_consumption - consumption_today] | max %}
+            {# Live estimate: current 1h-avg power projected to next sunrise (same window) #}
+            {% set consumption_live = states('sensor.estimated_remaining_consumption') | float(none) %}
+            {# Blend both (fallback to static if live is unavailable), then apply the buffer #}
+            {% set consumption_blended = (0.5 * consumption_static + 0.5 * consumption_live)
+                                          if consumption_live is not none else consumption_static %}
+            {% set consumption_remaining_today = consumption_blended * consumption_buffer %}
 
             {# === Tomorrow === #}
             {% set pv_tomorrow = states('sensor.pv_forecast_weighted_tomorrow') | float(0) * pv_factor %}
@@ -136,11 +147,9 @@ template:
             {% set consumption_day_after = states('sensor.expected_daily_consumption_day_after') | float(expected_daily_consumption) * consumption_buffer %}
 
             {# === Rolling balance: simulate battery state over the next days === #}
-            {# balance_X = energy left in battery at the end of day X #}
-            {# Becomes negative when consumption cannot be covered. #}
-            {% set balance_today = usable_energy + pv_remaining_today - consumption_remaining_today %}
-            {% set balance_tomorrow = balance_today + pv_tomorrow - consumption_tomorrow %}
-            {% set balance_day_after = balance_tomorrow + pv_day_after - consumption_day_after %}
+            {% set balance_today = [usable_energy + pv_remaining_today - consumption_remaining_today, max_storage] | min %}
+            {% set balance_tomorrow = [balance_today + pv_tomorrow - consumption_tomorrow, max_storage] | min %}
+            {% set balance_day_after = [balance_tomorrow + pv_day_after - consumption_day_after, max_storage] | min %}
 
             {# === Decision: most urgent shortfall wins === #}
             {% if balance_today < 0 %}
@@ -150,7 +159,24 @@ template:
             {% elif balance_day_after < 0 %}
               133   {# Day after tomorrow will fall short #}
             {% else %}
-              {{ states('sensor.dynamic_soc') | default(50, true) }}
+              {# No multi-day shortfall — normally follow the dynamic schedule.        #}
+              {# But: if today's remaining PV surplus cannot lift the battery to the   #}
+              {# dynamic target, open the cap to maximum to capture every available    #}
+              {# Wh instead of exporting it.                                           #}
+              {% set target = states('sensor.dynamic_soc') | float(50) %}
+
+              {# Energy still chargeable into the battery from today's PV (after house load) #}
+              {% set chargeable_pv = [0, pv_remaining_today - consumption_remaining_today] | max %}
+              {% set projected_energy = usable_energy + chargeable_pv %}
+
+              {# Energy level the dynamic target corresponds to #}
+              {% set target_energy = (target / 100) * max_storage %}
+
+              {% if projected_energy < target_energy %}
+                {{ state_attr('sensor.dynamic_soc_grenzen', 'max') }}
+              {% else %}
+                {{ target }}
+              {% endif %}
             {% endif %}
 
           {% endif %}
