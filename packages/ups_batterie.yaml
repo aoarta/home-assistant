@@ -107,15 +107,6 @@ rest:
 # TEMPLATE SENSOREN
 ################################################################################
 template:
-  - sensor:
-      - name: "UPS EnergyFlow Wh"
-        unique_id: ups_energyflow_wh
-        unit_of_measurement: "Wh"
-        device_class: energy
-        state_class: total
-        state: >
-          {{ states('input_number.ups_energyflow_wh_counter') }}
-
   - trigger:
       - platform: state
         entity_id: sensor.ups_soc_rest
@@ -192,6 +183,7 @@ template:
               {{ last_reset }}
             {% endif %}
           {% endif %}
+
   - trigger:
       - platform: state
         entity_id: sensor.ups_energyflow_wh
@@ -240,6 +232,14 @@ template:
         availability: "{{ is_number(states('sensor.ups_custom_soc')) }}"
 
   - sensor:
+      - name: "UPS EnergyFlow Wh"
+        unique_id: ups_energyflow_wh
+        unit_of_measurement: "Wh"
+        device_class: energy
+        state_class: total
+        state: >
+          {{ states('input_number.ups_energyflow_wh_counter') }}
+
       - name: "Battery total charge power"
         unique_id: battery_total_charge_power
         unit_of_measurement: "W"
