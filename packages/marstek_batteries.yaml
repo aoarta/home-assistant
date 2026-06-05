@@ -14,27 +14,22 @@ input_number:
     step: 1
 
 sensor:
-#  - platform: filter
-#    name: "Marstek Venus 1 AC Leistung glatt"
-#    unique_id: marstek_venus_1_ac_power_glatt
-#    entity_id: sensor.marstek_venus_1_ac_power
-#    filters:
-#      - filter: lowpass
-#        time_constant: 5 # Smooths over approx. 5 measurements (approx. 5-10 sec. inertia)
-#        precision: 0 # Rounds to one decimal place
-#      - filter: time_throttle
-#        window_size: "00:01:00" # Writes a value to the DB only every 30 seconds
-#
-#  - platform: filter
-#    name: "Marstek Venus 2 AC Leistung glatt"
-#    unique_id: marstek_venus_2_ac_power_glatt
-#    entity_id: sensor.marstek_venus_2_ac_power
-#    filters:
-#      - filter: lowpass
-#        time_constant: 5 # Smooths over approx. 5 measurements (approx. 5-10 sec. inertia)
-#        precision: 0 # Rounds to one decimal place
-#      - filter: time_throttle
-#        window_size: "00:01:00" # Writes a value to the DB only every 30 seconds
+  - platform: filter
+    name: "Marstek Venus 1 AC Leistung glatt"
+    unique_id: marstek_venus_1_ac_power_glatt
+    entity_id: sensor.marstek_venus_1_ac_power
+    filters:
+      - filter: lowpass
+        time_constant: 5
+        precision: 0
+  - platform: filter
+    name: "Marstek Venus 2 AC Leistung glatt"
+    unique_id: marstek_venus_2_ac_power_glatt
+    entity_id: sensor.marstek_venus_2_ac_power
+    filters:
+      - filter: lowpass
+        time_constant: 5
+        precision: 0
 
 #  - platform: integration
 #    source: sensor.marstek_venus_1_ac_power # positive is discharging

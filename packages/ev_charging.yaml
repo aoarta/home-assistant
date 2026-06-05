@@ -74,8 +74,8 @@ template:
         entity_id:
           - sensor.warp3_2ita_powernow
           - sensor.solarnet_leistung_vom_netz
-          - sensor.marstek_venus_1_ac_power
-          - sensor.marstek_venus_2_ac_power
+    #          - sensor.marstek_venus_1_ac_power
+    #          - sensor.marstek_venus_2_ac_power
     sensor:
       - name: "PV Dynamic Charging Current"
         unique_id: pv_dynamic_charging_current
@@ -97,8 +97,8 @@ template:
             #}
             {% set charger_power = states('sensor.warp3_2ita_powernow') | float(0) %}
             {% set power_from_net = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
-            {% set venus1 = states('sensor.marstek_venus_1_ac_power') | float(0) %}
-            {% set venus2 = states('sensor.marstek_venus_2_ac_power') | float(0) %}
+            {% set venus1 = states('sensor.marstek_venus_1_ac_power_glatt') | float(0) %}
+            {% set venus2 = states('sensor.marstek_venus_2_ac_power_glatt') | float(0) %}
 
             {% set surplus = charger_power - power_from_net - venus1 - venus2 %}
             {% set amps = (surplus / 230) | round(0, 'floor') | int %}
@@ -419,7 +419,7 @@ automation:
   # ============================================================
   - alias: "Wallbox: Follow PV surplus while charging"
     id: wallbox_pv_track
-    mode: restart
+    mode: single # hold after each step; drop surplus changes during settle
     triggers:
       - trigger: state
         entity_id: sensor.pv_dynamic_charging_current
@@ -427,23 +427,20 @@ automation:
       - condition: state
         entity_id: binary_sensor.warp3_2ita_charging
         state: "on"
-      # Only adjust while >= 6 A is available; stopping is handled separately.
       - condition: numeric_state
         entity_id: sensor.pv_dynamic_charging_current
         above: 5
-      # Skip when manual override is active.
       - condition: numeric_state
         entity_id: input_number.ev_manual_charging_current
         below: 6
-      # Block when vehicle mode is off.
       - condition: template
         value_template: "{{ not is_state('input_select.ev_vehicle_mode', 'off') }}"
     variables:
       target_amps: "{{ states('sensor.pv_dynamic_charging_current') | int(6) }}"
       current_amps: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
-      adjust_threshold_amps: 2 # avoid constant tiny writes for small fluctuations
+      adjust_threshold_amps: 3 # wider deadband: ignore < ~690 W wobble
     actions:
-      # Only write a new value when the change is meaningful.
+      # Only write on a meaningful change...
       - condition: template
         value_template: "{{ (target_amps - current_amps) | abs >= adjust_threshold_amps }}"
       - action: number.set_value
@@ -451,36 +448,11 @@ automation:
           entity_id: number.warp3_2ita_globalcurrent
         data:
           value: "{{ target_amps }}"
-
-  # ============================================================
-  # STOP: surplus below 6 A for 2 minutes -> stop charging
-  # (Automatic mode only; manual override keeps charging.)
-  # ============================================================
-  - alias: "Wallbox: Stop charging on sustained PV deficit"
-    id: wallbox_pv_stop
-    mode: single
-    triggers:
-      - trigger: numeric_state
-        entity_id: sensor.pv_dynamic_charging_current
-        below: 6
-        for:
+      # ...then HOLD. mode:single drops every surplus change during this delay,
+      # so the fast battery loop fully settles against a fixed EV draw before
+      # the EV is allowed to step again. This is what breaks the limit cycle.
+      - delay:
           minutes: 2
-    conditions:
-      - condition: state
-        entity_id: binary_sensor.warp3_2ita_charging
-        state: "on"
-      # Skip when manual override is active.
-      - condition: numeric_state
-        entity_id: input_number.ev_manual_charging_current
-        below: 6
-    actions:
-      - action: button.press
-        target:
-          entity_id: button.warp3_2ita_stopcharge
-      - action: logbook.log
-        data:
-          name: "Wallbox"
-          message: "PV surplus below 6 A for 2 min — charging stopped."
 
   # ============================================================
   # ENERGY / MODE STOP:
