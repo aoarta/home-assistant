@@ -113,7 +113,6 @@ template:
                + states('sensor.pv_production_power') | float(0)
               ) | round(0) }}
 
-  - sensor:
       - name: "Charge Power"
         unique_id: charge_power
         unit_of_measurement: "W"
