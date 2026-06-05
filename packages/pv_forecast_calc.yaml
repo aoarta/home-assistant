@@ -333,7 +333,7 @@ template:
         unique_id: pv_forecast_dwd_all
         unit_of_measurement: "kWh"
         state: >-
-          {% set dach = state_attr('sensor.pv_dach_dwd_production_today', 'wh_period') %}
+          {% set dach = state_attr('sensor.pv_roof_dwd_production_today', 'wh_period') %}
           {% set fassade = state_attr('sensor.pv_fassade_dwd_production_today', 'wh_period') %}
           {% if dach is mapping and fassade is mapping %}
             {% set ns = namespace(total=0) %}
@@ -553,8 +553,8 @@ automation:
       R_bias: 0.04
       Q_w: 0.005
       # Stufe 3: adaptive R parameters for the provider scores
-      beta_r: 0.9    # EWMA smoothing of the innovation variance
-      R_floor: 0.05  # lower bound for R, caps the maximum gain (prevents overfit)
+      beta_r: 0.9 # EWMA smoothing of the innovation variance
+      R_floor: 0.05 # lower bound for R, caps the maximum gain (prevents overfit)
     action:
       # 1. Bias Update (clean scalar Kalman, no forgetting)
       - if:
