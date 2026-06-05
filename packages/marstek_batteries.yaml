@@ -74,28 +74,6 @@ sensor:
 ################################################################################
 ################################################################################
 template:
-  - triggers:
-      - trigger: time_pattern
-        minutes: "/1"
-      - trigger: homeassistant
-        event: start
-    sensor:
-      - name: "Venus 1 Energy Wh"
-        unique_id: venus_1_energy_wh
-        unit_of_measurement: "Wh"
-        device_class: energy
-        state_class: total
-        state: >
-          {{ states('input_number.venus_1_energy_wh_counter') }}
-
-      - name: "Venus 2 Energy Wh"
-        unique_id: venus_2_energy_wh
-        unit_of_measurement: "Wh"
-        device_class: energy
-        state_class: total
-        state: >
-          {{ states('input_number.venus_2_energy_wh_counter') }}
-
   # ==========================================================
   # Venus SOC Reset Points
   # ==========================================================
@@ -117,29 +95,38 @@ template:
         unique_id: venus_1_soc_reset_point
         unit_of_measurement: "Wh"
         state: >-
-          {% set current_energy = states('sensor.venus_1_energy_wh') | float(0) %}
+          {% set current_energy = states('sensor.venus_1_energy_wh') | float(none) %}
           {% set raw_last_reset = states('sensor.venus_1_soc_reset_point') %}
-          {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
+          {% set last_reset = raw_last_reset | float(none) if is_number(raw_last_reset) else none %}
 
-          {% set hw_soc = states('sensor.marstek_venus_1_soc') | float(0) %}
-          {% set custom_soc = states('sensor.venus_1_custom_soc') | float(none) %}          
-          {% set stop_soc =state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
+          {% set hw_soc = states('sensor.marstek_venus_1_soc') | float(none) %}
+          {% set custom_soc = states('sensor.venus_1_custom_soc') | float(none) %}
+          {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
           {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
 
-          {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
-
-          {% if hw_soc <= stop_soc or drift_too_high %}
-            {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-          {% elif hw_soc >= 100 %}
-            {# At 100% we take the higher value (since energy flow decreases/goes negative when charging) #}
-            {{ current_energy }}
-          {% elif current_energy < last_reset %}
-            {{ current_energy }}
+          {# Essential input missing (restart, modbus dropout) -> hold last value, #}
+          {# never re-anchor the reset point on a bogus hw_soc=0.                   #}
+          {% if hw_soc is none or current_energy is none %}
+            {{ last_reset if last_reset is not none
+               else (this.state if is_number(this.state) else 0) }}
           {% else %}
-            {{ last_reset }}
+            {% set last_reset = last_reset if last_reset is not none else current_energy %}
+            {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
+            {% if hw_soc <= stop_soc or drift_too_high %}
+              {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
+            {% elif hw_soc >= 100 %}
+              {# At 100% we take the higher value (since energy flow decreases/goes negative when charging) #}
+              {{ current_energy }}
+            {% elif current_energy < last_reset %}
+              {{ current_energy }}
+            {% else %}
+              {{ last_reset }}
+            {% endif %}
           {% endif %}
 
   - triggers:
+      - trigger: homeassistant
+        event: start
       - trigger: numeric_state
         entity_id: sensor.venus_2_custom_soc
         above: 99.9
@@ -153,27 +140,56 @@ template:
         unique_id: venus_2_soc_reset_point
         unit_of_measurement: "Wh"
         state: >-
-          {% set current_energy = states('sensor.venus_2_energy_wh') | float(0) %}
+          {% set current_energy = states('sensor.venus_2_energy_wh') | float(none) %}
           {% set raw_last_reset = states('sensor.venus_2_soc_reset_point') %}
-          {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
+          {% set last_reset = raw_last_reset | float(none) if is_number(raw_last_reset) else none %}
 
-          {% set hw_soc = states('sensor.marstek_venus_2_soc') | float(0) %}
-          {% set custom_soc = states('sensor.venus_2_custom_soc') | float(none) %}          
-          {% set stop_soc =state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
+          {% set hw_soc = states('sensor.marstek_venus_2_soc') | float(none) %}
+          {% set custom_soc = states('sensor.venus_2_custom_soc') | float(none) %}
+          {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
           {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
 
-          {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
-
-          {% if hw_soc <= stop_soc or drift_too_high %}
-            {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-          {% elif hw_soc >= 100 %}
-            {# At 100% we take the higher value (since energy flow decreases/goes negative when charging) #}
-            {{ current_energy }}
-          {% elif current_energy < last_reset %}
-            {{ current_energy }}
+          {# Essential input missing (restart, modbus dropout) -> hold last value, #}
+          {# never re-anchor the reset point on a bogus hw_soc=0.                   #}
+          {% if hw_soc is none or current_energy is none %}
+            {{ last_reset if last_reset is not none
+               else (this.state if is_number(this.state) else 0) }}
           {% else %}
-            {{ last_reset }}
+            {% set last_reset = last_reset if last_reset is not none else current_energy %}
+            {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
+            {% if hw_soc <= stop_soc or drift_too_high %}
+              {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
+            {% elif hw_soc >= 100 %}
+              {# At 100% we take the higher value (since energy flow decreases/goes negative when charging) #}
+              {{ current_energy }}
+            {% elif current_energy < last_reset %}
+              {{ current_energy }}
+            {% else %}
+              {{ last_reset }}
+            {% endif %}
           {% endif %}
+
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: homeassistant
+        event: start
+    sensor:
+      - name: "Venus 1 Energy Wh"
+        unique_id: venus_1_energy_wh
+        unit_of_measurement: "Wh"
+        device_class: energy
+        state_class: total
+        state: >
+          {{ states('input_number.venus_1_energy_wh_counter') }}
+
+      - name: "Venus 2 Energy Wh"
+        unique_id: venus_2_energy_wh
+        unit_of_measurement: "Wh"
+        device_class: energy
+        state_class: total
+        state: >
+          {{ states('input_number.venus_2_energy_wh_counter') }}
 
   - triggers:
       - trigger: homeassistant

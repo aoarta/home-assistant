@@ -197,11 +197,6 @@ template:
           {% else %}
             0.0
           {% endif %}
-        attributes:
-          remaining_time_h: >-
-            {% set sunrise = as_timestamp(state_attr('sun.sun', 'next_rising'), none) %}
-            {% set now_ts = as_timestamp(now()) %}
-            {{ ((sunrise - now_ts) / 3600) | round(2) if sunrise is not none and sunrise > now_ts else 0 }}
 
   - triggers:
       - trigger: time
