@@ -236,271 +236,311 @@ template:
         availability: "{{ is_number(states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute')) }}"
         state: "{{ states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute') | float(0) | round(1) }}"
 
-  - triggers:
-      - platform: time_pattern
+  # ==========================================================================
+  # Weighted Kalman ensemble forecast (today / tomorrow / day after)
+  #
+  # Refactor: every source total and every provider weight is computed ONCE in
+  # `variables:` below. The sensors only emit those variables; the three
+  # weighted sensors read variables, never each other.
+  #   * No in-block ordering dependency (sensor order is now irrelevant).
+  #   * `score / (R + r_reg)` lives once as bw_<source>; the per-horizon
+  #     `if value > 0` gate is applied inline.
+  #   * `r_reg` is a SINGLE tuning knob (was duplicated per sensor).
+  #
+  # Hold-last-value on API gaps is preserved: a source whose raw API attribute
+  # is missing falls back to states('sensor.<self>'), which at variables-render
+  # time still holds the previous cycle's committed value. That held value
+  # flows into the ensemble exactly as before.
+  # ==========================================================================
+  - trigger:
+      - trigger: time_pattern
         minutes: "/5"
+    variables:
+      # --- Tuning knobs ---
+      r_reg: 0.1
+      bias: "{{ states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) }}"
+
+      # --- Provider base weights (inverse-variance, ungated) ---
+      bw_sc: "{{ (states('input_number.pv_kalman_score_solcast') | float(0)) / (states('input_number.pv_kalman_r_solcast') | float(0.1) + r_reg) }}"
+      bw_sp: "{{ (states('input_number.pv_kalman_score_solarprognose') | float(0)) / (states('input_number.pv_kalman_r_solarprognose') | float(0.1) + r_reg) }}"
+      bw_fs: "{{ (states('input_number.pv_kalman_score_forecastsolar') | float(0)) / (states('input_number.pv_kalman_r_forecastsolar') | float(0.1) + r_reg) }}"
+      bw_om: "{{ (states('input_number.pv_kalman_score_openmeteo') | float(0)) / (states('input_number.pv_kalman_r_openmeteo') | float(0.1) + r_reg) }}"
+      bw_ml: "{{ (states('input_number.pv_kalman_score_ml') | float(0)) / (states('input_number.pv_kalman_r_ml') | float(0.1) + r_reg) }}"
+      bw_dw: "{{ (states('input_number.pv_kalman_score_dwd') | float(0)) / (states('input_number.pv_kalman_r_dwd') | float(0.1) + r_reg) }}"
+
+      # --- TODAY source totals (remaining production) ---
+      sc_today: "{{ states('sensor.pv_forecast_solcast_all') | float(0) }}"
+      ml_today: "{{ states('sensor.pv_forecast_ml_all') | float(0) }}"
+      sp_today: >-
+        {% set dach = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
+        {% set fassade = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
+        {% if dach is mapping %}
+          {% set ns = namespace(total=0) %}
+          {% set now_dt = now() %}
+          {% set start_ts = now_dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() | int %}
+          {% set current_hour = now_dt.hour %}
+          {% set ts_now = (start_ts + current_hour * 3600) | string %}
+          {% set fraction_left = (3600 - (now_dt.minute * 60 + now_dt.second)) / 3600 %}
+          {% set d_now = dach[ts_now][1] | float(0) if ts_now in dach else 0 %}
+          {% set f_now = fassade[ts_now][1] | float(0) if (fassade is mapping and ts_now in fassade) else 0 %}
+          {% set ns.total = (d_now + f_now) * fraction_left %}
+          {% for i in range(current_hour + 1, 24) %}
+            {% set ts = (start_ts + i * 3600) | string %}
+            {% set d = dach[ts][1] | float(0) if ts in dach else 0 %}
+            {% set f = fassade[ts][1] | float(0) if (fassade is mapping and ts in fassade) else 0 %}
+            {% set ns.total = ns.total + (d + f) %}
+          {% endfor %}
+          {{ ns.total | round(1) }}
+        {% else %}
+          {{ states('sensor.pv_forecast_solarprognose_all') | float(0) }}
+        {% endif %}
+      fs_today: >-
+        {% set today = now().strftime('%Y-%m-%d') %}
+        {% set dach = state_attr('sensor.forecastsolar_api_raw_dach_stable', 'result') %}
+        {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade_stable', 'result') %}
+        {% if dach is mapping and fassade is mapping %}
+          {% set ns = namespace(d_max=0, f_max=0, d_now=0, f_now=0, prev_t=0, prev_v=0) %}
+          {% set now_ts = now().timestamp() %}
+          {% set tz = now().strftime('%z') %}
+          {% for ts, val in dach.items() if ts.startswith(today) %}
+            {% set t = as_timestamp(ts ~ tz) %}
+            {% set v = val | float(0) %}
+            {% if v > ns.d_max %}{% set ns.d_max = v %}{% endif %}
+            {% if ns.prev_t <= now_ts <= t and ns.prev_t != 0 %}
+              {% set fraction = (now_ts - ns.prev_t) / (t - ns.prev_t) %}
+              {% set ns.d_now = ns.prev_v + (v - ns.prev_v) * fraction %}
+            {% elif now_ts > t %}{% set ns.d_now = v %}{% endif %}
+            {% set ns.prev_t = t %}{% set ns.prev_v = v %}
+          {% endfor %}
+          {% set ns.prev_t = 0 %}{% set ns.prev_v = 0 %}
+          {% for ts, val in fassade.items() if ts.startswith(today) %}
+            {% set t = as_timestamp(ts ~ tz) %}
+            {% set v = val | float(0) %}
+            {% if v > ns.f_max %}{% set ns.f_max = v %}{% endif %}
+            {% if ns.prev_t <= now_ts <= t and ns.prev_t != 0 %}
+              {% set fraction = (now_ts - ns.prev_t) / (t - ns.prev_t) %}
+              {% set ns.f_now = ns.prev_v + (v - ns.prev_v) * fraction %}
+            {% elif now_ts > t %}{% set ns.f_now = v %}{% endif %}
+            {% set ns.prev_t = t %}{% set ns.prev_v = v %}
+          {% endfor %}
+          {{ ([0, ((ns.d_max - ns.d_now) + (ns.f_max - ns.f_now)) / 1000] | max) | round(1) }}
+        {% else %}
+          {{ states('sensor.pv_forecast_forecastsolar_all') | float(0) }}
+        {% endif %}
+      om_today: >-
+        {% set dach = state_attr('sensor.pv_roof_openmeteo_production_today', 'wh_period') %}
+        {% set fassade = state_attr('sensor.pv_fassade_openmeteo_production_today', 'wh_period') %}
+        {% if dach is mapping and fassade is mapping %}
+          {% set ns = namespace(total=0) %}
+          {% set now_dt = now() %}
+          {% set today = now_dt.strftime('%Y-%m-%d') %}
+          {% set current_hour_ts = now_dt.replace(minute=0, second=0, microsecond=0).timestamp() %}
+          {% set fraction_left = (3600 - (now_dt.minute * 60 + now_dt.second)) / 3600 %}
+          {% for ts, d_val in dach.items() if ts.startswith(today) %}
+            {% set t = as_timestamp(ts) %}
+            {% set f_val = fassade[ts] | float(0) if ts in fassade else 0 %}
+            {% set combined_wh = (d_val | float(0)) + f_val %}
+            {% if t == current_hour_ts %}{% set ns.total = ns.total + (combined_wh * fraction_left) %}
+            {% elif t > current_hour_ts %}{% set ns.total = ns.total + combined_wh %}{% endif %}
+          {% endfor %}
+          {{ (ns.total / 1000) | round(1) }}
+        {% else %}
+          {{ states('sensor.pv_forecast_openmeteo_all') | float(0) }}
+        {% endif %}
+      dw_today: >-
+        {% set dach = state_attr('sensor.pv_roof_dwd_production_today', 'wh_period') %}
+        {% set fassade = state_attr('sensor.pv_fassade_dwd_production_today', 'wh_period') %}
+        {% if dach is mapping and fassade is mapping %}
+          {% set ns = namespace(total=0) %}
+          {% set now_dt = now() %}
+          {% set today = now_dt.strftime('%Y-%m-%d') %}
+          {% set current_hour_ts = now_dt.replace(minute=0, second=0, microsecond=0).timestamp() %}
+          {% set fraction_left = (3600 - (now_dt.minute * 60 + now_dt.second)) / 3600 %}
+          {% for ts, d_val in dach.items() if ts.startswith(today) %}
+            {% set t = as_timestamp(ts) %}
+            {% set f_val = fassade[ts] | float(0) if ts in fassade else 0 %}
+            {% set combined_wh = (d_val | float(0)) + f_val %}
+            {% if t == current_hour_ts %}{% set ns.total = ns.total + (combined_wh * fraction_left) %}
+            {% elif t > current_hour_ts %}{% set ns.total = ns.total + combined_wh %}{% endif %}
+          {% endfor %}
+          {{ (ns.total / 1000) | round(1) }}
+        {% else %}
+          {{ states('sensor.pv_forecast_dwd_all') | float(0) }}
+        {% endif %}
+
+      # --- TOMORROW source totals ---
+      sc_tomorrow: >-
+        {% set val = states('sensor.solcast_pv_forecast_prognose_morgen') %}
+        {{ val | float if is_number(val) else states('sensor.pv_forecast_solcast_tomorrow') | float(0) }}
+      ml_tomorrow: "{{ states('sensor.pv_forecast_ml_tomorrow') | float(0) }}"
+      sp_tomorrow: >-
+        {% set dach_data = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
+        {% set fassade_data = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
+        {% if dach_data is mapping %}
+          {% set ns = namespace(total=0) %}
+          {% set start_ts = (now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp() + 86400) | int %}
+          {% for i in range(24) %}
+            {% set ts = (start_ts + i * 3600) | string %}
+            {% set d = dach_data[ts][1] | float(0) if ts in dach_data else 0 %}
+            {% set f = fassade_data[ts][1] | float(0) if fassade_data is mapping and ts in fassade_data else 0 %}
+            {% set ns.total = ns.total + (d + f) %}
+          {% endfor %}
+          {{ ns.total | round(2) }}
+        {% else %}
+          0.0
+        {% endif %}
+      fs_tomorrow: >-
+        {% set tomorrow = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
+        {% set dach = state_attr('sensor.forecastsolar_api_raw_dach_stable', 'result') %}
+        {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade_stable', 'result') %}
+        {% if dach is mapping and fassade is mapping %}
+          {% set tomorrow_suffix = tomorrow ~ ' ' %}
+          {% set ns = namespace(d_max=0, f_max=0) %}
+          {% for ts, val in dach.items() if ts.startswith(tomorrow_suffix) %}
+            {% if val > ns.d_max %}{% set ns.d_max = val %}{% endif %}
+          {% endfor %}
+          {% for ts, val in fassade.items() if ts.startswith(tomorrow_suffix) %}
+            {% if val > ns.f_max %}{% set ns.f_max = val %}{% endif %}
+          {% endfor %}
+          {{ ((ns.d_max + ns.f_max) / 1000) | round(2) }}
+        {% else %}
+          0.0
+        {% endif %}
+      om_tomorrow: >-
+        {% set dach = states('sensor.pv_roof_openmeteo_production_tomorrow') | float(0) %}
+        {% set fassade = states('sensor.pv_fassade_openmeteo_production_tomorrow') | float(0) %}
+        {{ dach + fassade }}
+      dw_tomorrow: >-
+        {% set dach = states('sensor.pv_roof_dwd_production_tomorrow') | float(0) %}
+        {% set fassade = states('sensor.pv_fassade_dwd_production_tomorrow') | float(0) %}
+        {{ dach + fassade }}
+
+      # --- DAY AFTER source totals ---
+      ml_day_after: "{{ states('sensor.pv_forecast_ml_day_after') | float(0) }}"
+      om_day_after: >-
+        {% set dach = states('sensor.pv_roof_openmeteo_production_day_after') | float(0) %}
+        {% set fassade = states('sensor.pv_fassade_openmeteo_production_day_after') | float(0) %}
+        {{ (dach + fassade) | round(2) }}
+      dw_day_after: >-
+        {% set dach = states('sensor.pv_roof_dwd_production_day_after') | float(0) %}
+        {% set fassade = states('sensor.pv_fassade_dwd_production_day_after') | float(0) %}
+        {{ (dach + fassade) | round(2) }}
+
     sensor:
+      # ---------- source sensors: emit the hoisted variable ----------
       - name: "PV Forecast Solarprognose all"
         unique_id: pv_forecast_solarprognose_all
         unit_of_measurement: "kWh"
-        state: >-
-          {% set dach = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
-          {% set fassade = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
-          {% if dach is mapping %}
-            {% set ns = namespace(total=0) %}
-            {% set now_dt = now() %}
-            {% set start_ts = now_dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() | int %}
-            {% set current_hour = now_dt.hour %}
-            {% set ts_now = (start_ts + current_hour * 3600) | string %}
-            {% set fraction_left = (3600 - (now_dt.minute * 60 + now_dt.second)) / 3600 %}
-            {% set d_now = dach[ts_now][1] | float(0) if ts_now in dach else 0 %}
-            {% set f_now = fassade[ts_now][1] | float(0) if (fassade is mapping and ts_now in fassade) else 0 %}
-            {% set ns.total = (d_now + f_now) * fraction_left %}
-            {% for i in range(current_hour + 1, 24) %}
-              {% set ts = (start_ts + i * 3600) | string %}
-              {% set d = dach[ts][1] | float(0) if ts in dach else 0 %}
-              {% set f = fassade[ts][1] | float(0) if (fassade is mapping and ts in fassade) else 0 %}
-              {% set ns.total = ns.total + (d + f) %}
-            {% endfor %}
-            {{ ns.total | round(1) }}
-          {% else %}
-            {{ this.state | float(0) }}
-          {% endif %}
+        state: "{{ sp_today }}"
 
       - name: "PV Forecast Forecastsolar all"
         unique_id: pv_forecast_forecastsolar_all
         unit_of_measurement: "kWh"
-        state: >-
-          {% set today = now().strftime('%Y-%m-%d') %}
-          {% set dach = state_attr('sensor.forecastsolar_api_raw_dach_stable', 'result') %}
-          {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade_stable', 'result') %}
-          {% if dach is mapping and fassade is mapping %}
-            {% set ns = namespace(d_max=0, f_max=0, d_now=0, f_now=0, prev_t=0, prev_v=0) %}
-            {% set now_ts = now().timestamp() %}
-            {% set tz = now().strftime('%z') %}
-            {% for ts, val in dach.items() if ts.startswith(today) %}
-              {% set t = as_timestamp(ts ~ tz) %}
-              {% set v = val | float(0) %}
-              {% if v > ns.d_max %}{% set ns.d_max = v %}{% endif %}
-              {% if ns.prev_t <= now_ts <= t and ns.prev_t != 0 %}
-                {% set fraction = (now_ts - ns.prev_t) / (t - ns.prev_t) %}
-                {% set ns.d_now = ns.prev_v + (v - ns.prev_v) * fraction %}
-              {% elif now_ts > t %}{% set ns.d_now = v %}{% endif %}
-              {% set ns.prev_t = t %}{% set ns.prev_v = v %}
-            {% endfor %}
-            {% set ns.prev_t = 0 %}{% set ns.prev_v = 0 %}
-            {% for ts, val in fassade.items() if ts.startswith(today) %}
-              {% set t = as_timestamp(ts ~ tz) %}
-              {% set v = val | float(0) %}
-              {% if v > ns.f_max %}{% set ns.f_max = v %}{% endif %}
-              {% if ns.prev_t <= now_ts <= t and ns.prev_t != 0 %}
-                {% set fraction = (now_ts - ns.prev_t) / (t - ns.prev_t) %}
-                {% set ns.f_now = ns.prev_v + (v - ns.prev_v) * fraction %}
-              {% elif now_ts > t %}{% set ns.f_now = v %}{% endif %}
-              {% set ns.prev_t = t %}{% set ns.prev_v = v %}
-            {% endfor %}
-            {{ ([0, ((ns.d_max - ns.d_now) + (ns.f_max - ns.f_now)) / 1000] | max) | round(1) }}
-          {% else %}
-            {{ this.state | float(0) }}
-          {% endif %}
+        state: "{{ fs_today }}"
 
       - name: "PV Forecast openmeteo all"
         unique_id: pv_forecast_openmeteo_all
         unit_of_measurement: "kWh"
-        state: >-
-          {% set dach = state_attr('sensor.pv_roof_openmeteo_production_today', 'wh_period') %}
-          {% set fassade = state_attr('sensor.pv_fassade_openmeteo_production_today', 'wh_period') %}
-          {% if dach is mapping and fassade is mapping %}
-            {% set ns = namespace(total=0) %}
-            {% set now_dt = now() %}
-            {% set today = now_dt.strftime('%Y-%m-%d') %}
-            {% set current_hour_ts = now_dt.replace(minute=0, second=0, microsecond=0).timestamp() %}
-            {% set fraction_left = (3600 - (now_dt.minute * 60 + now_dt.second)) / 3600 %}
-            {% for ts, d_val in dach.items() if ts.startswith(today) %}
-              {% set t = as_timestamp(ts) %}
-              {% set f_val = fassade[ts] | float(0) if ts in fassade else 0 %}
-              {% set combined_wh = (d_val | float(0)) + f_val %}
-              {% if t == current_hour_ts %}{% set ns.total = ns.total + (combined_wh * fraction_left) %}
-              {% elif t > current_hour_ts %}{% set ns.total = ns.total + combined_wh %}{% endif %}
-            {% endfor %}
-            {{ (ns.total / 1000) | round(1) }}
-          {% else %}
-            {{ this.state | float(0) }}
-          {% endif %}
+        state: "{{ om_today }}"
 
-      # --- DWD: open-meteo-solar-forecast instance with model=dwd_icon ---
       - name: "PV Forecast DWD all"
         unique_id: pv_forecast_dwd_all
         unit_of_measurement: "kWh"
-        state: >-
-          {% set dach = state_attr('sensor.pv_roof_dwd_production_today', 'wh_period') %}
-          {% set fassade = state_attr('sensor.pv_fassade_dwd_production_today', 'wh_period') %}
-          {% if dach is mapping and fassade is mapping %}
-            {% set ns = namespace(total=0) %}
-            {% set now_dt = now() %}
-            {% set today = now_dt.strftime('%Y-%m-%d') %}
-            {% set current_hour_ts = now_dt.replace(minute=0, second=0, microsecond=0).timestamp() %}
-            {% set fraction_left = (3600 - (now_dt.minute * 60 + now_dt.second)) / 3600 %}
-            {% for ts, d_val in dach.items() if ts.startswith(today) %}
-              {% set t = as_timestamp(ts) %}
-              {% set f_val = fassade[ts] | float(0) if ts in fassade else 0 %}
-              {% set combined_wh = (d_val | float(0)) + f_val %}
-              {% if t == current_hour_ts %}{% set ns.total = ns.total + (combined_wh * fraction_left) %}
-              {% elif t > current_hour_ts %}{% set ns.total = ns.total + combined_wh %}{% endif %}
-            {% endfor %}
-            {{ (ns.total / 1000) | round(1) }}
-          {% else %}
-            {{ this.state | float(0) }}
-          {% endif %}
+        state: "{{ dw_today }}"
 
+      - name: "PV Forecast Solcast Tomorrow"
+        unique_id: pv_forecast_solcast_tomorrow
+        unit_of_measurement: "kWh"
+        state: "{{ sc_tomorrow }}"
+
+      - name: "PV Forecast Solarprognose Tomorrow"
+        unique_id: pv_forecast_solarprognose_tomorrow
+        unit_of_measurement: "kWh"
+        state: "{{ sp_tomorrow }}"
+
+      - name: "PV Forecast ForecastSolar Tomorrow"
+        unique_id: pv_forecast_forecastsolar_tomorrow
+        unit_of_measurement: "kWh"
+        state: "{{ fs_tomorrow }}"
+
+      - name: "PV Forecast Openmeteo Tomorrow"
+        unique_id: pv_forecast_openmeteo_tomorrow
+        unit_of_measurement: "kWh"
+        state: "{{ om_tomorrow }}"
+
+      - name: "PV Forecast DWD tomorrow"
+        unique_id: pv_forecast_dwd_tomorrow
+        unit_of_measurement: "kWh"
+        state: "{{ dw_tomorrow }}"
+
+      - name: "PV Forecast OpenMeteo Day After"
+        unique_id: pv_forecast_openmeteo_day_after
+        unit_of_measurement: "kWh"
+        state: "{{ om_day_after }}"
+
+      - name: "PV Forecast DWD Day After"
+        unique_id: pv_forecast_dwd_day_after
+        unit_of_measurement: "kWh"
+        state: "{{ dw_day_after }}"
+
+      # ---------- weighted ensembles: read variables only ----------
       - name: "PV Forecast Weighted"
         unique_id: pv_forecast_weighted
         unit_of_measurement: "kWh"
         state: >-
-          {% set sc = states('sensor.pv_forecast_solcast_all') | float(0) %}
-          {% set sp = states('sensor.pv_forecast_solarprognose_all') | float(0) %}
-          {% set fs = states('sensor.pv_forecast_forecastsolar_all') | float(0) %}
-          {% set om = states('sensor.pv_forecast_openmeteo_all') | float(0) %}
-          {% set ml = states('sensor.pv_forecast_ml_all') | float(0) %}
-          {% set dw = states('sensor.pv_forecast_dwd_all') | float(0) %}
-          {# Stufe 4: inverse-variance weighting -> weight = score / (R + r_reg) #}
-          {% set r_reg = 0.1 %}
-          {% set sc_w = (states('input_number.pv_kalman_score_solcast') | float(0)) / (states('input_number.pv_kalman_r_solcast') | float(0.1) + r_reg) if sc > 0 else 0 %}
-          {% set sp_w = (states('input_number.pv_kalman_score_solarprognose') | float(0)) / (states('input_number.pv_kalman_r_solarprognose') | float(0.1) + r_reg) if sp > 0 else 0 %}
-          {% set fs_w = (states('input_number.pv_kalman_score_forecastsolar') | float(0)) / (states('input_number.pv_kalman_r_forecastsolar') | float(0.1) + r_reg) if fs > 0 else 0 %}
-          {% set om_w = (states('input_number.pv_kalman_score_openmeteo') | float(0)) / (states('input_number.pv_kalman_r_openmeteo') | float(0.1) + r_reg) if om > 0 else 0 %}
-          {% set ml_w = (states('input_number.pv_kalman_score_ml') | float(0)) / (states('input_number.pv_kalman_r_ml') | float(0.1) + r_reg) if ml > 0 else 0 %}
-          {% set dw_w = (states('input_number.pv_kalman_score_dwd') | float(0)) / (states('input_number.pv_kalman_r_dwd') | float(0.1) + r_reg) if dw > 0 else 0 %}
+          {% set sc = sc_today | float(0) %}
+          {% set sp = sp_today | float(0) %}
+          {% set fs = fs_today | float(0) %}
+          {% set om = om_today | float(0) %}
+          {% set ml = ml_today | float(0) %}
+          {% set dw = dw_today | float(0) %}
+          {% set sc_w = bw_sc if sc > 0 else 0 %}
+          {% set sp_w = bw_sp if sp > 0 else 0 %}
+          {% set fs_w = bw_fs if fs > 0 else 0 %}
+          {% set om_w = bw_om if om > 0 else 0 %}
+          {% set ml_w = bw_ml if ml > 0 else 0 %}
+          {% set dw_w = bw_dw if dw > 0 else 0 %}
           {% set total_weight = sc_w + sp_w + fs_w + om_w + ml_w + dw_w %}
-          {% set bias = states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) %}
           {% if total_weight > 0 %}
             {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + ml_w * ml + dw_w * dw) / total_weight * bias) | round() }}
           {% else %}
             {{ this.state | float(0) }}
           {% endif %}
 
-      # --- PROGNOSEN MORGEN ---
-      - name: "PV Forecast Solcast Tomorrow"
-        unique_id: pv_forecast_solcast_tomorrow
-        unit_of_measurement: "kWh"
-        state: >-
-          {% set val = states('sensor.solcast_pv_forecast_prognose_morgen') %}
-          {{ val if is_number(val) else this.state | float(0) }}
-
-      - name: "PV Forecast Solarprognose Tomorrow"
-        unique_id: pv_forecast_solarprognose_tomorrow
-        unit_of_measurement: "kWh"
-        state: >-
-          {% set dach_data = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
-          {% set fassade_data = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
-          {% if dach_data is mapping %}
-            {% set ns = namespace(total=0) %}
-            {% set start_ts = (now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp() + 86400) | int %}
-            {% for i in range(24) %}
-              {% set ts = (start_ts + i * 3600) | string %}
-              {% set d = dach_data[ts][1] | float(0) if ts in dach_data else 0 %}
-              {% set f = fassade_data[ts][1] | float(0) if fassade_data is mapping and ts in fassade_data else 0 %}
-              {% set ns.total = ns.total + (d + f) %}
-            {% endfor %}
-            {{ ns.total | round(2) }}
-          {% else %}
-            0.0
-          {% endif %}
-
-      - name: "PV Forecast ForecastSolar Tomorrow"
-        unique_id: pv_forecast_forecastsolar_tomorrow
-        unit_of_measurement: "kWh"
-        state: >-
-          {% set tomorrow = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
-          {% set dach = state_attr('sensor.forecastsolar_api_raw_dach_stable', 'result') %}
-          {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade_stable', 'result') %}
-          {% if dach is mapping and fassade is mapping %}
-            {% set tomorrow_suffix = tomorrow ~ ' ' %}
-            {% set ns = namespace(d_max=0, f_max=0) %}
-            {% for ts, val in dach.items() if ts.startswith(tomorrow_suffix) %}
-              {% if val > ns.d_max %}{% set ns.d_max = val %}{% endif %}
-            {% endfor %}
-            {% for ts, val in fassade.items() if ts.startswith(tomorrow_suffix) %}
-              {% if val > ns.f_max %}{% set ns.f_max = val %}{% endif %}
-            {% endfor %}
-            {{ ((ns.d_max + ns.f_max) / 1000) | round(2) }}
-          {% else %}
-            0.0
-          {% endif %}
-
-      - name: "PV Forecast Openmeteo Tomorrow"
-        unique_id: pv_forecast_openmeteo_tomorrow
-        unit_of_measurement: "kWh"
-        state: >-
-          {% set dach = states('sensor.pv_roof_openmeteo_production_tomorrow') | float(0) %}
-          {% set fassade = states('sensor.pv_fassade_openmeteo_production_tomorrow') | float(0) %}
-          {{ dach + fassade }}
-
-      - name: "PV Forecast DWD tomorrow"
-        unique_id: pv_forecast_dwd_tomorrow
-        unit_of_measurement: "kWh"
-        state: >-
-          {% set dach = states('sensor.pv_roof_dwd_production_tomorrow') | float(0) %}
-          {% set fassade = states('sensor.pv_fassade_dwd_production_tomorrow') | float(0) %}
-          {{ dach + fassade }}
-
       - name: "PV Forecast Weighted Tomorrow"
         unique_id: pv_forecast_weighted_tomorrow
         unit_of_measurement: "kWh"
         state: >-
-          {% set sc = states('sensor.pv_forecast_solcast_tomorrow') | float(0) %}
-          {% set sp = states('sensor.pv_forecast_solarprognose_tomorrow') | float(0) %}
-          {% set fs = states('sensor.pv_forecast_forecastsolar_tomorrow') | float(0) %}
-          {% set om = states('sensor.pv_forecast_openmeteo_tomorrow') | float(0) %}
-          {% set ml = states('sensor.pv_forecast_ml_tomorrow') | float(0) %}
-          {% set dw = states('sensor.pv_forecast_dwd_tomorrow') | float(0) %}
-          {# Stufe 4: inverse-variance weighting -> weight = score / (R + r_reg) #}
-          {% set r_reg = 0.1 %}
-          {% set sc_w = (states('input_number.pv_kalman_score_solcast') | float(0)) / (states('input_number.pv_kalman_r_solcast') | float(0.1) + r_reg) if sc > 0 else 0 %}
-          {% set sp_w = (states('input_number.pv_kalman_score_solarprognose') | float(0)) / (states('input_number.pv_kalman_r_solarprognose') | float(0.1) + r_reg) if sp > 0 else 0 %}
-          {% set fs_w = (states('input_number.pv_kalman_score_forecastsolar') | float(0)) / (states('input_number.pv_kalman_r_forecastsolar') | float(0.1) + r_reg) if fs > 0 else 0 %}
-          {% set om_w = (states('input_number.pv_kalman_score_openmeteo') | float(0)) / (states('input_number.pv_kalman_r_openmeteo') | float(0.1) + r_reg) if om > 0 else 0 %}
-          {% set ml_w = (states('input_number.pv_kalman_score_ml') | float(0)) / (states('input_number.pv_kalman_r_ml') | float(0.1) + r_reg) if ml > 0 else 0 %}
-          {% set dw_w = (states('input_number.pv_kalman_score_dwd') | float(0)) / (states('input_number.pv_kalman_r_dwd') | float(0.1) + r_reg) if dw > 0 else 0 %}
+          {% set sc = sc_tomorrow | float(0) %}
+          {% set sp = sp_tomorrow | float(0) %}
+          {% set fs = fs_tomorrow | float(0) %}
+          {% set om = om_tomorrow | float(0) %}
+          {% set ml = ml_tomorrow | float(0) %}
+          {% set dw = dw_tomorrow | float(0) %}
+          {% set sc_w = bw_sc if sc > 0 else 0 %}
+          {% set sp_w = bw_sp if sp > 0 else 0 %}
+          {% set fs_w = bw_fs if fs > 0 else 0 %}
+          {% set om_w = bw_om if om > 0 else 0 %}
+          {% set ml_w = bw_ml if ml > 0 else 0 %}
+          {% set dw_w = bw_dw if dw > 0 else 0 %}
           {% set total_weight = sc_w + sp_w + fs_w + om_w + ml_w + dw_w %}
-          {% set bias = states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) %}
           {% if total_weight > 0 %}
             {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + ml_w * ml + dw_w * dw) / total_weight * bias) | round(2) }}
           {% else %}
             0.0
           {% endif %}
 
-      # PROGNOSEN --- übermorgen ---
-      - name: "PV Forecast OpenMeteo Day After"
-        unique_id: pv_forecast_openmeteo_day_after
-        unit_of_measurement: "kWh"
-        state: >-
-          {% set dach = states('sensor.pv_roof_openmeteo_production_day_after') | float(0) %}
-          {% set fassade = states('sensor.pv_fassade_openmeteo_production_day_after') | float(0) %}
-          {{ (dach + fassade) | round(2) }}
-
-      - name: "PV Forecast DWD Day After"
-        unique_id: pv_forecast_dwd_day_after
-        unit_of_measurement: "kWh"
-        state: >-
-          {% set dach = states('sensor.pv_roof_dwd_production_day_after') | float(0) %}
-          {% set fassade = states('sensor.pv_fassade_dwd_production_day_after') | float(0) %}
-          {{ (dach + fassade) | round(2) }}
-
       - name: "PV Forecast Weighted Day After"
         unique_id: pv_forecast_weighted_day_after
         unit_of_measurement: "kWh"
         state: >-
-          {% set om = states('sensor.pv_forecast_openmeteo_day_after') | float(0) %}
-          {% set dw = states('sensor.pv_forecast_dwd_day_after') | float(0) %}
-          {% set ml = states('sensor.pv_forecast_ml_day_after') | float(0) %}
-          {# Stufe 4: inverse-variance weighting -> weight = score / (R + r_reg) #}
-          {% set r_reg = 0.1 %}
-          {% set om_w = (states('input_number.pv_kalman_score_openmeteo') | float(0)) / (states('input_number.pv_kalman_r_openmeteo') | float(0.1) + r_reg) if om > 0 else 0 %}
-          {% set dw_w = (states('input_number.pv_kalman_score_dwd') | float(0)) / (states('input_number.pv_kalman_r_dwd') | float(0.1) + r_reg) if dw > 0 else 0 %}
-          {% set ml_w = (states('input_number.pv_kalman_score_ml') | float(0)) / (states('input_number.pv_kalman_r_ml') | float(0.1) + r_reg) if ml > 0 else 0 %}
+          {% set om = om_day_after | float(0) %}
+          {% set dw = dw_day_after | float(0) %}
+          {% set ml = ml_day_after | float(0) %}
+          {% set om_w = bw_om if om > 0 else 0 %}
+          {% set dw_w = bw_dw if dw > 0 else 0 %}
+          {% set ml_w = bw_ml if ml > 0 else 0 %}
           {% set total_weight = om_w + dw_w + ml_w %}
-          {% set bias = states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) %}
           {% if total_weight > 0 %}
             {{ ((om_w * om + dw_w * dw + ml_w * ml) / total_weight * bias) | round(2) }}
           {% else %}
