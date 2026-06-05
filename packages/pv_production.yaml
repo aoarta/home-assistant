@@ -142,32 +142,35 @@ template:
           {# Only add values that are actually available as numbers #}
           {{ (s1 + s2) | round(0) }}
 
-  - triggers:
+  # ==========================================================================
+  # Realtime energy aggregation.
+  #
+  # Refactor: the separate "PV Energy Realtime Aggregator" snapshot sensor is
+  # gone. All four inverter totals are read ONCE into `variables:` per trigger,
+  # and both realtime sensors read those variables. Same consistent snapshot,
+  # no in-block ordering dependency (Balcony/Total no longer read the aggregator
+  # sensor that had to be evaluated first), one sensor fewer.
+  # ==========================================================================
+  - trigger:
       - trigger: state
         entity_id:
           - sensor.balcony_inverter_1_energy
           - sensor.balcony_inverter_2_energy
           - sensor.garage_inverter_energy
           - sensor.roof_energy
+    variables:
+      # One consistent snapshot of all four inverter totals for this trigger.
+      b1: "{{ states('sensor.balcony_inverter_1_energy') | float(0) }}"
+      b2: "{{ states('sensor.balcony_inverter_2_energy') | float(0) }}"
+      g: "{{ states('sensor.garage_inverter_energy') | float(0) }}"
+      roof: "{{ states('sensor.roof_energy') | float(0) }}"
     sensor:
-      - name: "PV Energy Realtime Aggregator"
-        unique_id: pv_energy_realtime_aggregator
-        state: "OK"
-        attributes:
-          balcony_1: "{{ states('sensor.balcony_inverter_1_energy') | float(0) }}"
-          balcony_2: "{{ states('sensor.balcony_inverter_2_energy') | float(0) }}"
-          garage: "{{ states('sensor.garage_inverter_energy') | float(0) }}"
-          roof: "{{ states('sensor.roof_energy') | float(0) }}"
-
       - name: "PV Energy Balcony Realtime"
         unique_id: pv_energy_balcony_realtime
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
         state: >-
-          {% set b1 = state_attr('sensor.pv_energy_realtime_aggregator', 'balcony_1') | float(0) %}
-          {% set b2 = state_attr('sensor.pv_energy_realtime_aggregator', 'balcony_2') | float(0) %}
-          {% set g = state_attr('sensor.pv_energy_realtime_aggregator', 'garage') | float(0) %}
           {% set computed = (b1 + b2 + g) | round(2) %}
           {% set last = this.state | float(none) %}
           {# Sum must never decrease - prevents phantom utility_meter resets #}
@@ -179,10 +182,6 @@ template:
         device_class: energy
         state_class: total_increasing
         state: >-
-          {% set b1 = state_attr('sensor.pv_energy_realtime_aggregator', 'balcony_1') | float(0) %}
-          {% set b2 = state_attr('sensor.pv_energy_realtime_aggregator', 'balcony_2') | float(0) %}
-          {% set g = state_attr('sensor.pv_energy_realtime_aggregator', 'garage') | float(0) %}
-          {% set roof = state_attr('sensor.pv_energy_realtime_aggregator', 'roof') | float(0) %}
           {% set computed = (b1 + b2 + g + roof) | round(2) %}
           {% set last = this.state | float(none) %}
           {# Sum must never decrease - prevents phantom utility_meter resets #}
