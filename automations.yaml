@@ -99,15 +99,23 @@
 - alias: "Battery Maintenance: Enable SOC Override When Overdue"
   description: >
     Turns on SOC override if any battery has not been fully charged within
-    the configured number of days; turns it off once all are fresh.
+    the configured number of days; turns it off once all are fresh OR once
+    all three batteries report a full charge (hardware SOC and custom SOC).
   id: soc_override_weekly_control
   triggers:
     - trigger: time_pattern
       minutes: "/5"
     - trigger: homeassistant
       event: start
+  #    - trigger: numeric_state
+  #      entity_id:
+  #        - sensor.venus_1_custom_soc
+  #        - sensor.venus_2_custom_soc
+  #        - sensor.ups_custom_soc
+  #      above: 99.9
   actions:
     - choose:
+        # --- Turn ON: any battery overdue ---
         - conditions:
             - condition: template
               value_template: >-
@@ -124,6 +132,21 @@
             - action: input_boolean.turn_on
               target:
                 entity_id: input_boolean.override_soc
+
+        # --- Turn OFF: all three batteries fully charged (HW SOC + custom SOC) ---
+        - conditions:
+            - condition: template
+              value_template: >-
+                {{ states('sensor.marstek_venus_1_soc') | float(0) >= 100
+                   and states('sensor.venus_1_custom_soc') | float(0) >= 100
+                   and states('sensor.marstek_venus_2_soc') | float(0) >= 100
+                   and states('sensor.venus_2_custom_soc') | float(0) >= 100
+                   and states('sensor.ups_soc') | float(0) >= 100
+                   and states('sensor.ups_custom_soc') | float(0) >= 100 }}
+          sequence:
+            - action: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.override_soc
       default:
         - condition: template
           value_template: >-
@@ -133,7 +156,7 @@
               (now_ts - as_timestamp(states('input_datetime.venus_2_last_full'), now_ts)) if has_value('input_datetime.venus_2_last_full') else now_ts,
               (now_ts - as_timestamp(states('input_datetime.ups_last_full'), now_ts)) if has_value('input_datetime.ups_last_full') else now_ts
             ] %}
-            {{ ages | min < 120 }}
+            {{ ages | min < 30 }}
         - action: input_boolean.turn_off
           target:
             entity_id: input_boolean.override_soc
