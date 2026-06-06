@@ -418,7 +418,7 @@ automation:
   # (Automatic mode only; manual current must be 0; mode != off.)
   # ============================================================
   - alias: "Wallbox: Follow PV surplus while charging"
-    id: wallbox_pv_track
+    id: wallbox_follow_pv_surplus_while_charging
     mode: single # hold after each step; drop surplus changes during settle
     triggers:
       - trigger: state
