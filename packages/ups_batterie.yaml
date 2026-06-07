@@ -317,6 +317,10 @@ automation:
           netz: "{{ states('sensor.solarnet_leistung_vom_netz') | float(0) }}" # <0 wenn einspeisung
           bat_pwr: "{{ states('sensor.marstek_ac_power_total') | float(0) }}" # <0 wenn laden
           ups_pwr: "{{ states('sensor.ups_ac_power') | float(0) }}" # <0 wenn laden
+          # Feedback-free balance: add UPS output back so the inverter's own
+          # discharge no longer moves the decision variable (stops oscillation)
+          true_balance: "{{ netz + bat_pwr + ups_pwr }}"
+
           soc: "{{ states('sensor.ups_custom_soc') | float(0) }}"
           hw_soc: "{{ states('sensor.ups_soc') | float(0) }}"
           low_cell: "{{ states('sensor.ups_lowest_cell') | float(0) }}"
@@ -327,15 +331,18 @@ automation:
           max_v: "{{ state_attr('sensor.global_parameter', 'lfp_max_voltage') | float(3.60) }}"
           min_v: "{{ state_attr('sensor.global_parameter', 'lfp_min_voltage') | float(2.90) }}"
           hyst: "{{ state_attr('sensor.global_parameter', 'lfp_hysteresis') | float(0.2) }}"
-          wartung_aktiv: "{{ states('input_number.manual_charge_power') | float(0) >= 1000 }}"
+          maintenance_activ: "{{ states('input_number.manual_charge_power') | float(0) >= 1000 }}"
           # Schalter Zustände
           inverter_an: "{{ is_state('switch.battery_inverter_tasmota', 'on') }}"
-          lader_an: "{{ is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on') }}"
+          charger_on: "{{ is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on') }}"
+          inverter_on_for: >-
+            {{ (now() - states.switch.battery_inverter_tasmota.last_changed).total_seconds() }}
 
       #netz    >0: kaufen
       #bat_pwr >0: entladen
       #ups_pwr >0: entladen
-
+      #true_balance >0: Restbedarf (Verbrauch > PV), unabhängig von Speicherzustand
+      #true_balance <0: Überschuss
       - choose:
           # 0 --- keine Verbindung zum BMS
           - conditions:
@@ -357,7 +364,7 @@ automation:
           # 1 --- Wartungsmodus ein
           - conditions:
               - condition: template
-                value_template: "{{ wartung_aktiv and high_cell < max_v }}"
+                value_template: "{{ maintenance_activ and high_cell < max_v }}"
             sequence:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
@@ -384,7 +391,7 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ (netz + bat_pwr > 180) and soc > 25 
+                  {{ (true_balance > 180) and soc > 25 
                      and low_cell > min_v + hyst and not inverter_an }}
             sequence:
               - action: switch.turn_off
@@ -402,12 +409,14 @@ automation:
           #netz    >0: kaufen
           #bat_pwr >0: entladen
           #ups_pwr >0: entladen
+          #true_balance >0: Restbedarf (Verbrauch > PV), unabhängig von Speicherzustand
+          #true_balance <0: Überschuss
 
           # 4 --- ENTLADEN STOPPEN
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ ((netz + bat_pwr < 20) or soc <= 20 or low_cell < min_v) 
+                  {{ ((true_balance < 50 and inverter_on_for > 30) or soc <= 20 or low_cell < min_v) 
                      and inverter_an }}
             sequence:
               - action: switch.turn_off
@@ -420,10 +429,9 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {# Stop wenn Netzbezug steigt, Akku voll, Zelle zu hoch ODER Ladeleistung zu gering #}
-                  {{ (netz + bat_pwr > 50 or high_cell > max_v 
-                                or (ups_pwr > -15 and soc > 95) )
-                    and lader_an and soc >= stop_soc }}
+                  {# stop on true grid pull, full pack, cell limit, or trickle #}
+                  {{ (true_balance > 50 or high_cell > max_v or (ups_pwr > -15 and soc > 95) )
+                    and charger_on and soc >= stop_soc }}
             sequence:
               - action: switch.turn_off
                 target:
@@ -438,19 +446,21 @@ automation:
           #netz    >0: kaufen
           #bat_pwr >0: entladen
           #ups_pwr >0: entladen
+          #true_balance >0: Restbedarf (Verbrauch > PV), unabhängig von Speicherzustand
+          #true_balance <0: Überschuss
 
           # 6 --- LADEN STARTEN
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ netz + bat_pwr < -820 and soc < 100 and high_cell < max_v - hyst 
-                     and not inverter_an and not lader_an }}
+                  {{ true_balance < -820 and soc < 100 and high_cell < max_v - hyst 
+                     and not inverter_an and not charger_on }}
             sequence:
               - action: switch.turn_on
                 target: { entity_id: switch.battery_charger }
               - if:
                   - condition: template
-                    value_template: "{{ netz + bat_pwr < -1200 and (soc < 99 or hw_soc < 100) }}"
+                    value_template: "{{ true_balance < -1200 and (soc < 99 or hw_soc < 100) }}"
                 then:
                   - delay: "00:00:01"
                   - action: switch.turn_on
