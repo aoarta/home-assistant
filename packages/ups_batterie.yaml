@@ -429,9 +429,11 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {# stop on true grid pull, full pack, cell limit, or trickle #}
-                  {{ (true_balance > 50 or high_cell > max_v or (ups_pwr > -15 and soc > 95) )
+                  {# stop on true grid pull, full pack, cell limit, trickle, OR marstek discharging #}
+                  {{ (true_balance > 50 or high_cell > max_v or bat_pwr > 50
+                      or (ups_pwr > -15 and soc > 95))
                     and charger_on and soc >= stop_soc }}
+
             sequence:
               - action: switch.turn_off
                 target:
@@ -453,8 +455,10 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ true_balance < -820 and soc < 100 and high_cell < max_v - hyst 
-                     and not inverter_an and not charger_on }}
+                  {{ true_balance < -820 and soc < 100 and high_cell < max_v - hyst
+                    and bat_pwr < 50
+                    and not inverter_an and not charger_on }}
+
             sequence:
               - action: switch.turn_on
                 target: { entity_id: switch.battery_charger }
