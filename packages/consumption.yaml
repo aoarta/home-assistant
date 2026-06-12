@@ -126,6 +126,20 @@ template:
                states('sensor.marstek_ac_power_total') | float(0)
               ) | round(0) }}
 
+      - name: "Expected Remaining Consumption Today"
+        unique_id: expected_remaining_consumption_today
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: measurement
+        icon: mdi:home-lightning-bolt-outline
+        state: >-
+          {% set expected = states('sensor.expected_daily_consumption') | float(0) %}
+          {% set consumed = states('sensor.house_consumption_energy_today_um') | float(0) %}
+          {{ [expected - consumed, 0] | max | round(2) }}
+        availability: >-
+          {{ states('sensor.expected_daily_consumption') | is_number
+            and states('sensor.house_consumption_energy_today_um') | is_number }}
+
   #  - sensor:
   #      - name: "Stable Charge Power"
   #        unique_id: ladeleistung_stabil
