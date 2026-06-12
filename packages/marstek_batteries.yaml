@@ -106,8 +106,7 @@ template:
                else (this.state if is_number(this.state) else 0) }}
           {% else %}
             {% set last_reset = last_reset if last_reset is not none else current_energy %}
-            {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
-            {% if hw_soc <= stop_soc or drift_too_high %}
+            {% if hw_soc <= stop_soc %}
               {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
             {% elif hw_soc >= 100 %}
               {# At 100% we take the higher value (since energy flow decreases/goes negative when charging) #}
@@ -151,8 +150,7 @@ template:
                else (this.state if is_number(this.state) else 0) }}
           {% else %}
             {% set last_reset = last_reset if last_reset is not none else current_energy %}
-            {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
-            {% if hw_soc <= stop_soc or drift_too_high %}
+            {% if hw_soc <= stop_soc %}
               {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
             {% elif hw_soc >= 100 %}
               {# At 100% we take the higher value (since energy flow decreases/goes negative when charging) #}
@@ -446,6 +444,150 @@ template:
           limits: "{{ limits_map }}"
 
   # for dashboard
+
+  # ==========================================================
+  # Venus charge ETA sensors
+  # ==========================================================
+  - triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: state
+        entity_id:
+          - sensor.venus_1_custom_soc
+          - sensor.venus_2_custom_soc
+    sensor:
+      - name: "Venus 1 Time until 80"
+        unique_id: venus_1_time_until_80
+        unit_of_measurement: "min"
+        device_class: duration
+        state_class: measurement
+        icon: mdi:battery-clock
+        state: >-
+          {% set target = 80 %}
+          {% set soc = states('sensor.venus_1_custom_soc') | float(none) %}
+          {# DC battery power, positive = charging #}
+          {% set power = states('sensor.marstek_venus_1_batterieleistung') | float(0) %}
+          {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
+          {% if soc is none %}
+            {{ none }}
+          {% elif soc >= target %}
+            0
+          {% elif power < 50 %}
+            {# not charging (or negligible) -> no meaningful ETA #}
+            {{ none }}
+          {% else %}
+            {{ ((target - soc) / 100 * cap_wh / power * 60) | round(0) }}
+          {% endif %}
+        attributes:
+          eta: >-
+            {% set target = 80 %}
+            {% set soc = states('sensor.venus_1_custom_soc') | float(none) %}
+            {% set power = states('sensor.marstek_venus_1_batterieleistung') | float(0) %}
+            {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
+            {% if soc is not none and soc < target and power >= 50 %}
+              {{ (now() + timedelta(minutes = (target - soc) / 100 * cap_wh / power * 60)).isoformat() }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+
+      - name: "Venus 1 Time until 100"
+        unique_id: venus_1_time_until_100
+        unit_of_measurement: "min"
+        device_class: duration
+        state_class: measurement
+        icon: mdi:battery-clock
+        state: >-
+          {% set target = 100 %}
+          {% set soc = states('sensor.venus_1_custom_soc') | float(none) %}
+          {% set power = states('sensor.marstek_venus_1_batterieleistung') | float(0) %}
+          {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
+          {% if soc is none %}
+            {{ none }}
+          {% elif soc >= target %}
+            0
+          {% elif power < 50 %}
+            {{ none }}
+          {% else %}
+            {{ ((target - soc) / 100 * cap_wh / power * 60) | round(0) }}
+          {% endif %}
+        attributes:
+          eta: >-
+            {% set target = 100 %}
+            {% set soc = states('sensor.venus_1_custom_soc') | float(none) %}
+            {% set power = states('sensor.marstek_venus_1_batterieleistung') | float(0) %}
+            {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
+            {% if soc is not none and soc < target and power >= 50 %}
+              {{ (now() + timedelta(minutes = (target - soc) / 100 * cap_wh / power * 60)).isoformat() }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+
+      - name: "Venus 2 Time until 80"
+        unique_id: venus_2_time_until_80
+        unit_of_measurement: "min"
+        device_class: duration
+        state_class: measurement
+        icon: mdi:battery-clock
+        state: >-
+          {% set target = 80 %}
+          {% set soc = states('sensor.venus_2_custom_soc') | float(none) %}
+          {% set power = states('sensor.marstek_venus_2_batterieleistung') | float(0) %}
+          {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
+          {% if soc is none %}
+            {{ none }}
+          {% elif soc >= target %}
+            0
+          {% elif power < 50 %}
+            {{ none }}
+          {% else %}
+            {{ ((target - soc) / 100 * cap_wh / power * 60) | round(0) }}
+          {% endif %}
+        attributes:
+          eta: >-
+            {% set target = 80 %}
+            {% set soc = states('sensor.venus_2_custom_soc') | float(none) %}
+            {% set power = states('sensor.marstek_venus_2_batterieleistung') | float(0) %}
+            {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
+            {% if soc is not none and soc < target and power >= 50 %}
+              {{ (now() + timedelta(minutes = (target - soc) / 100 * cap_wh / power * 60)).isoformat() }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+
+      - name: "Venus 2 Time until 100"
+        unique_id: venus_2_time_until_100
+        unit_of_measurement: "min"
+        device_class: duration
+        state_class: measurement
+        icon: mdi:battery-clock
+        state: >-
+          {% set target = 100 %}
+          {% set soc = states('sensor.venus_2_custom_soc') | float(none) %}
+          {% set power = states('sensor.marstek_venus_2_batterieleistung') | float(0) %}
+          {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
+          {% if soc is none %}
+            {{ none }}
+          {% elif soc >= target %}
+            0
+          {% elif power < 50 %}
+            {{ none }}
+          {% else %}
+            {{ ((target - soc) / 100 * cap_wh / power * 60) | round(0) }}
+          {% endif %}
+        attributes:
+          eta: >-
+            {% set target = 100 %}
+            {% set soc = states('sensor.venus_2_custom_soc') | float(none) %}
+            {% set power = states('sensor.marstek_venus_2_batterieleistung') | float(0) %}
+            {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
+            {% if soc is not none and soc < target and power >= 50 %}
+              {{ (now() + timedelta(minutes = (target - soc) / 100 * cap_wh / power * 60)).isoformat() }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+
   - sensor:
       - name: "Battery SOC Total"
         unique_id: battery_soc_total
@@ -526,7 +668,7 @@ automation:
                   # No self-consumption here
                   delta_wh: >-
                     {# if delta > max_delta, something is wrong #}
-                    {{ (power * delta_t_h) if (power | abs) < 2500 else 0 }}
+                    {{ (power * delta_t_h) if (power | abs) < 3200 else 0 }}
               - action: input_number.set_value
                 target:
                   entity_id: input_number.venus_1_energy_wh_counter
@@ -542,7 +684,7 @@ automation:
                   # Add self-consumption of 9W (9W / 3600s * 15s = 0.0375 Wh per interval)
                   delta_wh: >-
                     {# if delta > max_delta, something is wrong #}
-                    {{ (power * delta_t_h) if (power | abs) < 2500 else 0 }}
+                    {{ (power * delta_t_h) if (power | abs) < 3200 else 0 }}
               - action: input_number.set_value
                 target:
                   entity_id: input_number.venus_2_energy_wh_counter
@@ -579,28 +721,28 @@ automation:
   # the periodic trigger then still helps with redistribution, but lost-write
   # recovery would need a read-back verify instead.
   - alias: "Sende Lade und Entladebefehle an Hardware"
-    id: "sende_batterie_targets_v2"
-    mode: queued
-    max: 15
+    id: "sende_batterie_targets_v3"
+    # restart: an aborted run can only leave a battery at standby/0 W (safe);
+    # the next run or the /15 reconcile completes the picture. No queue of
+    # redundant runs anymore.
+    mode: restart
     triggers:
-      # Immediate path: react the moment a target changes
       - trigger: state
         entity_id: sensor.target_power_distribution_fast
       - trigger: state
         entity_id:
           - input_boolean.override_soc
           - input_number.manual_charge_power
-      # Safety net: periodic reconcile (recover lost writes + attribute-only
-      # redistributions). On this path the 100 ms debounce below is harmless.
+      # Reconcile: heals lost writes within 15 s instead of 30 s.
+      # Cheap — guards below only write on actual mismatch.
       - trigger: time_pattern
-        seconds: "/30"
+        seconds: "/15"
 
     actions:
-      - delay: # Debounce the event-driven path
+      - delay: # debounce the event-driven path
           milliseconds: 100
 
       - variables:
-          # 1. --- FETCH + SAFE MAPPING ---
           c: >-
             {% set raw = state_attr('sensor.target_power_distribution_fast', 'charge') %}
             {{ raw if raw is mapping else {'v1': 0, 'v2': 0} }}
@@ -608,96 +750,171 @@ automation:
             {% set raw = state_attr('sensor.target_power_distribution_fast', 'discharge') %}
             {{ raw if raw is mapping else {'v1': 0, 'v2': 0} }}
 
-          # 2. --- EXTRACT INDIVIDUAL VALUES ---
           c1: "{{ c.v1 | default(0) | int(0) }}"
           d1: "{{ d.v1 | default(0) | int(0) }}"
           c2: "{{ c.v2 | default(0) | int(0) }}"
           d2: "{{ d.v2 | default(0) | int(0) }}"
 
-          # 3. --- CALCULATE POWER VALUES ---
-          v1_laden: "{{ [c1, 2500] | min if c1 >= 20 else 0 }}"
-          v1_entladen: "{{ [d1, 2500] | min if d1 >= 20 and c1 < 20 else 0 }}"
-          v2_laden: "{{ [c2, 2500] | min if c2 >= 20 else 0 }}"
-          v2_entladen: "{{ [d2, 2500] | min if d2 >= 20 and c2 < 20 else 0 }}"
+          # --- SINGLE direction decision for BOTH batteries ---
+          # The opposing direction is forced to zero. Cross-mode targets are
+          # impossible by construction, even with manual override active.
+          direction: >-
+            {% set c_tot = c1 + c2 %}
+            {% set d_tot = d1 + d2 %}
+            {{ 'charge' if c_tot >= 20 and c_tot >= d_tot
+               else ('discharge' if d_tot >= 20 else 'standby') }}
 
-          # 4. --- DETERMINE TARGET MODES ---
-          target_mode_v1: "{{ 'charge' if c1 >= 20 else ('discharge' if d1 >= 20 else 'standby') }}"
-          target_mode_v2: "{{ 'charge' if c2 >= 20 else ('discharge' if d2 >= 20 else 'standby') }}"
+          v1_charge: "{{ [c1, 2500] | min if direction == 'charge' and c1 >= 20 else 0 }}"
+          v2_charge: "{{ [c2, 2500] | min if direction == 'charge' and c2 >= 20 else 0 }}"
+          v1_discharge: "{{ [d1, 2500] | min if direction == 'discharge' and d1 >= 20 else 0 }}"
+          v2_discharge: "{{ [d2, 2500] | min if direction == 'discharge' and d2 >= 20 else 0 }}"
 
-          # 5. --- SAFETY CHECK (Conflict Resolution) ---
-          is_conflict: >-
-            {{ (target_mode_v1 == 'charge' and target_mode_v2 == 'discharge') or
-               (target_mode_v1 == 'discharge' and target_mode_v2 == 'charge') }}
-          target_mode_v1_safe: "{{ 'standby' if is_conflict else target_mode_v1 }}"
-          target_mode_v2_safe: "{{ 'standby' if is_conflict else target_mode_v2 }}"
+          target_mode_v1: "{{ 'charge' if v1_charge > 0 else ('discharge' if v1_discharge > 0 else 'standby') }}"
+          target_mode_v2: "{{ 'charge' if v2_charge > 0 else ('discharge' if v2_discharge > 0 else 'standby') }}"
 
+          # Battery is currently in an active mode it must leave?
+          leaving_v1: >-
+            {{ states('select.marstek_venus_1_force_mode') in ['charge', 'discharge']
+               and states('select.marstek_venus_1_force_mode') != target_mode_v1 }}
+          leaving_v2: >-
+            {{ states('select.marstek_venus_2_force_mode') in ['charge', 'discharge']
+               and states('select.marstek_venus_2_force_mode') != target_mode_v2 }}
+
+      # ================================================================
+      # PHASE 1: ramp down every battery that leaves its active mode —
+      # BEFORE any battery enters a new active mode. Guarantees the two
+      # units are never in opposite active modes, not even transiently.
+      # ================================================================
+      - if:
+          - condition: template
+            value_template: "{{ leaving_v1 or leaving_v2 }}"
+        then:
+          - parallel:
+              - sequence:
+                  - if:
+                      - condition: template
+                        value_template: "{{ leaving_v1 }}"
+                    then:
+                      - if:
+                          - condition: template
+                            value_template: "{{ states('number.marstek_venus_1_charge_power') | float(0) != 0 }}"
+                        then:
+                          - action: number.set_value
+                            target:
+                              { entity_id: number.marstek_venus_1_charge_power }
+                            data: { value: 0 }
+                            continue_on_error: true
+                          - delay: { milliseconds: 150 }
+                      - if:
+                          - condition: template
+                            value_template: "{{ states('number.marstek_venus_1_discharge_power') | float(0) != 0 }}"
+                        then:
+                          - action: number.set_value
+                            target:
+                              {
+                                entity_id: number.marstek_venus_1_discharge_power,
+                              }
+                            data: { value: 0 }
+                            continue_on_error: true
+              - sequence:
+                  - delay: { milliseconds: 20 }
+                  - if:
+                      - condition: template
+                        value_template: "{{ leaving_v2 }}"
+                    then:
+                      - if:
+                          - condition: template
+                            value_template: "{{ states('number.marstek_venus_2_charge_power') | float(0) != 0 }}"
+                        then:
+                          - action: number.set_value
+                            target:
+                              { entity_id: number.marstek_venus_2_charge_power }
+                            data: { value: 0 }
+                            continue_on_error: true
+                          - delay: { milliseconds: 150 }
+                      - if:
+                          - condition: template
+                            value_template: "{{ states('number.marstek_venus_2_discharge_power') | float(0) != 0 }}"
+                        then:
+                          - action: number.set_value
+                            target:
+                              {
+                                entity_id: number.marstek_venus_2_discharge_power,
+                              }
+                            data: { value: 0 }
+                            continue_on_error: true
+          # settle time before the new direction goes active
+          - delay: { milliseconds: 500 }
+
+      # ================================================================
+      # PHASE 2: apply new modes and power targets (guarded writes)
+      # ================================================================
       - parallel:
           # --- Venus 1 (own EW11 / own socket) ---
           - sequence:
               - if:
                   - condition: template
-                    value_template: "{{ states('select.marstek_venus_1_force_mode') != target_mode_v1_safe }}"
+                    value_template: "{{ states('select.marstek_venus_1_force_mode') != target_mode_v1 }}"
                 then:
                   - action: select.select_option
                     target: { entity_id: select.marstek_venus_1_force_mode }
-                    data: { option: "{{ target_mode_v1_safe }}" }
+                    data: { option: "{{ target_mode_v1 }}" }
                   - delay: { milliseconds: 150 }
 
               - if:
                   - condition: template
                     value_template: >-
-                      {{ (states('number.marstek_venus_1_charge_power') | float(-1)) | round(0) != v1_laden }}
+                      {{ (states('number.marstek_venus_1_charge_power') | float(-1)) | round(0) != v1_charge }}
                 then:
                   - action: number.set_value
                     target: { entity_id: number.marstek_venus_1_charge_power }
-                    data: { value: "{{ v1_laden }}" }
+                    data: { value: "{{ v1_charge }}" }
                     continue_on_error: true
                   - delay: { milliseconds: 150 }
 
               - if:
                   - condition: template
                     value_template: >-
-                      {{ (states('number.marstek_venus_1_discharge_power') | float(-1)) | round(0) != v1_entladen }}
+                      {{ (states('number.marstek_venus_1_discharge_power') | float(-1)) | round(0) != v1_discharge }}
                 then:
                   - action: number.set_value
                     target:
                       { entity_id: number.marstek_venus_1_discharge_power }
-                    data: { value: "{{ v1_entladen }}" }
+                    data: { value: "{{ v1_discharge }}" }
                     continue_on_error: true
 
           # --- Venus 2 (own EW11 / own socket) ---
           - sequence:
-              - delay:
-                  milliseconds: 20 # start venus 2 a tad later
+              - delay: { milliseconds: 20 }
               - if:
                   - condition: template
-                    value_template: "{{ states('select.marstek_venus_2_force_mode') != target_mode_v2_safe }}"
+                    value_template: "{{ states('select.marstek_venus_2_force_mode') != target_mode_v2 }}"
                 then:
                   - action: select.select_option
                     target: { entity_id: select.marstek_venus_2_force_mode }
-                    data: { option: "{{ target_mode_v2_safe }}" }
+                    data: { option: "{{ target_mode_v2 }}" }
                   - delay: { milliseconds: 150 }
 
               - if:
                   - condition: template
                     value_template: >-
-                      {{ (states('number.marstek_venus_2_charge_power') | float(-1)) | round(0) != v2_laden }}
+                      {{ (states('number.marstek_venus_2_charge_power') | float(-1)) | round(0) != v2_charge }}
                 then:
                   - action: number.set_value
                     target: { entity_id: number.marstek_venus_2_charge_power }
-                    data: { value: "{{ v2_laden }}" }
+                    data: { value: "{{ v2_charge }}" }
                     continue_on_error: true
                   - delay: { milliseconds: 150 }
 
               - if:
                   - condition: template
                     value_template: >-
-                      {{ (states('number.marstek_venus_2_discharge_power') | float(-1)) | round(0) != v2_entladen }}
+                      {{ (states('number.marstek_venus_2_discharge_power') | float(-1)) | round(0) != v2_discharge }}
                 then:
                   - action: number.set_value
                     target:
                       { entity_id: number.marstek_venus_2_discharge_power }
-                    data: { value: "{{ v2_entladen }}" }
+                    data: { value: "{{ v2_discharge }}" }
                     continue_on_error: true
 
   # ==========================================================

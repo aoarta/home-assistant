@@ -18,7 +18,7 @@ input_number:
     name: UPS Energiefluss Counter
     min: -50000
     max: 50000
-    step: 1
+    step: 0.01
 
 rest:
   - resource: http://192.168.0.13/show
@@ -360,6 +360,18 @@ automation:
                   title: "⚠️ BMS Verbindung verloren"
                   message: "Keine Verbindung zum BMS – alle Schalter abgeschaltet! ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "bms_no_connection"
+
+          # 0.5 --- CELL OVERVOLTAGE: stop charging unconditionally
+          - conditions:
+              - condition: template
+                value_template: "{{ high_cell > max_v and charger_on }}"
+            sequence:
+              - action: switch.turn_off
+                target:
+                  {
+                    entity_id:
+                      [switch.battery_charger, switch.battery_charger2],
+                  }
 
           # 1 --- Wartungsmodus ein
           - conditions:
