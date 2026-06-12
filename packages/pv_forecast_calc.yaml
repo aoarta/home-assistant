@@ -46,12 +46,6 @@ input_number:
     max: 15
     step: 0.001
 
-  pv_kalman_score_ml:
-    name: "Kalman Score ML"
-    min: 0.0001
-    max: 15
-    step: 0.001
-
   pv_kalman_score_dwd:
     name: "Kalman Score DWD"
     min: 0.0001
@@ -76,11 +70,6 @@ input_number:
     step: 0.0001
   pv_kalman_p_openmeteo:
     name: "Kalman P OpenMeteo"
-    min: 0.0001
-    max: 1
-    step: 0.0001
-  pv_kalman_p_ml:
-    name: "Kalman P ML"
     min: 0.0001
     max: 1
     step: 0.0001
@@ -115,11 +104,6 @@ input_number:
     min: 0.0001
     max: 50
     step: 0.001
-  pv_kalman_r_ml:
-    name: "Kalman R ML"
-    min: 0.0001
-    max: 50
-    step: 0.001
   pv_kalman_r_dwd:
     name: "Kalman R DWD"
     min: 0.0001
@@ -147,11 +131,6 @@ input_number:
     min: 0
     max: 1
     step: 0.001
-  weight_ml:
-    name: "Gewicht ML"
-    min: 0
-    max: 1
-    step: 0.001
   weight_dwd:
     name: "Gewicht DWD"
     min: 0
@@ -176,11 +155,6 @@ input_number:
     unit_of_measurement: "kWh"
   pv_save_openmeteo_morgens:
     name: "OpenMeteo Ref"
-    min: 0
-    max: 150
-    unit_of_measurement: "kWh"
-  pv_save_ml_morgens:
-    name: "ML Ref"
     min: 0
     max: 150
     unit_of_measurement: "kWh"
@@ -215,21 +189,6 @@ input_number:
 ################################################################################
 template:
   - sensor:
-      - name: "PV Forecast ML All"
-        unique_id: pv_forecast_ml_all
-        unit_of_measurement: "kWh"
-        state: "{{ states('sensor.prognose_heute') | float(0) | round(1) }}"
-
-      - name: "PV Forecast ML tomorrow"
-        unique_id: pv_forecast_ml_tomorrow
-        unit_of_measurement: "kWh"
-        state: "{{ states('sensor.prognose_morgen') | float(0) | round(1) }}"
-
-      - name: "PV Forecast ML day after"
-        unique_id: pv_forecast_ml_day_after
-        unit_of_measurement: "kWh"
-        state: "{{ states('sensor.prognose_ubermorgen') | float(0) | round(1) }}"
-
       - name: "PV Forecast Solcast all"
         unique_id: pv_forecast_solcast_all
         unit_of_measurement: "kWh"
@@ -265,12 +224,10 @@ template:
       bw_sp: "{{ (states('input_number.pv_kalman_score_solarprognose') | float(0)) / (states('input_number.pv_kalman_r_solarprognose') | float(0.1) + r_reg) }}"
       bw_fs: "{{ (states('input_number.pv_kalman_score_forecastsolar') | float(0)) / (states('input_number.pv_kalman_r_forecastsolar') | float(0.1) + r_reg) }}"
       bw_om: "{{ (states('input_number.pv_kalman_score_openmeteo') | float(0)) / (states('input_number.pv_kalman_r_openmeteo') | float(0.1) + r_reg) }}"
-      bw_ml: "{{ (states('input_number.pv_kalman_score_ml') | float(0)) / (states('input_number.pv_kalman_r_ml') | float(0.1) + r_reg) }}"
       bw_dw: "{{ (states('input_number.pv_kalman_score_dwd') | float(0)) / (states('input_number.pv_kalman_r_dwd') | float(0.1) + r_reg) }}"
 
       # --- TODAY source totals (remaining production) ---
       sc_today: "{{ states('sensor.pv_forecast_solcast_all') | float(0) }}"
-      ml_today: "{{ states('sensor.pv_forecast_ml_all') | float(0) }}"
       sp_today: >-
         {% set dach = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
         {% set fassade = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
@@ -372,7 +329,6 @@ template:
       sc_tomorrow: >-
         {% set val = states('sensor.solcast_pv_forecast_prognose_morgen') %}
         {{ val | float if is_number(val) else states('sensor.pv_forecast_solcast_tomorrow') | float(0) }}
-      ml_tomorrow: "{{ states('sensor.pv_forecast_ml_tomorrow') | float(0) }}"
       sp_tomorrow: >-
         {% set dach_data = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
         {% set fassade_data = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
@@ -416,7 +372,6 @@ template:
         {{ dach + fassade }}
 
       # --- DAY AFTER source totals ---
-      ml_day_after: "{{ states('sensor.pv_forecast_ml_day_after') | float(0) }}"
       om_day_after: >-
         {% set dach = states('sensor.pv_roof_openmeteo_production_day_after') | float(0) %}
         {% set fassade = states('sensor.pv_fassade_openmeteo_production_day_after') | float(0) %}
@@ -492,17 +447,19 @@ template:
           {% set sp = sp_today | float(0) %}
           {% set fs = fs_today | float(0) %}
           {% set om = om_today | float(0) %}
-          {% set ml = ml_today | float(0) %}
           {% set dw = dw_today | float(0) %}
           {% set sc_w = bw_sc if sc > 0 else 0 %}
           {% set sp_w = bw_sp if sp > 0 else 0 %}
           {% set fs_w = bw_fs if fs > 0 else 0 %}
           {% set om_w = bw_om if om > 0 else 0 %}
-          {% set ml_w = bw_ml if ml > 0 else 0 %}
           {% set dw_w = bw_dw if dw > 0 else 0 %}
-          {% set total_weight = sc_w + sp_w + fs_w + om_w + ml_w + dw_w %}
+          {% set total_weight = sc_w + sp_w + fs_w + om_w + dw_w %}
           {% if total_weight > 0 %}
-            {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + ml_w * ml + dw_w * dw) / total_weight * bias) | round() }}
+            {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias) | round(1) }}
+          {% elif is_state('sun.sun', 'below_horizon') and not state_attr('sun.sun', 'rising') %}
+            {# Evening: the day is genuinely over, remaining production is 0. #}
+            {# After midnight (rising=true) the hold below stays active for API gaps. #}
+            0.0
           {% else %}
             {{ this.state | float(0) }}
           {% endif %}
@@ -515,17 +472,15 @@ template:
           {% set sp = sp_tomorrow | float(0) %}
           {% set fs = fs_tomorrow | float(0) %}
           {% set om = om_tomorrow | float(0) %}
-          {% set ml = ml_tomorrow | float(0) %}
           {% set dw = dw_tomorrow | float(0) %}
           {% set sc_w = bw_sc if sc > 0 else 0 %}
           {% set sp_w = bw_sp if sp > 0 else 0 %}
           {% set fs_w = bw_fs if fs > 0 else 0 %}
           {% set om_w = bw_om if om > 0 else 0 %}
-          {% set ml_w = bw_ml if ml > 0 else 0 %}
           {% set dw_w = bw_dw if dw > 0 else 0 %}
-          {% set total_weight = sc_w + sp_w + fs_w + om_w + ml_w + dw_w %}
+          {% set total_weight = sc_w + sp_w + fs_w + om_w + dw_w %}
           {% if total_weight > 0 %}
-            {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + ml_w * ml + dw_w * dw) / total_weight * bias) | round(2) }}
+            {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias) | round(2) }}
           {% else %}
             0.0
           {% endif %}
@@ -536,13 +491,11 @@ template:
         state: >-
           {% set om = om_day_after | float(0) %}
           {% set dw = dw_day_after | float(0) %}
-          {% set ml = ml_day_after | float(0) %}
           {% set om_w = bw_om if om > 0 else 0 %}
           {% set dw_w = bw_dw if dw > 0 else 0 %}
-          {% set ml_w = bw_ml if ml > 0 else 0 %}
-          {% set total_weight = om_w + dw_w + ml_w %}
+          {% set total_weight = om_w + dw_w %}
           {% if total_weight > 0 %}
-            {{ ((om_w * om + dw_w * dw + ml_w * ml) / total_weight * bias) | round(2) }}
+            {{ ((om_w * om + dw_w * dw ) / total_weight * bias) | round(2) }}
           {% else %}
             0.0
           {% endif %}
@@ -565,14 +518,7 @@ automation:
           value: "{{ states('sensor.pv_forecast_weighted') | float(0) | round(2) }}"
       - repeat:
           for_each:
-            [
-              "solcast",
-              "solarprognose",
-              "forecastsolar",
-              "openmeteo",
-              "ml",
-              "dwd",
-            ]
+            ["solcast", "solarprognose", "forecastsolar", "openmeteo", "dwd"]
           sequence:
             - action: input_number.set_value
               target:
@@ -648,7 +594,6 @@ automation:
                 - id: "solarprognose"
                 - id: "forecastsolar"
                 - id: "openmeteo"
-                - id: "ml"
                 - id: "dwd"
               sequence:
                 - variables:
@@ -703,7 +648,6 @@ automation:
                     states('input_number.pv_kalman_score_solarprognose') | float(0) +
                     states('input_number.pv_kalman_score_forecastsolar') | float(0) +
                     states('input_number.pv_kalman_score_openmeteo') | float(0) +
-                    states('input_number.pv_kalman_score_ml') | float(0) +
                     states('input_number.pv_kalman_score_dwd') | float(0)) }}
           - if:
               - condition: template
@@ -716,7 +660,6 @@ automation:
                       "solarprognose",
                       "forecastsolar",
                       "openmeteo",
-                      "ml",
                       "dwd",
                     ]
                   sequence:
