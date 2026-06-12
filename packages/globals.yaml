@@ -37,3 +37,5 @@ template:
             {% set venus = this.attributes.get('venus_capacity_wh', 0) | float(0) %}
             {% set ups = this.attributes.get('ups_capacity_wh', 0) | float(0) %}
             {{ ((venus * 2 * 0.8) + (ups * 0.6)) / 1000 }}
+
+          battery_floor_soc_for_ev: 50
