@@ -49,10 +49,6 @@ recorder:
       - sensor.garage_inverter_energy_power
       - sensor.balkon_inverter2_energy_power
       - sensor.balkon_inverter_energy_power
-      - sensor.solarnet_leistung_netzbezug
-      - sensor.solarnet_leistung_netzeinspeisung
-      - sensor.solarnet_leistung_verbrauch
-      - sensor.solarnet_pv_leistung
       # - sensor.solarnet_leistung_vom_netz
 
     entity_globs:
