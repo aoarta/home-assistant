@@ -4,6 +4,21 @@
 # sensors, and the daily Kalman update (Stufe 3 adaptive R + Stufe 4
 # inverse-variance weighting). Consumes the sensor.*_stable entities defined
 # in pv_forecast_fetch.yaml by entity_id.
+#
+# HORIZON CORRECTION (custom_templates/horizon_mask.jinja required):
+# All horizon masking is concentrated in THIS file; pv_forecast_fetch.yaml
+# stays untouched (in particular: NO &horizon= URL parameter at forecast.solar,
+# that would double-correct).
+#   * sp_today / sp_tomorrow  -> horizon_factor(md, hour) in the hourly loop
+#   * om_today / dw_today     -> horizon_factor_ts(ts) on combined_wh
+#   * fs_today / fs_tomorrow  -> rewritten to masked deltas of the cumulative
+#                                watt_hours series (replaces max - now logic)
+#   * sc_* (Solcast)          -> NOT masked: Solcast may already model terrain
+#                                shading; verify empirically before touching
+#   * om/dw tomorrow + day_after -> NOT masked: day-total sensors only, no
+#                                hourly data available
+# Expect input_number.pv_forecast_bias_korrekturfaktor to drift towards 1.0
+# over ~2-4 weeks after deployment (it previously absorbed the shading).
 
 ################################################################################
 # INPUTS & PARAMETER
@@ -210,6 +225,10 @@ template:
   # is missing falls back to states('sensor.<self>'), which at variables-render
   # time still holds the previous cycle's committed value. That held value
   # flows into the ensemble exactly as before.
+  #
+  # Horizon mask: every hourly source value is multiplied by the precomputed
+  # factor from custom_templates/horizon_mask.jinja before summing. The
+  # factors encode terrain shading (Inntal ridges) incl. diffuse floor.
   # ==========================================================================
   - trigger:
       - trigger: time_pattern
@@ -226,65 +245,85 @@ template:
       bw_om: "{{ (states('input_number.pv_kalman_score_openmeteo') | float(0)) / (states('input_number.pv_kalman_r_openmeteo') | float(0.1) + r_reg) }}"
       bw_dw: "{{ (states('input_number.pv_kalman_score_dwd') | float(0)) / (states('input_number.pv_kalman_r_dwd') | float(0.1) + r_reg) }}"
 
-      # --- TODAY source totals (remaining production) ---
+      # --- TODAY source totals (remaining production, horizon-masked) ---
       sc_today: "{{ states('sensor.pv_forecast_solcast_all') | float(0) }}"
       sp_today: >-
+        {% from 'horizon_mask.jinja' import horizon_factor %}
         {% set dach = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
         {% set fassade = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
         {% if dach is mapping %}
           {% set ns = namespace(total=0) %}
           {% set now_dt = now() %}
+          {% set md = '%02d-%02d' % (now_dt.month, now_dt.day) %}
           {% set start_ts = now_dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() | int %}
           {% set current_hour = now_dt.hour %}
           {% set ts_now = (start_ts + current_hour * 3600) | string %}
           {% set fraction_left = (3600 - (now_dt.minute * 60 + now_dt.second)) / 3600 %}
           {% set d_now = dach[ts_now][1] | float(0) if ts_now in dach else 0 %}
           {% set f_now = fassade[ts_now][1] | float(0) if (fassade is mapping and ts_now in fassade) else 0 %}
-          {% set ns.total = (d_now + f_now) * fraction_left %}
+          {% set ns.total = (d_now + f_now) * fraction_left * (horizon_factor(md, current_hour) | float(1)) %}
           {% for i in range(current_hour + 1, 24) %}
             {% set ts = (start_ts + i * 3600) | string %}
             {% set d = dach[ts][1] | float(0) if ts in dach else 0 %}
             {% set f = fassade[ts][1] | float(0) if (fassade is mapping and ts in fassade) else 0 %}
-            {% set ns.total = ns.total + (d + f) %}
+            {% set ns.total = ns.total + (d + f) * (horizon_factor(md, i) | float(1)) %}
           {% endfor %}
           {{ ns.total | round(1) }}
         {% else %}
           {{ states('sensor.pv_forecast_solarprognose_all') | float(0) }}
         {% endif %}
+      # Rewritten: remaining = sum of future interval deltas of the cumulative
+      # watt_hours series, each delta masked by the factor of its mid-hour.
+      # Replaces the previous (max - interpolated now) logic; the partial
+      # current interval is handled by the (t - now_ts)/(t - prev_t) fraction.
+      # [delta, 0]|max guards against day-boundary resets in the series.
       fs_today: >-
+        {% from 'horizon_mask.jinja' import horizon_factor %}
         {% set today = now().strftime('%Y-%m-%d') %}
+        {% set md = now().strftime('%m-%d') %}
         {% set dach = state_attr('sensor.forecastsolar_api_raw_dach_stable', 'result') %}
         {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade_stable', 'result') %}
         {% if dach is mapping and fassade is mapping %}
-          {% set ns = namespace(d_max=0, f_max=0, d_now=0, f_now=0, prev_t=0, prev_v=0) %}
           {% set now_ts = now().timestamp() %}
           {% set tz = now().strftime('%z') %}
+          {% set ns = namespace(prev_t=0, prev_v=0, rem=0) %}
           {% for ts, val in dach.items() if ts.startswith(today) %}
             {% set t = as_timestamp(ts ~ tz) %}
             {% set v = val | float(0) %}
-            {% if v > ns.d_max %}{% set ns.d_max = v %}{% endif %}
-            {% if ns.prev_t <= now_ts <= t and ns.prev_t != 0 %}
-              {% set fraction = (now_ts - ns.prev_t) / (t - ns.prev_t) %}
-              {% set ns.d_now = ns.prev_v + (v - ns.prev_v) * fraction %}
-            {% elif now_ts > t %}{% set ns.d_now = v %}{% endif %}
+            {% if ns.prev_t != 0 %}
+              {% set delta = [v - ns.prev_v, 0] | max %}
+              {% set h = (((ns.prev_t + t) / 2) | timestamp_custom('%H', true)) | int %}
+              {% set f = horizon_factor(md, h) | float(1) %}
+              {% if ns.prev_t >= now_ts %}
+                {% set ns.rem = ns.rem + delta * f %}
+              {% elif t > now_ts %}
+                {% set ns.rem = ns.rem + delta * f * ((t - now_ts) / (t - ns.prev_t)) %}
+              {% endif %}
+            {% endif %}
             {% set ns.prev_t = t %}{% set ns.prev_v = v %}
           {% endfor %}
           {% set ns.prev_t = 0 %}{% set ns.prev_v = 0 %}
           {% for ts, val in fassade.items() if ts.startswith(today) %}
             {% set t = as_timestamp(ts ~ tz) %}
             {% set v = val | float(0) %}
-            {% if v > ns.f_max %}{% set ns.f_max = v %}{% endif %}
-            {% if ns.prev_t <= now_ts <= t and ns.prev_t != 0 %}
-              {% set fraction = (now_ts - ns.prev_t) / (t - ns.prev_t) %}
-              {% set ns.f_now = ns.prev_v + (v - ns.prev_v) * fraction %}
-            {% elif now_ts > t %}{% set ns.f_now = v %}{% endif %}
+            {% if ns.prev_t != 0 %}
+              {% set delta = [v - ns.prev_v, 0] | max %}
+              {% set h = (((ns.prev_t + t) / 2) | timestamp_custom('%H', true)) | int %}
+              {% set f = horizon_factor(md, h) | float(1) %}
+              {% if ns.prev_t >= now_ts %}
+                {% set ns.rem = ns.rem + delta * f %}
+              {% elif t > now_ts %}
+                {% set ns.rem = ns.rem + delta * f * ((t - now_ts) / (t - ns.prev_t)) %}
+              {% endif %}
+            {% endif %}
             {% set ns.prev_t = t %}{% set ns.prev_v = v %}
           {% endfor %}
-          {{ ([0, ((ns.d_max - ns.d_now) + (ns.f_max - ns.f_now)) / 1000] | max) | round(1) }}
+          {{ (ns.rem / 1000) | round(1) }}
         {% else %}
           {{ states('sensor.pv_forecast_forecastsolar_all') | float(0) }}
         {% endif %}
       om_today: >-
+        {% from 'horizon_mask.jinja' import horizon_factor_ts %}
         {% set dach = state_attr('sensor.pv_roof_openmeteo_production_today', 'wh_period') %}
         {% set fassade = state_attr('sensor.pv_fassade_openmeteo_production_today', 'wh_period') %}
         {% if dach is mapping and fassade is mapping %}
@@ -296,7 +335,7 @@ template:
           {% for ts, d_val in dach.items() if ts.startswith(today) %}
             {% set t = as_timestamp(ts) %}
             {% set f_val = fassade[ts] | float(0) if ts in fassade else 0 %}
-            {% set combined_wh = (d_val | float(0)) + f_val %}
+            {% set combined_wh = ((d_val | float(0)) + f_val) * (horizon_factor_ts(ts) | float(1)) %}
             {% if t == current_hour_ts %}{% set ns.total = ns.total + (combined_wh * fraction_left) %}
             {% elif t > current_hour_ts %}{% set ns.total = ns.total + combined_wh %}{% endif %}
           {% endfor %}
@@ -305,6 +344,7 @@ template:
           {{ states('sensor.pv_forecast_openmeteo_all') | float(0) }}
         {% endif %}
       dw_today: >-
+        {% from 'horizon_mask.jinja' import horizon_factor_ts %}
         {% set dach = state_attr('sensor.pv_roof_dwd_production_today', 'wh_period') %}
         {% set fassade = state_attr('sensor.pv_fassade_dwd_production_today', 'wh_period') %}
         {% if dach is mapping and fassade is mapping %}
@@ -316,7 +356,7 @@ template:
           {% for ts, d_val in dach.items() if ts.startswith(today) %}
             {% set t = as_timestamp(ts) %}
             {% set f_val = fassade[ts] | float(0) if ts in fassade else 0 %}
-            {% set combined_wh = (d_val | float(0)) + f_val %}
+            {% set combined_wh = ((d_val | float(0)) + f_val) * (horizon_factor_ts(ts) | float(1)) %}
             {% if t == current_hour_ts %}{% set ns.total = ns.total + (combined_wh * fraction_left) %}
             {% elif t > current_hour_ts %}{% set ns.total = ns.total + combined_wh %}{% endif %}
           {% endfor %}
@@ -330,35 +370,56 @@ template:
         {% set val = states('sensor.solcast_pv_forecast_prognose_morgen') %}
         {{ val | float if is_number(val) else states('sensor.pv_forecast_solcast_tomorrow') | float(0) }}
       sp_tomorrow: >-
+        {% from 'horizon_mask.jinja' import horizon_factor %}
         {% set dach_data = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
         {% set fassade_data = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
         {% if dach_data is mapping %}
           {% set ns = namespace(total=0) %}
+          {% set md = (now() + timedelta(days=1)).strftime('%m-%d') %}
           {% set start_ts = (now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp() + 86400) | int %}
           {% for i in range(24) %}
             {% set ts = (start_ts + i * 3600) | string %}
             {% set d = dach_data[ts][1] | float(0) if ts in dach_data else 0 %}
             {% set f = fassade_data[ts][1] | float(0) if fassade_data is mapping and ts in fassade_data else 0 %}
-            {% set ns.total = ns.total + (d + f) %}
+            {% set ns.total = ns.total + (d + f) * (horizon_factor(md, i) | float(1)) %}
           {% endfor %}
           {{ ns.total | round(2) }}
         {% else %}
           0.0
         {% endif %}
+      # Rewritten: day total = sum of all interval deltas of the cumulative
+      # watt_hours series, each masked by the factor of its mid-hour.
+      # (Replaces the previous d_max/f_max logic.)
       fs_tomorrow: >-
+        {% from 'horizon_mask.jinja' import horizon_factor %}
         {% set tomorrow = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
+        {% set md = (now() + timedelta(days=1)).strftime('%m-%d') %}
         {% set dach = state_attr('sensor.forecastsolar_api_raw_dach_stable', 'result') %}
         {% set fassade = state_attr('sensor.forecastsolar_api_raw_fassade_stable', 'result') %}
         {% if dach is mapping and fassade is mapping %}
           {% set tomorrow_suffix = tomorrow ~ ' ' %}
-          {% set ns = namespace(d_max=0, f_max=0) %}
+          {% set tz = now().strftime('%z') %}
+          {% set ns = namespace(prev_t=0, prev_v=0, total=0) %}
           {% for ts, val in dach.items() if ts.startswith(tomorrow_suffix) %}
-            {% if val > ns.d_max %}{% set ns.d_max = val %}{% endif %}
+            {% set t = as_timestamp(ts ~ tz) %}
+            {% set v = val | float(0) %}
+            {% if ns.prev_t != 0 %}
+              {% set h = (((ns.prev_t + t) / 2) | timestamp_custom('%H', true)) | int %}
+              {% set ns.total = ns.total + ([v - ns.prev_v, 0] | max) * (horizon_factor(md, h) | float(1)) %}
+            {% endif %}
+            {% set ns.prev_t = t %}{% set ns.prev_v = v %}
           {% endfor %}
+          {% set ns.prev_t = 0 %}{% set ns.prev_v = 0 %}
           {% for ts, val in fassade.items() if ts.startswith(tomorrow_suffix) %}
-            {% if val > ns.f_max %}{% set ns.f_max = val %}{% endif %}
+            {% set t = as_timestamp(ts ~ tz) %}
+            {% set v = val | float(0) %}
+            {% if ns.prev_t != 0 %}
+              {% set h = (((ns.prev_t + t) / 2) | timestamp_custom('%H', true)) | int %}
+              {% set ns.total = ns.total + ([v - ns.prev_v, 0] | max) * (horizon_factor(md, h) | float(1)) %}
+            {% endif %}
+            {% set ns.prev_t = t %}{% set ns.prev_v = v %}
           {% endfor %}
-          {{ ((ns.d_max + ns.f_max) / 1000) | round(2) }}
+          {{ (ns.total / 1000) | round(2) }}
         {% else %}
           0.0
         {% endif %}
