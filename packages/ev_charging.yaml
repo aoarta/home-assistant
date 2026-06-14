@@ -105,8 +105,8 @@ template:
         entity_id:
           - sensor.warp3_2ita_powernow
           - sensor.solarnet_leistung_vom_netz
-    #          - sensor.marstek_venus_1_ac_power
-    #          - sensor.marstek_venus_2_ac_power
+          - sensor.marstek_venus_1_ac_power_glatt
+          - sensor.marstek_venus_2_ac_power_glatt
     sensor:
       - name: "PV Dynamic Charging Current"
         unique_id: pv_dynamic_charging_current

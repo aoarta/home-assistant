@@ -736,11 +736,11 @@ automation:
       # Reconcile: heals lost writes within 15 s instead of 30 s.
       # Cheap — guards below only write on actual mismatch.
       - trigger: time_pattern
-        seconds: "/15"
+        seconds: "/12"
 
     actions:
       - delay: # debounce the event-driven path
-          milliseconds: 100
+          milliseconds: 50
 
       - variables:
           c: >-
