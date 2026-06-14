@@ -22,7 +22,7 @@ template:
         attributes:
           forecast: >-
             {% set roof = state_attr('sensor.pv_roof_openmeteo_production_today', 'wh_period') %}
-            {% set facade = state_attr('sensor.pv_roof_openmeteo_production_today', 'wh_period') %}
+            {% set facade = state_attr('sensor.pv_fassade_openmeteo_production_today', 'wh_period') %}
             {% set ensemble_rest = states('sensor.pv_forecast_weighted') | float(0) %}
             {% if roof is mapping and facade is mapping %}
               {% set today = now().strftime('%Y-%m-%d') %}

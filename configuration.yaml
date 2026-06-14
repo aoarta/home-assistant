@@ -45,7 +45,6 @@ recorder:
     entities:
       - sensor.takt
       - input_datetime.takt_base
-      - automation.sende_lade_und_entladebefehle_an_hardware
       - sensor.garage_inverter_energy_power
       - sensor.balkon_inverter2_energy_power
       - sensor.balkon_inverter_energy_power

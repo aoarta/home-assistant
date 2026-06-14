@@ -68,6 +68,40 @@ template:
           {% set ups = states('sensor.ups_ac_power') | float(0) %}
           {{ (venus1 + venus2 + ups) | round(0) }}
 
+      - name: "Target SOC Status"
+        unique_id: target_soc_status
+        icon: mdi:battery-clock
+        state: >-
+          {% set t = states('sensor.target_soc') | int(-1) %}
+          {% if t == 101 %}
+            Manual override active — charging to 100%
+          {% elif t == 110 %}
+            Manual charge power set — target ignored
+          {% elif t == 120 %}
+            Battery maintenance cycle — charging to 100%
+          {% elif t == 130 %}
+            Today's energy balance negative — charging to 100% now
+          {% elif t == 131 %}
+            Tomorrow's energy balance negative — charging to 100%
+          {% elif t == 133 %}
+            Day after tomorrow's energy balance negative — charging to 100%
+          {% else %}
+            {% set dynamic = states('sensor.dynamic_soc') | float(0) %}
+            {% set grenzen_max = state_attr('sensor.dynamic_soc_grenzen', 'max') | float(100.5) %}
+            {% if t | float(-1) == grenzen_max %}
+              PV surplus insufficient for dynamic target — cap opened to max
+            {% elif t == dynamic | int %}
+              Following dynamic schedule — target {{ t }}%
+            {% else %}
+              Unknown state ({{ t }})
+            {% endif %}
+          {% endif %}
+        attributes:
+          target_soc_raw: "{{ states('sensor.target_soc') | int(-1) }}"
+          dynamic_soc: "{{ states('sensor.dynamic_soc') | float(0) }}"
+          override_active: "{{ is_state('input_boolean.override_soc', 'on') }}"
+          maintenance_active: "{{ is_state('binary_sensor.battery_maintenance_required', 'on') }}"
+
   # 2. Trigger-based sensors
   - triggers:
       - trigger: time_pattern

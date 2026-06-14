@@ -130,7 +130,7 @@ template:
         unique_id: expected_remaining_consumption_today
         unit_of_measurement: "kWh"
         device_class: energy
-        state_class: measurement
+        state_class: total
         icon: mdi:home-lightning-bolt-outline
         state: >-
           {% set expected = states('sensor.expected_daily_consumption') | float(0) %}
