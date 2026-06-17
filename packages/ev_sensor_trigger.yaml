@@ -1,0 +1,96 @@
+# ============================================================
+# PV surplus wallbox charging (WARP3) - Trigger Sensors
+# ============================================================
+
+template:
+  # ----------------------------------------------------------
+  # BATTERY FLOOR SOC FOR EV -- computed reserve.
+  # ----------------------------------------------------------
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/2"
+      - trigger: state
+        entity_id:
+          - sensor.expected_daily_consumption
+          - sensor.house_consumption_energy_today
+          - sensor.estimated_remaining_consumption
+    sensor:
+      - name: "Battery Floor SOC for EV"
+        unique_id: battery_floor_soc_for_ev
+        unit_of_measurement: "%"
+        state_class: measurement
+        state: >-
+          {% set consumption_buffer = 1.10 %}
+          {% set max_storage = state_attr('sensor.global_parameter', 'max_usable_energy') | float(10) %}
+          {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
+          {% set consumption_today = states('sensor.house_consumption_energy_today') | float(0) %}
+          {% set consumption_static = [0, expected_daily_consumption - consumption_today] | max %}
+          {% set consumption_live = states('sensor.estimated_remaining_consumption') | float(none) %}
+          {% set consumption_blended = (0.5 * consumption_static + 0.5 * consumption_live)
+                                        if consumption_live is not none else consumption_static %}
+          {% set consumption_remaining = consumption_blended * consumption_buffer %}
+          {% if max_storage <= 0 %}
+            100
+          {% else %}
+            {% set floor = consumption_remaining / max_storage * 100 %}
+            {{ [[floor, 10] | max, 100] | min | round(1) }}
+          {% endif %}
+        attributes:
+          consumption_remaining_kwh: >-
+            {% set buffer = 1.10 %}
+            {% set static = [0, states('sensor.expected_daily_consumption') | float(0)
+                                - states('sensor.house_consumption_energy_today') | float(0)] | max %}
+            {% set live = states('sensor.estimated_remaining_consumption') | float(none) %}
+            {{ (((0.5 * static + 0.5 * live) if live is not none else static) * buffer) | round(2) }}
+
+  # ----------------------------------------------------------
+  # TARGET CHARGING CURRENT -- single source of truth.
+  # ----------------------------------------------------------
+  - triggers:
+      - trigger: time_pattern
+        seconds: "/30"
+      - trigger: state
+        entity_id:
+          - sensor.pv_dynamic_charging_current
+          - sensor.marstek_total_soc
+          - sensor.battery_floor_soc_for_ev
+          - input_select.ev_charge_mode
+          - input_select.ev_vehicle_mode
+          - input_number.ev_manual_charging_current
+    sensor:
+      - name: "EV Target Charging Current"
+        unique_id: ev_target_charging_current
+        unit_of_measurement: "A"
+        device_class: current
+        state_class: measurement
+        state: >-
+          {% set vehicle = states('input_select.ev_vehicle_mode') %}
+          {% set cable = is_state('binary_sensor.warp3_2ita_cable', 'on') %}
+          {% if vehicle == 'off' or not cable %}
+            0
+          {% else %}
+            {% set manual = states('input_number.ev_manual_charging_current') | int(0) %}
+            {% if manual >= 6 %}
+              {{ manual }}
+            {% else %}
+              {% set mode = states('input_select.ev_charge_mode') %}
+              {% set surplus = states('sensor.pv_dynamic_charging_current') | int(0) %}
+              {% if mode == 'pv_surplus' %}
+                {{ surplus }}
+              {% elif mode == 'pv_battery_floor' %}
+                {% if surplus >= 6 %}
+                  {{ surplus }}
+                {% else %}
+                  {% set soc   = states('sensor.marstek_total_soc') | float(0) %}
+                  {% set floor = states('sensor.battery_floor_soc_for_ev') | float(100) %}
+                  {{ 6 if soc > floor else 0 }}
+                {% endif %}
+              {% elif mode == 'pv_grid_floor' %}
+                {{ [surplus, 6] | max }}
+              {% else %}
+                0
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        attributes:
+          charge_mode: "{{ states('input_select.ev_charge_mode') }}"
