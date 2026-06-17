@@ -1,0 +1,53 @@
+# ============================================================
+# PV surplus wallbox charging (WARP3) - Inputs
+# ============================================================
+
+# --- INPUT SELECTS ---
+input_select:
+  # Vehicle selection + master OFF switch.
+  ev_vehicle_mode:
+    name: "EV Vehicle Mode"
+    options:
+      - "off"
+      - "zero"
+      - "honda_e"
+    initial: "off"
+    icon: mdi:car-electric
+
+  # Charging strategy.
+  ev_charge_mode:
+    name: "EV Charge Mode"
+    options:
+      - "pv_surplus" # 1: pure PV surplus, nothing below 6 A
+      - "pv_battery_floor" # 2: PV surplus, min 6 A from battery (if SOC allows)
+      - "pv_grid_floor" # 3: PV surplus, always min 6 A (grid if needed)
+    initial: "pv_surplus"
+    icon: mdi:ev-station
+
+# --- INPUT NUMBERS ---
+input_number:
+  ev_manual_charging_current:
+    name: "EV Manual Charging Current (0 = Automatic)"
+    initial: 0
+    min: 0
+    max: 32
+    step: 1
+    unit_of_measurement: "A"
+    icon: mdi:car-speed-limiter
+
+  ev_charge_percent:
+    name: "EV Charge Target (% of battery)"
+    initial: 50
+    min: 0
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:battery-charging-50
+
+  ev_session_start_energy_kwh:
+    name: "EV Session Start Energy (snapshot)"
+    min: 0
+    max: 9999999
+    step: 0.001
+    unit_of_measurement: "kWh"
+    icon: mdi:counter
