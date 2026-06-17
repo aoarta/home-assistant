@@ -26,7 +26,7 @@ template:
           # Wallbox
           wallbox_max_amps: 22
           # Zero
-          zero_capacity: 15.6
+          zero_capacity: 14.4
           zero_charge_efficienty: 0.88 # AC-DC efficiency
           # Honda e
           honda_e_capacity: 35.5 # NEU — Honda e: 35,5 kWh brutto
