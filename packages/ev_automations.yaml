@@ -122,19 +122,34 @@ automation:
   # ============================================================
   # START (PV surplus mode only): target current sustained >= 6 A for 5 min.
   # ============================================================
-  - alias: "Wallbox: Start on sustained PV surplus"
+  - alias: "Wallbox: Start on PV surplus"
     id: wallbox_pv_start
     mode: single
     triggers:
+      # 1. PV-Überschuss > 5 A (mit 1 Minute Stabilität)
       - trigger: numeric_state
         entity_id: sensor.ev_target_charging_current
         above: 5
         for:
-          minutes: 5
-    conditions:
-      - condition: state
+          minutes: 1
+
+      # 2. Fahrzeugauswahl (nur "zero" oder "honda_e")
+      - trigger: state
+        entity_id: input_select.ev_vehicle_mode
+        to:
+          - "zero"
+          - "honda_e"
+
+      # 3. Lademodus (nur "pv_surplus")
+      - trigger: state
         entity_id: input_select.ev_charge_mode
-        state: "pv_surplus"
+        to: "pv_surplus"
+
+      # 4. Ladeziel-Änderung (jeder Wert)
+      - trigger: state
+        entity_id: input_number.ev_charge_percent
+
+    conditions:
       - condition: state
         entity_id: binary_sensor.warp3_2ita_cable
         state: "on"
@@ -148,8 +163,10 @@ automation:
         value_template: "{{ not is_state('input_select.ev_vehicle_mode', 'off') }}"
       - condition: template
         value_template: >-
-          {{ states('sensor.ev_session_energy') | float(0)
-             < states('sensor.ev_max_charge_energy') | float(0) }}
+          {{ states('sensor.ev_session_energy') | float(0) < states('sensor.ev_max_charge_energy') | float(0) }}
+      - condition: template
+        value_template: >-
+          {{ states('input_select.ev_charge_mode') in ['pv_surplus', 'pv_battery_floor', 'pv_grid_floor'] }}
     actions:
       - action: number.set_value
         target:
@@ -181,11 +198,20 @@ automation:
         for:
           seconds: 10
       - trigger: state
-        entity_id:
-          - input_select.ev_charge_mode
-          - input_select.ev_vehicle_mode
-          - binary_sensor.warp3_2ita_cable
+        entity_id: binary_sensor.warp3_2ita_cable
         to: "on"
+      - trigger: state
+        entity_id: input_number.ev_charge_percent
+      - trigger: state
+        entity_id: input_select.ev_charge_mode
+        to:
+          - "pv_battery_floor"
+          - "pv_grid_floor"
+      - trigger: state
+        entity_id: input_select.ev_vehicle_mode
+        to:
+          - "zero"
+          - "honda_e"
     conditions:
       - condition: template
         value_template: >-
@@ -235,6 +261,12 @@ automation:
     triggers:
       - trigger: state
         entity_id: sensor.ev_target_charging_current
+      - trigger: state
+        entity_id: input_select.ev_vehicle_mode
+      - trigger: state
+        entity_id: input_select.ev_charge_mode
+      - trigger: state
+        entity_id: input_number.ev_charge_percent
     conditions:
       - condition: state
         entity_id: binary_sensor.warp3_2ita_charging
