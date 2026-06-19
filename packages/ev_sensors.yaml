@@ -20,6 +20,8 @@ template:
       - name: "PV Dynamic Charging Current"
         unique_id: pv_dynamic_charging_current
         unit_of_measurement: "A"
+        device_class: current
+        state_class: measurement
         state: >-
           {% set pv_power = states('sensor.pv_production_power') | float(0) %}
           {% set house_power = states('sensor.house_consumption_power_brutto') | float(0) %}
