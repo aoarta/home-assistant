@@ -161,7 +161,8 @@ template:
             {# === Today (remaining) === #}
             {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}
             {% set pv_yield_today = states('sensor.pv_energy_yield_today_um') | float(0) %}
-            {% set pv_remaining_today = ([0, pv_forecast_today - pv_yield_today] | max) * pv_factor %}
+            {#{% set pv_remaining_today = ([0, pv_forecast_today - pv_yield_today] | max) * pv_factor %}#}  
+            {% set pv_remaining_today = pv_forecast_today %}
             {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
             {% set consumption_today = states('sensor.house_consumption_energy_today') | float(0) %}
 
