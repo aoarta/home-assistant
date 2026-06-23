@@ -98,6 +98,7 @@ sensor:
 template:
   - sensor:
       - name: "House Consumption Power brutto"
+        # house without chargers
         unique_id: house_consumption_power_brutto
         unit_of_measurement: "W"
         device_class: power
@@ -105,12 +106,14 @@ template:
         availability: >-
           {{ has_value('sensor.solarnet_leistung_vom_netz') and
              has_value('sensor.marstek_ac_power_total') and
-             has_value('sensor.pv_production_power')
+             has_value('sensor.pv_production_power') and
+             has_value('sensor.ev_charging_power')
              }}
         state: >-
           {{ ( states('sensor.solarnet_leistung_vom_netz') | float(0)
                + states('sensor.marstek_ac_power_total') | float(0)
-               + states('sensor.pv_production_power') | float(0)
+               + states('sensor.pv_production_power') | float(0) 
+               + states('sensor.ev_charging_power') | float(0)
               ) | round(0) }}
 
       - name: "Charge Power"
@@ -139,16 +142,6 @@ template:
         availability: >-
           {{ states('sensor.expected_daily_consumption') | is_number
             and states('sensor.house_consumption_energy_today_um') | is_number }}
-
-  #  - sensor:
-  #      - name: "Stable Charge Power"
-  #        unique_id: ladeleistung_stabil
-  #        unit_of_measurement: "W"
-  #        device_class: power
-  #        state_class: measurement
-  #        availability: "{{ has_value('sensor.charge_power') }}"
-  #        state: >-
-  #          {{ ((states('sensor.charge_power') | float(0) / 15) | int) * 15 }}
 
   - triggers:
       - trigger: state

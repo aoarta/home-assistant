@@ -98,3 +98,11 @@ template:
         attributes:
           mode: "{{ states('input_select.ev_vehicle_mode') }}"
           percent: "{{ states('input_number.ev_charge_percent') }}"
+
+      - name: "EV Charging Power"
+        unique_id: ev_charging_power
+        unit_of_measurement: "W"
+        device_class: power
+        state: >-
+          {% set power = states('sensor.warp3_2ita_powernow') | float(0) %}
+          {{ -power if power is not none else 0 }}
