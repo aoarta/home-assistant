@@ -18,16 +18,16 @@
 #   * om/dw tomorrow + day_after -> NOT masked: day-total sensors only, no
 #                                hourly data available
 # Expect input_number.pv_forecast_bias_korrekturfaktor to drift towards 1.0
-# over ~2-4 weeks after deployment (it previously absorbed the shading).
+# over ~2-4 weeks after deployment (it now corrects only residual errors).
 
 ################################################################################
 # INPUTS & PARAMETER
 ################################################################################
 input_number:
   pv_forecast_bias_korrekturfaktor:
-    name: "Forecast Bias Korrekturfaktor"
-    min: 0.5
-    max: 1.5
+    name: "Forecast Bias Korrekturfaktor (dynamisch)"
+    min: 0.8 # Engere Grenzen, da Höhen-/Albedo-Korrektur separat
+    max: 1.3
     step: 0.0001
 
   pv_kalman_p_bias:
@@ -95,10 +95,6 @@ input_number:
     step: 0.0001
 
   # --- Kalman R-Werte (adaptives Messrauschen, Stufe 3) ---
-  # Holds the smoothed innovation variance per source (EWMA of innovation^2).
-  # Used as the adaptive measurement noise R in the daily score update.
-  # A source whose daily quality metric jumps around grows a large R and is
-  # trusted less (smaller gain); a consistent source keeps R small.
   pv_kalman_r_solcast:
     name: "Kalman R Solcast"
     min: 0.0001
@@ -192,13 +188,6 @@ input_number:
     max: 150
     unit_of_measurement: "kWh"
 
-# NOTE: DWD is provided via two additional open-meteo-solar-forecast instances
-# (model = dwd_icon), configured in the UI. They expose:
-#   sensor.pv_dach_dwd_production_today    (attribute: wh_period)
-#   sensor.pv_dach_dwd_production_tomorrow (kWh value)
-#   sensor.pv_fassade_dwd_production_today / _tomorrow
-# Adjust the entity_ids below if your instance names differ.
-
 ################################################################################
 # FORECAST SENSORS (calculations)
 ################################################################################
@@ -211,24 +200,36 @@ template:
         state: "{{ states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute') | float(0) | round(1) }}"
 
   # ==========================================================================
+  # NEW: Height and Albedo Correction Factors
+  # ==========================================================================
+  - sensor:
+      - name: "PV Height Correction Factor"
+        unique_id: pv_height_correction_factor
+        unit_of_measurement: ""
+        state: "1.053" # 530m height correction (5.3% increase)
+
+      - name: "PV Albedo Correction Factor"
+        unique_id: pv_albedo_correction_factor
+        unit_of_measurement: ""
+        state: >-
+          {% set month = now().month %}
+          {% if month in [12, 1, 2, 3] %}  # Winter: Snow albedo
+            1.1
+          {% elif month in [4, 5, 10, 11] %}  # Spring/Autumn: Mixed conditions
+            1.05
+          {% else %}  # Summer: No additional albedo
+            1.0
+          {% endif %}
+
+      - name: "PV Total Correction Factor"
+        unique_id: pv_total_correction_factor
+        unit_of_measurement: ""
+        state: >-
+          {{ (states('sensor.pv_height_correction_factor') | float(1)) *
+             (states('sensor.pv_albedo_correction_factor') | float(1)) | round(3) }}
+
+  # ==========================================================================
   # Weighted Kalman ensemble forecast (today / tomorrow / day after)
-  #
-  # Refactor: every source total and every provider weight is computed ONCE in
-  # `variables:` below. The sensors only emit those variables; the three
-  # weighted sensors read variables, never each other.
-  #   * No in-block ordering dependency (sensor order is now irrelevant).
-  #   * `score / (R + r_reg)` lives once as bw_<source>; the per-horizon
-  #     `if value > 0` gate is applied inline.
-  #   * `r_reg` is a SINGLE tuning knob (was duplicated per sensor).
-  #
-  # Hold-last-value on API gaps is preserved: a source whose raw API attribute
-  # is missing falls back to states('sensor.<self>'), which at variables-render
-  # time still holds the previous cycle's committed value. That held value
-  # flows into the ensemble exactly as before.
-  #
-  # Horizon mask: every hourly source value is multiplied by the precomputed
-  # factor from custom_templates/horizon_mask.jinja before summing. The
-  # factors encode terrain shading (Inntal ridges) incl. diffuse floor.
   # ==========================================================================
   - trigger:
       - trigger: time_pattern
@@ -237,6 +238,7 @@ template:
       # --- Tuning knobs ---
       r_reg: 0.1
       bias: "{{ states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) }}"
+      total_correction: "{{ states('sensor.pv_total_correction_factor') | float(1) }}" # NEW: Combined height + albedo
 
       # --- Provider base weights (inverse-variance, ungated) ---
       bw_sc: "{{ (states('input_number.pv_kalman_score_solcast') | float(0)) / (states('input_number.pv_kalman_r_solcast') | float(0.1) + r_reg) }}"
@@ -272,11 +274,6 @@ template:
         {% else %}
           {{ states('sensor.pv_forecast_solarprognose_all') | float(0) }}
         {% endif %}
-      # Rewritten: remaining = sum of future interval deltas of the cumulative
-      # watt_hours series, each delta masked by the factor of its mid-hour.
-      # Replaces the previous (max - interpolated now) logic; the partial
-      # current interval is handled by the (t - now_ts)/(t - prev_t) fraction.
-      # [delta, 0]|max guards against day-boundary resets in the series.
       fs_today: >-
         {% from 'horizon_mask.jinja' import horizon_factor %}
         {% set today = now().strftime('%Y-%m-%d') %}
@@ -387,9 +384,6 @@ template:
         {% else %}
           0.0
         {% endif %}
-      # Rewritten: day total = sum of all interval deltas of the cumulative
-      # watt_hours series, each masked by the factor of its mid-hour.
-      # (Replaces the previous d_max/f_max logic.)
       fs_tomorrow: >-
         {% from 'horizon_mask.jinja' import horizon_factor %}
         {% set tomorrow = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
@@ -516,10 +510,8 @@ template:
           {% set dw_w = bw_dw if dw > 0 else 0 %}
           {% set total_weight = sc_w + sp_w + fs_w + om_w + dw_w %}
           {% if total_weight > 0 %}
-            {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias) | round(1) }}
+            {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias * total_correction) | round(1) }}
           {% elif is_state('sun.sun', 'below_horizon') and not state_attr('sun.sun', 'rising') %}
-            {# Evening: the day is genuinely over, remaining production is 0. #}
-            {# After midnight (rising=true) the hold below stays active for API gaps. #}
             0.0
           {% else %}
             {{ this.state | float(0) }}
@@ -541,7 +533,7 @@ template:
           {% set dw_w = bw_dw if dw > 0 else 0 %}
           {% set total_weight = sc_w + sp_w + fs_w + om_w + dw_w %}
           {% if total_weight > 0 %}
-            {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias) | round(2) }}
+            {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias * total_correction) | round(2) }}
           {% else %}
             0.0
           {% endif %}
@@ -556,7 +548,7 @@ template:
           {% set dw_w = bw_dw if dw > 0 else 0 %}
           {% set total_weight = om_w + dw_w %}
           {% if total_weight > 0 %}
-            {{ ((om_w * om + dw_w * dw ) / total_weight * bias) | round(2) }}
+            {{ ((om_w * om + dw_w * dw ) / total_weight * bias * total_correction) | round(2) }}
           {% else %}
             0.0
           {% endif %}
@@ -568,7 +560,6 @@ automation:
   - alias: "PV: Fix Daily Forecast Morning"
     id: pv_fix_daily_forecast_morning
     trigger:
-      # Fixed time, as the modells are calculated before 6:00
       - platform: time
         at: "06:30:00"
     action:
@@ -599,9 +590,8 @@ automation:
       Q_bias: 0.001
       R_bias: 0.04
       Q_w: 0.005
-      # Stufe 3: adaptive R parameters for the provider scores
-      beta_r: 0.9 # EWMA smoothing of the innovation variance
-      R_floor: 0.05 # lower bound for R, caps the maximum gain (prevents overfit)
+      beta_r: 0.9
+      R_floor: 0.05
     action:
       # 1. Bias Update (clean scalar Kalman, no forgetting)
       - if:
@@ -611,11 +601,6 @@ automation:
           - variables:
               bias_alt: "{{ states('input_number.pv_forecast_bias_korrekturfaktor') | float(1.0) }}"
               P_bias_alt: "{{ states('input_number.pv_kalman_p_bias') | float(0.02) }}"
-              # Measure against the UNbiased forecast (forecast_heute / bias_alt).
-              # forecast_heute already includes the bias applied this morning, so
-              # dividing it out gives the true correction ratio u = real / forecast.
-              # The filter now converges to u (full correction) instead of sqrt(u),
-              # and the loop becomes linear -> effective gain is 1 - K (stable).
               messung_bias: "{{ real * bias_alt / forecast_heute }}"
           - variables:
               P_bias_pred: "{{ P_bias_alt + Q_bias }}"
@@ -625,7 +610,7 @@ automation:
             target:
               entity_id: input_number.pv_forecast_bias_korrekturfaktor
             data:
-              value: "{{ (bias_alt + K_bias * (messung_bias - bias_alt)) | clamp(0.6, 1.5) | round(4) }}"
+              value: "{{ (bias_alt + K_bias * (messung_bias - bias_alt)) | clamp(0.9, 1.1) | round(4) }}"
           - action: input_number.set_value
             target:
               entity_id: input_number.pv_kalman_p_bias
@@ -670,12 +655,6 @@ automation:
                     - condition: template
                       value_template: "{{ obs_val >= 0 }}"
                   then:
-                    # Stufe 3: scalar Kalman update with adaptive measurement noise R.
-                    # R = smoothed innovation variance (EWMA of innovation^2), so a
-                    # source whose daily quality jumps around grows a large R and is
-                    # smoothed harder (small gain). No forgetting factor: a positive
-                    # Q_w keeps P (and thus the gain) from collapsing, which is what
-                    # keeps the filter permanently reactive.
                     - variables:
                         kalman_calc: >-
                           {% set innovation = obs_val - score_alt %}
