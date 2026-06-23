@@ -126,8 +126,7 @@ template:
         unit_of_measurement: "kWh"
         state: >-
           {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}
-          {% set pv_energy_yield_today = states('sensor.pv_energy_yield_today_um') | float(0) %}
-          {{ ([0, pv_forecast_today - pv_energy_yield_today] | max) | round(2) }}
+          {{ ([0, pv_forecast_today] | max) | round(2) }}
 
       - name: "Remaining Consumption Today"
         unique_id: remaining_consumption_today
