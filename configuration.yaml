@@ -70,6 +70,7 @@ recorder:
       - sensor.*energy_current*
       - sensor.*energy_voltage
       - sensor.*energy_factor*
+      - sensor.*ant_bms*
 
 sql:
   - name: "DB Top 10 Writers"
