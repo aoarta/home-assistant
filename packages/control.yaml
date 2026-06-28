@@ -155,7 +155,7 @@ template:
 
             {# === Safety factors === #}
             {% set pv_factor = 0.85 %}
-            {% set consumption_buffer = 1.10 %}
+            {% set consumption_buffer = 1%}
 
             {# === Today (remaining) === #}
             {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}
@@ -209,7 +209,8 @@ template:
               {% set target_energy = (target / 100) * max_storage %}
 
               {% if projected_energy < target_energy %}
-                {{ state_attr('sensor.dynamic_soc_grenzen', 'max') }}
+                {#{{ state_attr('sensor.dynamic_soc_grenzen', 'max') }}#}
+                {{ target }}
               {% else %}
                 {{ target }}
               {% endif %}
