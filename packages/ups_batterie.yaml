@@ -20,20 +20,45 @@ input_number:
     max: 50000
     step: 0.01
 
-rest:
-  - resource: http://192.168.0.13/show
-    scan_interval: 30 # Abfrageintervall in Sekunden anpassen, falls gewünscht
-    timeout: 8
-    sensor:
+################################################################################
+# TEMPLATE SENSOREN
+################################################################################
+template:
+  - sensor:
+      - name: "UPS EnergyFlow Wh"
+        unique_id: ups_energyflow_wh
+        unit_of_measurement: "Wh"
+        device_class: energy
+        state_class: total
+        state: >
+          {{ states('input_number.ups_energyflow_wh_counter') }}
+
+      - name: "Battery total charge power"
+        unique_id: battery_total_charge_power
+        unit_of_measurement: "W"
+        device_class: power
+        state: >-
+          {% set p1 = states('sensor.battery_charger_energy_power') | float(0) %}
+          {% set p2 = states('sensor.battery_charger2_energy_power') | float(0) %}
+          {{ (p1 + p2) | round(-1) }}
+
+      - name: "UPS AC Power"
+        unique_id: ups_ac_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >-
+          {% set charging = states('sensor.battery_total_charge_power') | float(0) %}
+          {% set discharging = states('sensor.battery_inverter_energy_power') | float(0) %}
+          {{ (discharging - charging) | round(-1) }}
+
       - name: "UPS SOC Rest"
         unique_id: ups_soc_rest
         unit_of_measurement: "%"
         device_class: battery
         state_class: measurement
-        # Keep last valid value instead of falling back to 0 on a malformed read
-        value_template: >-
-          {% set m = (value | default('')) | regex_findall('SOC:\s*([0-9.]+)') %}
-          {{ m[0] if m else states('sensor.ups_soc_rest') }}
+        availability: "{{ states('sensor.ant_bms_v2_ant_bms_soc') | is_number }}"
+        state: "{{ states('sensor.ant_bms_v2_ant_bms_soc') | float(0) }}"
 
       - name: "UPS DC Power"
         unique_id: ups_dc_power
@@ -42,71 +67,22 @@ rest:
         state_class: measurement
         # BMS reports positive while discharging.
         # Falling back to 0 here is intentional: it halts energy integration on a bad read.
-        value_template: "{{ value | regex_findall('Power:\\s*([-0-9.]+)') | first | default(0) }}"
+        state: "{{ states('sensor.ant_bms_v2_ant_bms_power') | float(0) }}"
 
       - name: "UPS Highest Cell"
         unique_id: ups_highest_cell
         unit_of_measurement: "V"
         device_class: voltage
         state_class: measurement
-        value_template: >-
-          {% set m = (value | default('')) | regex_findall('highest Cell.*:\s*([0-9.]+)') %}
-          {{ m[0] if m else states('sensor.ups_highest_cell') }}
+        state: "{{ states('sensor.ant_bms_v2_ant_bms_highest_cell') | float(0) }}"
 
       - name: "UPS Lowest Cell"
         unique_id: ups_lowest_cell
         unit_of_measurement: "V"
         device_class: voltage
         state_class: measurement
-        value_template: >-
-          {% set m = (value | default('')) | regex_findall('lowest Cell.*:\s*([0-9.]+)') %}
-          {{ m[0] if m else states('sensor.ups_lowest_cell') }}
+        state: "{{ states('sensor.ant_bms_v2_ant_bms_lowest_cell') | float(0) }}"
 
-      #      - name: "BMS Current"
-      #        value_template: "{{ value | regex_findall('Current:\\s*([-0-9.]+)') | first | default(0) }}"
-      #        unit_of_measurement: "A"
-      #        device_class: current
-      #        state_class: measurement
-
-      #      - name: "BMS Total Voltage"
-      #        value_template: "{{ value | regex_findall('totalVoltage:\\s*([0-9.]+)') | first | default(0) }}"
-      #        unit_of_measurement: "V"
-      #        device_class: voltage
-      #        state_class: measurement
-
-      #      - name: "BMS Total Capacity"
-      #        value_template: "{{ value | regex_findall('totalCapacity:\\s*([0-9.]+)') | first | default(0) }}"
-      #        unit_of_measurement: "Ah"
-      #        state_class: measurement
-
-      #      - name: "BMS Remaining Capacity"
-      #        value_template: "{{ value | regex_findall('remainingCapacity:\\s*([0-9.]+)') | first | default(0) }}"
-      #        unit_of_measurement: "Ah"
-      #        state_class: measurement
-
-#      - name: "BMS Cell Diff"
-#        # Beachte: "Cell diff" hat in deiner Ausgabe keinen Doppelpunkt, daher fangen wir nur die Leerzeichen ab
-#        value_template: "{{ value | regex_findall('Cell diff\\s*([0-9.]+)') | first | default(0) }}"
-#        unit_of_measurement: "V"
-#        device_class: voltage
-#        state_class: measurement
-
-#      - name: "BMS Temperature Probe 0"
-#        value_template: "{{ value | regex_findall('Probe 0:\\s*([-0-9.]+)') | first | default(0) }}"
-#        unit_of_measurement: "°C"
-#        device_class: temperature
-#        state_class: measurement
-
-#      - name: "BMS Temperature Probe 1"
-#        value_template: "{{ value | regex_findall('Probe 1:\\s*([-0-9.]+)') | first | default(0) }}"
-#        unit_of_measurement: "°C"
-#        device_class: temperature
-#        state_class: measurement
-
-################################################################################
-# TEMPLATE SENSOREN
-################################################################################
-template:
   - trigger:
       - platform: state
         entity_id: sensor.ups_soc_rest
@@ -230,34 +206,6 @@ template:
           {% set soc = states('sensor.ups_custom_soc') | float(-1) %}
           {{ (total_kwh * (1 - (soc / 100))) | round(2) if soc >= 0 else 0 }}
         availability: "{{ is_number(states('sensor.ups_custom_soc')) }}"
-
-  - sensor:
-      - name: "UPS EnergyFlow Wh"
-        unique_id: ups_energyflow_wh
-        unit_of_measurement: "Wh"
-        device_class: energy
-        state_class: total
-        state: >
-          {{ states('input_number.ups_energyflow_wh_counter') }}
-
-      - name: "Battery total charge power"
-        unique_id: battery_total_charge_power
-        unit_of_measurement: "W"
-        device_class: power
-        state: >-
-          {% set p1 = states('sensor.battery_charger_energy_power') | float(0) %}
-          {% set p2 = states('sensor.battery_charger2_energy_power') | float(0) %}
-          {{ (p1 + p2) | round(-1) }}
-
-      - name: "UPS AC Power"
-        unique_id: ups_ac_power
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        state: >-
-          {% set charging = states('sensor.battery_total_charge_power') | float(0) %}
-          {% set discharging = states('sensor.battery_inverter_energy_power') | float(0) %}
-          {{ (discharging - charging) | round(-1) }}
 
 ################################################################################
 # 4. AUTOMATIONEN
