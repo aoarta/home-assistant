@@ -51,11 +51,12 @@ template:
         unique_id: dynamic_soc_grenzen
         state: "OK"
         attributes:
-          min: "10"
-          low: "60"
-          mid: "80"
-          high: "90"
-          max: "100.5"
+          min: "{{ [10, state_attr('sensor.global_parameter','stop_soc') | float(10)] | max }}"
+
+          low: "{{ [60, state_attr('sensor.global_parameter','stop_soc') | float(60)] | max }}"
+          mid: "{{ [80, state_attr('sensor.global_parameter','stop_soc') | float(80)] | max }}"
+          high: "{{ [90, state_attr('sensor.global_parameter','stop_soc') | float(90)] | max }}"
+          max: "{{ [100.5, state_attr('sensor.global_parameter','stop_soc') | float(10.5)] | max }}"
 
       - name: "Battery AC Power total"
         unique_id: battery_ac_power_total
@@ -67,40 +68,6 @@ template:
           {% set venus2 = states('sensor.marstek_venus_2_ac_power') | float(0) %}
           {% set ups = states('sensor.ups_ac_power') | float(0) %}
           {{ (venus1 + venus2 + ups) | round(0) }}
-
-      - name: "Target SOC Status"
-        unique_id: target_soc_status
-        icon: mdi:battery-clock
-        state: >-
-          {% set t = states('sensor.target_soc') | int(-1) %}
-          {% if t == 101 %}
-            Manual override active — charging to 100%
-          {% elif t == 110 %}
-            Manual charge power set — target ignored
-          {% elif t == 120 %}
-            Battery maintenance cycle — charging to 100%
-          {% elif t == 130 %}
-            Today's energy balance negative — charging to 100% now
-          {% elif t == 131 %}
-            Tomorrow's energy balance negative — charging to 100%
-          {% elif t == 133 %}
-            Day after tomorrow's energy balance negative — charging to 100%
-          {% else %}
-            {% set dynamic = states('sensor.dynamic_soc') | float(0) %}
-            {% set grenzen_max = state_attr('sensor.dynamic_soc_grenzen', 'max') | float(100.5) %}
-            {% if t | float(-1) == grenzen_max %}
-              PV surplus insufficient for dynamic target — cap opened to max
-            {% elif t == dynamic | int %}
-              Following dynamic schedule — target {{ t }}%
-            {% else %}
-              Unknown state ({{ t }})
-            {% endif %}
-          {% endif %}
-        attributes:
-          target_soc_raw: "{{ states('sensor.target_soc') | int(-1) }}"
-          dynamic_soc: "{{ states('sensor.dynamic_soc') | float(0) }}"
-          override_active: "{{ is_state('input_boolean.override_soc', 'on') }}"
-          maintenance_active: "{{ is_state('binary_sensor.battery_maintenance_required', 'on') }}"
 
   # 2. Trigger-based sensors
   - triggers:
@@ -136,6 +103,40 @@ template:
           {% set hausverbrauch_heute = states('sensor.house_consumption_energy_today') | float(0) %}
           {{ ([0, expected_daily_consumption - hausverbrauch_heute] | max) | round(2) }}
 
+      - name: "Target SOC Status"
+        unique_id: target_soc_status
+        icon: mdi:battery-clock
+        state: >-
+          {% set t = states('sensor.target_soc') | int(-1) %}
+          {% if t == 101 %}
+            Manual override active — charging to 100%
+          {% elif t == 110 %}
+            Manual charge power set — target ignored
+          {% elif t == 120 %}
+            Battery maintenance cycle — charging to 100%
+          {% elif t == 130 %}
+            Today's energy balance negative — charging to 100% now
+          {% elif t == 131 %}
+            Tomorrow's energy balance negative — charging to 100%
+          {% elif t == 133 %}
+            Day after tomorrow's energy balance negative — charging to 100%
+          {% else %}
+            {% set dynamic = states('sensor.dynamic_soc') | float(0) %}
+            {% set grenzen_max = state_attr('sensor.dynamic_soc_grenzen', 'max') | float(100.5) %}
+            {% if t | float(-1) == grenzen_max %}
+              PV surplus insufficient for dynamic target — cap opened to max
+            {% elif t == dynamic | int %}
+              Following dynamic schedule — target {{ t }}%
+            {% else %}
+              Unknown state ({{ t }})
+            {% endif %}
+          {% endif %}
+        attributes:
+          target_soc_raw: "{{ states('sensor.target_soc') | int(-1) }}"
+          dynamic_soc: "{{ states('sensor.dynamic_soc') | float(0) }}"
+          override_active: "{{ is_state('input_boolean.override_soc', 'on') }}"
+          maintenance_active: "{{ is_state('binary_sensor.battery_maintenance_required', 'on') }}"
+
       - name: "Target SOC"
         unique_id: target_soc
         unit_of_measurement: "%"
@@ -154,8 +155,8 @@ template:
             {% set max_storage = state_attr('sensor.global_parameter', 'max_usable_energy') | float(10) %}
 
             {# === Safety factors === #}
-            {% set pv_factor = 0.85 %}
-            {% set consumption_buffer = 1%}
+            {% set pv_factor = 1.00 %}
+            {% set consumption_buffer = 1.00 %}
 
             {# === Today (remaining) === #}
             {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}
@@ -168,7 +169,7 @@ template:
             {# Static estimate: learned daily bucket minus what's already used this cycle #}
             {% set consumption_static = [0, expected_daily_consumption - consumption_today] | max %}
             {# Live estimate: current 1h-avg power projected to next sunrise (same window) #}
-            {% set consumption_live = states('sensor.estimated_remaining_consumption') | float(none) %}
+            {% set consumption_live = states('sensor.estimated_remaining_consumption') | float(consumption_static) %}
             {# Blend both (fallback to static if live is unavailable), then apply the buffer #}
             {% set consumption_blended = (0.5 * consumption_static + 0.5 * consumption_live)
                                           if consumption_live is not none else consumption_static %}
