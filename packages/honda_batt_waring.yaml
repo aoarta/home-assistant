@@ -1,0 +1,46 @@
+notify:
+  - name: gmail_benachrichtigung
+    platform: smtp
+    server: smtp.gmail.com
+    port: 587
+    timeout: 15
+    sender: naglzwick@gmail.com
+    username: naglzwick@gmail.com
+    password: "wvzl iwgr dlpw mbmo"
+    recipient: martin.zwicknagl@kirchbichl.net
+    starttls: true
+
+automation:
+  - alias: "Benachrichtigung bei Home Assistant Neustart"
+    id: "notify_ha_restarted"
+    mode: single
+    triggers:
+      - trigger: homeassistant
+        event: start
+    actions:
+      - delay: "00:00:15"
+      - action: notify.gmail_benachrichtigung
+        data:
+          title: "Home Assistant Neustart"
+          message: "Home Assistant wurde soeben erfolgreich neu gestartet. (Zeit: {{ now().strftime('%d.%m.%Y %H:%M:%S') }})"
+
+  - alias: "Batterie Warnung per E-Mail"
+    id: "batterie_warnung_email"
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.bm2_de1c0a_volt
+        below: 12.3
+        for: "00:05:00"
+      - trigger: numeric_state
+        entity_id: sensor.bm2_battery_monitor_de1c0a_bm2_batt
+        below: 50
+        for: "00:05:00"
+    actions:
+      - action: notify.gmail_benachrichtigung
+        data:
+          title: "⚠️ Batterie kritisch!"
+          message: >
+            Die Batterie hat kritische Werte erreicht: 
+            Spannung: {{ states('sensor.bm2_de1c0a_volt') }} V
+            Ladestand: {{ states('sensor.bm2_battery_monitor_de1c0a_bm2_batt') }} %
