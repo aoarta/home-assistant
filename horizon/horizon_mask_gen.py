@@ -2,9 +2,8 @@
 """
 horizon_mask_gen.py
 
-Convert the horizon profile (horizon_profile.csv, produced by
-horizon_from_pv.py) into a precomputed hourly mask table as a Jinja2 macro
-file for Home Assistant custom_templates.
+Convert the horizon profile (produced by horizon_from_pv.py) into a precomputed
+hourly mask table as a Jinja2 macro file for Home Assistant custom_templates.
 
 For every table day (keyed "MM-DD") and every local hour the script computes
 which fraction of that hour the sun is above the *local* horizon (terrain),
@@ -39,6 +38,7 @@ Usage in templates:
 Dependencies: numpy, astral  (same venv as horizon_from_pv.py)
 """
 
+import argparse
 import csv
 import datetime as dt
 import json
@@ -51,7 +51,6 @@ from astral.sun import azimuth as sun_azimuth, elevation as sun_elevation
 
 # ---------------------------------------------------------------------------
 CONFIG = {
-    "profile_csv": "horizon_profile.csv",
     "out_jinja": "horizon_mask.jinja",
     "latitude": 47.49,            # Woergl
     "longitude": 12.07,
@@ -145,8 +144,12 @@ JINJA_MACROS = """
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Generate horizon mask Jinja template from profile.")
+    parser.add_argument("profile_csv", help="Pfad zur horizon_profile.csv Datei")
+    args = parser.parse_args()
+
     cfg = CONFIG
-    az, el = load_profile(cfg["profile_csv"])
+    az, el = load_profile(args.profile_csv)
     horizon_at = make_horizon_lookup(az, el)
     obs = Observer(latitude=cfg["latitude"], longitude=cfg["longitude"])
     tz = ZoneInfo(cfg["timezone"])
