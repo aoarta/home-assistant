@@ -52,8 +52,8 @@ template:
           {% set discharging = states('sensor.battery_inverter_energy_power') | float(0) %}
           {{ (discharging - charging) | round(-1) }}
 
-      - name: "UPS SOC Rest"
-        unique_id: ups_soc_rest
+      - name: "UPS SOC raw"
+        unique_id: ups_soc_raw
         unit_of_measurement: "%"
         device_class: battery
         state_class: measurement
@@ -85,7 +85,7 @@ template:
 
   - trigger:
       - platform: state
-        entity_id: sensor.ups_soc_rest
+        entity_id: sensor.ups_soc_raw
         not_to:
           - unknown
           - unavailable
@@ -99,12 +99,8 @@ template:
         unit_of_measurement: "%"
         device_class: battery
         state_class: measurement
-        # Holds the last valid hardware SOC. The raw REST sensor reads 'unknown'
-        # right after a restart (REST sensors are not restored), which used to
-        # make every consumer read 0. This trigger-based sensor restores its own
-        # last state on restart, so we fall back to it when the raw value is gone.
         state: >-
-          {% set raw = states('sensor.ups_soc_rest') %}
+          {% set raw = states('sensor.ups_soc_raw') %}
           {% if is_number(raw) %}
             {{ raw | float }}
           {% else %}
