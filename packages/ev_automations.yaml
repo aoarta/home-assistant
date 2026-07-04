@@ -232,8 +232,7 @@ automation:
         above: 5
       - condition: template
         value_template: >-
-          {{ states('sensor.ev_session_energy') | float(0)
-             < states('sensor.ev_max_charge_energy') | float(0) }}
+          {{ states('sensor.ev_session_energy') | float(0) < states('sensor.ev_max_charge_energy') | float(0) }}
     actions:
       - action: number.set_value
         target:
@@ -330,8 +329,7 @@ automation:
     triggers:
       - trigger: template
         value_template: >-
-          {{ states('sensor.ev_session_energy') | float(0)
-             >= states('sensor.ev_max_charge_energy') | float(0) }}
+          {{ states('sensor.ev_session_energy') | float(0) >= states('sensor.ev_max_charge_energy') | float(0) }}
       - trigger: state
         entity_id: input_select.ev_vehicle_mode
         to: "off"
@@ -347,8 +345,7 @@ automation:
       - condition: template
         value_template: >-
           {{ is_state('input_select.ev_vehicle_mode', 'off')
-             or states('sensor.ev_session_energy') | float(0)
-                >= states('sensor.ev_max_charge_energy') | float(0) }}
+             or states('sensor.ev_session_energy') | float(0) >= states('sensor.ev_max_charge_energy') | float(0) }}
     actions:
       - action: button.press
         target:
@@ -360,6 +357,32 @@ automation:
             Charging stopped -- vehicle={{ states('input_select.ev_vehicle_mode') }},
             session={{ states('sensor.ev_session_energy') }} kWh,
             limit={{ states('sensor.ev_max_charge_energy') }} kWh.
+
+  # ============================================================
+  # STOP (vehicle=off): when unplugged
+  # ============================================================
+  - alias: "Wallbox: Stop charging at limit or when mode is off"
+    id: wallbox_stop_on_limit_or_off
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.warp3_2ita_cable
+        to: "off"
+    actions:
+      - action: button.press
+        target:
+          entity_id: button.warp3_2ita_stopcharge
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.ev_vehicle_mode
+        data:
+          option: "off"
+
+      - action: logbook.log
+        data:
+          name: "Wallbox"
+          message: >-
+            Charging stopped -- vehicle={{ states('input_select.ev_vehicle_mode') }}
 
   # ============================================================
   # Slider correction: force the manual current to 0 or >= 6
