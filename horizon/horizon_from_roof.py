@@ -71,9 +71,9 @@ CONFIG = {
         "password": "homeassistant",
         "database": "homeassistant",
     },
-    "entity_id": "sensor.zwicknagl_martin_leistung_ac",          # PV power sensor
-#    "entity_id": "sensor.pv_production_balcony_power",
-#    "entity_id": "sensor.pv_production_power",
+    "entity_id": "sensor.zwicknagl_martin_leistung_ac", # Roof power sensor
+#    "entity_id": "sensor.pv_production_balcony_power",  # Balcony power sensor
+#    "entity_id": "sensor.pv_production_power",          # Both together
 
     "days_back": 365,
 
@@ -87,12 +87,12 @@ CONFIG = {
                               # (handles sensors that go 'unavailable' at night)
 
     # --- edge detection (all windows in grid samples, 1 sample = step_s) ---
-    "pre_window": 6,          # 30 min that must be LOW before a rising edge
-    "post_window": 6,         # 30 min that must be HIGH after it
-    "gap": 2,                 # transition zone (15 min) between the windows
-    "low_frac": 0.20,         # LOW  = below 20 % of the day's reference max
-    "high_frac": 0.35,        # HIGH = above 35 % of the day's reference max
-    "min_day_max": 200.0,     # skip days with day max below this (sensor units)
+    "pre_window": 4,          # x5 min that must be LOW before a rising edge
+    "post_window": 4,         # x5 min that must be HIGH after it
+    "gap": 4,                 # transition zone (15 min) between the windows
+    "low_frac": 0.10,         # LOW  = below 20 % of the day's reference max
+    "high_frac": 0.20,        # HIGH = above 35 % of the day's reference max
+    "min_day_max": 3000.0,     # skip days with day max below this (sensor units)
     "min_elevation": 0.0,     # plausibility range for horizon points (deg)
     "max_elevation": 45.0,
 
@@ -105,9 +105,9 @@ CONFIG = {
     "fs_values": 36,          # values in the horizon string (must divide 360)
 
     # --- output files ---
-    "out_points_csv": "horizon_points.csv",
-    "out_profile_csv": "horizon_profile.csv",
-    "out_plot_png": "horizon_plot.png",   # set to None to skip the plot
+    "out_points_csv": "horizon_points_roof.csv",
+    "out_profile_csv": "horizon_profile_roof.csv",
+    "out_plot_png": "horizon_plot_roof.png",   # set to None to skip the plot
 }
 
 
