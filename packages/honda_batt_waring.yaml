@@ -7,7 +7,9 @@ automation:
         event: start
     actions:
       - delay: "00:00:15"
-      - action: notify.gmail_benachrichtigung
+      - action: notify.send_message
+        target:
+          entity_id: notify.gmail_benachrichtigung_martin_zwicknagl_kirchbichl_net
         data:
           title: "Home Assistant Neustart"
           message: "Home Assistant wurde soeben erfolgreich neu gestartet. (Zeit: {{ now().strftime('%d.%m.%Y %H:%M:%S') }})"
@@ -25,7 +27,9 @@ automation:
         below: 50
         for: "00:05:00"
     actions:
-      - action: notify.gmail_benachrichtigung
+      - action: notify.send_message
+        target:
+          entity_id: notify.gmail_benachrichtigung_martin_zwicknagl_kirchbichl_net
         data:
           title: "⚠️ Batterie kritisch!"
           message: >

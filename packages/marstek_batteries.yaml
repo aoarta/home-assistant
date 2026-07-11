@@ -224,11 +224,11 @@ template:
           - input_number.manual_charge_power
           - input_boolean.override_soc
         for:
-          milliseconds: 500
+          milliseconds: 1000
       - trigger: state
         entity_id: sensor.target_soc
       - trigger: state
-        entity_id: sensor.takt
+        entity_id: sensor.charge_power
 
     variables:
       limits_map: >-

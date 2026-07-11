@@ -70,7 +70,7 @@ template:
           {{ (venus1 + venus2 + ups) | round(0) }}
 
   # 2. Trigger-based sensors
-  - triggers:
+  - trigger:
       - trigger: time_pattern
         minutes: "/2"
       - trigger: state
@@ -219,7 +219,7 @@ template:
 
           {% endif %}
 
-  - triggers:
+  - trigger:
       - trigger: time_pattern
         minutes: "/2"
     sensor:

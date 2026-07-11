@@ -40,14 +40,17 @@ recorder:
       - sensor.prognose_morgen
       - sensor.prognose_ubermorgen
       - sensor.pv_energy_yield_today_um
+      - sensor.pv_production_power
+      - sensor.solarnet_leistung_vom_netz
+      - sensor.battery_ac_power_total
 
   exclude:
     entities:
       - sensor.takt
       - input_datetime.takt_base
-      - sensor.garage_inverter_energy_power
-      - sensor.balkon_inverter2_energy_power
-      - sensor.balkon_inverter_energy_power
+      # - sensor.garage_inverter_energy_power
+      # - sensor.balkon_inverter2_energy_power
+      # - sensor.balkon_inverter_energy_power
       # - sensor.solarnet_leistung_vom_netz
 
     entity_globs:

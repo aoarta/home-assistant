@@ -1,196 +1,4 @@
 # packages/pv_forecast_calc.yaml
-#
-# Calculation layer: helpers/state, the weighted Kalman-ensemble forecast
-# sensors, and the daily Kalman update (Stufe 3 adaptive R + Stufe 4
-# inverse-variance weighting). Consumes the sensor.*_stable entities defined
-# in pv_forecast_fetch.yaml by entity_id.
-#
-# HORIZON CORRECTION (custom_templates/horizon_mask.jinja required):
-# All horizon masking is concentrated in THIS file; pv_forecast_fetch.yaml
-# stays untouched (in particular: NO &horizon= URL parameter at forecast.solar,
-# that would double-correct).
-#   * sp_today / sp_tomorrow  -> horizon_factor(md, hour) in the hourly loop
-#   * om_today / dw_today     -> horizon_factor_ts(ts) on combined_wh
-#   * fs_today / fs_tomorrow  -> rewritten to masked deltas of the cumulative
-#                                watt_hours series (replaces max - now logic)
-#   * sc_* (Solcast)          -> NOT masked: Solcast may already model terrain
-#                                shading; verify empirically before touching
-#   * om/dw tomorrow + day_after -> NOT masked: day-total sensors only, no
-#                                hourly data available
-# Expect input_number.pv_forecast_bias_korrekturfaktor to drift towards 1.0
-# over ~2-4 weeks after deployment (it now corrects only residual errors).
-
-################################################################################
-# INPUTS & PARAMETER
-################################################################################
-input_number:
-  pv_forecast_bias_korrekturfaktor:
-    name: "Forecast Bias Korrekturfaktor (dynamisch)"
-    min: 0.8 # Engere Grenzen, da Höhen-/Albedo-Korrektur separat
-    max: 1.3
-    step: 0.0001
-
-  pv_kalman_p_bias:
-    name: "Kalman P Bias"
-    min: 0.0001
-    max: 1
-    step: 0.0001
-
-  # --- Kalman Scores (Vertrauenswürdigkeit) ---
-  pv_kalman_score_solcast:
-    name: "Kalman Score Solcast"
-    min: 0.0001
-    max: 15
-    step: 0.001
-
-  pv_kalman_score_solarprognose:
-    name: "Kalman Score Solarprognose"
-    min: 0.0001
-    max: 15
-    step: 0.001
-
-  pv_kalman_score_forecastsolar:
-    name: "Kalman Score ForecastSolar"
-    min: 0.0001
-    max: 15
-    step: 0.001
-
-  pv_kalman_score_openmeteo:
-    name: "Kalman Score OpenMeteo"
-    min: 0.0001
-    max: 15
-    step: 0.001
-
-  pv_kalman_score_dwd:
-    name: "Kalman Score DWD"
-    min: 0.0001
-    max: 15
-    step: 0.001
-
-  # --- Kalman P-Werte (Unsicherheit der Schätzung) ---
-  pv_kalman_p_solcast:
-    name: "Kalman P Solcast"
-    min: 0.0001
-    max: 1
-    step: 0.0001
-  pv_kalman_p_solarprognose:
-    name: "Kalman P Solarprognose"
-    min: 0.0001
-    max: 1
-    step: 0.0001
-  pv_kalman_p_forecastsolar:
-    name: "Kalman P ForecastSolar"
-    min: 0.0001
-    max: 1
-    step: 0.0001
-  pv_kalman_p_openmeteo:
-    name: "Kalman P OpenMeteo"
-    min: 0.0001
-    max: 1
-    step: 0.0001
-  pv_kalman_p_dwd:
-    name: "Kalman P DWD"
-    min: 0.0001
-    max: 1
-    step: 0.0001
-
-  # --- Kalman R-Werte (adaptives Messrauschen, Stufe 3) ---
-  pv_kalman_r_solcast:
-    name: "Kalman R Solcast"
-    min: 0.0001
-    max: 50
-    step: 0.001
-  pv_kalman_r_solarprognose:
-    name: "Kalman R Solarprognose"
-    min: 0.0001
-    max: 50
-    step: 0.001
-  pv_kalman_r_forecastsolar:
-    name: "Kalman R ForecastSolar"
-    min: 0.0001
-    max: 50
-    step: 0.001
-  pv_kalman_r_openmeteo:
-    name: "Kalman R OpenMeteo"
-    min: 0.0001
-    max: 50
-    step: 0.001
-  pv_kalman_r_dwd:
-    name: "Kalman R DWD"
-    min: 0.0001
-    max: 50
-    step: 0.001
-
-  # --- Normierte Gewichte (Visualisierung) ---
-  weight_solcast:
-    name: "Gewicht Solcast"
-    min: 0
-    max: 1
-    step: 0.001
-  weight_solarprognose:
-    name: "Gewicht Solarprognose"
-    min: 0
-    max: 1
-    step: 0.001
-  weight_forecastsolar:
-    name: "Gewicht ForecastSolar"
-    min: 0
-    max: 1
-    step: 0.001
-  weight_openmeteo:
-    name: "Gewicht OpenMeteo"
-    min: 0
-    max: 1
-    step: 0.001
-  weight_dwd:
-    name: "Gewicht DWD"
-    min: 0
-    max: 1
-    step: 0.001
-
-  # --- Snapshots ---
-  pv_save_solcast_morgens:
-    name: "Solcast Ref"
-    min: 0
-    max: 150
-    unit_of_measurement: "kWh"
-  pv_save_solarprognose_morgens:
-    name: "Solarprognose Ref"
-    min: 0
-    max: 150
-    unit_of_measurement: "kWh"
-  pv_save_forecastsolar_morgens:
-    name: "ForecastSolar Ref"
-    min: 0
-    max: 150
-    unit_of_measurement: "kWh"
-  pv_save_openmeteo_morgens:
-    name: "OpenMeteo Ref"
-    min: 0
-    max: 150
-    unit_of_measurement: "kWh"
-  pv_save_dwd_morgens:
-    name: "DWD Ref"
-    min: 0
-    max: 150
-    unit_of_measurement: "kWh"
-
-  pv_prognose_von_gestern:
-    min: 0
-    max: 150
-    unit_of_measurement: "kWh"
-  pv_reale_ernte_von_gestern:
-    min: 0
-    max: 150
-    unit_of_measurement: "kWh"
-  pv_prognose_this_morning:
-    min: 0
-    max: 150
-    unit_of_measurement: "kWh"
-
-################################################################################
-# FORECAST SENSORS (calculations)
-################################################################################
 template:
   - sensor:
       - name: "PV Forecast Solcast all"
@@ -199,25 +7,21 @@ template:
         availability: "{{ is_number(states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute')) }}"
         state: "{{ states('sensor.solcast_pv_forecast_prognose_verbleibende_leistung_heute') | float(0) | round(1) }}"
 
-  # ==========================================================================
-  # NEW: Height and Albedo Correction Factors
-  # ==========================================================================
-  - sensor:
       - name: "PV Height Correction Factor"
         unique_id: pv_height_correction_factor
         unit_of_measurement: ""
-        state: "1.053" # 530m height correction (5.3% increase)
+        state: "1.053"
 
       - name: "PV Albedo Correction Factor"
         unique_id: pv_albedo_correction_factor
         unit_of_measurement: ""
         state: >-
           {% set month = now().month %}
-          {% if month in [12, 1, 2, 3] %}  # Winter: Snow albedo
+          {% if month in [12, 1, 2, 3] %}
             1.1
-          {% elif month in [4, 5, 10, 11] %}  # Spring/Autumn: Mixed conditions
+          {% elif month in [4, 5, 10, 11] %}
             1.05
-          {% else %}  # Summer: No additional albedo
+          {% else %}
             1.0
           {% endif %}
 
@@ -228,29 +32,25 @@ template:
           {{ (states('sensor.pv_height_correction_factor') | float(1)) *
              (states('sensor.pv_albedo_correction_factor') | float(1)) | round(3) }}
 
-  # ==========================================================================
-  # Weighted Kalman ensemble forecast (today / tomorrow / day after)
-  # ==========================================================================
   - trigger:
       - trigger: time_pattern
         minutes: "/5"
     variables:
-      # --- Tuning knobs ---
       r_reg: 0.1
       bias: "{{ states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) }}"
-      total_correction: "{{ states('sensor.pv_total_correction_factor') | float(1) }}" # NEW: Combined height + albedo
+      total_correction: "{{ states('sensor.pv_total_correction_factor') | float(1) }}"
 
-      # --- Provider base weights (inverse-variance, ungated) ---
       bw_sc: "{{ (states('input_number.pv_kalman_score_solcast') | float(0)) / (states('input_number.pv_kalman_r_solcast') | float(0.1) + r_reg) }}"
       bw_sp: "{{ (states('input_number.pv_kalman_score_solarprognose') | float(0)) / (states('input_number.pv_kalman_r_solarprognose') | float(0.1) + r_reg) }}"
       bw_fs: "{{ (states('input_number.pv_kalman_score_forecastsolar') | float(0)) / (states('input_number.pv_kalman_r_forecastsolar') | float(0.1) + r_reg) }}"
       bw_om: "{{ (states('input_number.pv_kalman_score_openmeteo') | float(0)) / (states('input_number.pv_kalman_r_openmeteo') | float(0.1) + r_reg) }}"
       bw_dw: "{{ (states('input_number.pv_kalman_score_dwd') | float(0)) / (states('input_number.pv_kalman_r_dwd') | float(0.1) + r_reg) }}"
 
-      # --- TODAY source totals (remaining production, horizon-masked) ---
       sc_today: "{{ states('sensor.pv_forecast_solcast_all') | float(0) }}"
+
       sp_today: >-
-        {% from 'horizon_mask.jinja' import horizon_factor %}
+        {% from 'horizon_dach.jinja' import horizon_factor as hf_dach %}
+        {% from 'horizon_fassade.jinja' import horizon_factor as hf_fassade %}
         {% set dach = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
         {% set fassade = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
         {% if dach is mapping %}
@@ -263,19 +63,21 @@ template:
           {% set fraction_left = (3600 - (now_dt.minute * 60 + now_dt.second)) / 3600 %}
           {% set d_now = dach[ts_now][1] | float(0) if ts_now in dach else 0 %}
           {% set f_now = fassade[ts_now][1] | float(0) if (fassade is mapping and ts_now in fassade) else 0 %}
-          {% set ns.total = (d_now + f_now) * fraction_left * (horizon_factor(md, current_hour) | float(1)) %}
+          {% set ns.total = (d_now * (hf_dach(md, current_hour) | float(1)) + f_now * (hf_fassade(md, current_hour) | float(1))) * fraction_left %}
           {% for i in range(current_hour + 1, 24) %}
             {% set ts = (start_ts + i * 3600) | string %}
             {% set d = dach[ts][1] | float(0) if ts in dach else 0 %}
             {% set f = fassade[ts][1] | float(0) if (fassade is mapping and ts in fassade) else 0 %}
-            {% set ns.total = ns.total + (d + f) * (horizon_factor(md, i) | float(1)) %}
+            {% set ns.total = ns.total + (d * (hf_dach(md, i) | float(1)) + f * (hf_fassade(md, i) | float(1))) %}
           {% endfor %}
           {{ ns.total | round(1) }}
         {% else %}
           {{ states('sensor.pv_forecast_solarprognose_all') | float(0) }}
         {% endif %}
+
       fs_today: >-
-        {% from 'horizon_mask.jinja' import horizon_factor %}
+        {% from 'horizon_dach.jinja' import horizon_factor as hf_dach %}
+        {% from 'horizon_fassade.jinja' import horizon_factor as hf_fassade %}
         {% set today = now().strftime('%Y-%m-%d') %}
         {% set md = now().strftime('%m-%d') %}
         {% set dach = state_attr('sensor.forecastsolar_api_raw_dach_stable', 'result') %}
@@ -290,7 +92,7 @@ template:
             {% if ns.prev_t != 0 %}
               {% set delta = [v - ns.prev_v, 0] | max %}
               {% set h = (((ns.prev_t + t) / 2) | timestamp_custom('%H', true)) | int %}
-              {% set f = horizon_factor(md, h) | float(1) %}
+              {% set f = hf_dach(md, h) | float(1) %}
               {% if ns.prev_t >= now_ts %}
                 {% set ns.rem = ns.rem + delta * f %}
               {% elif t > now_ts %}
@@ -306,7 +108,7 @@ template:
             {% if ns.prev_t != 0 %}
               {% set delta = [v - ns.prev_v, 0] | max %}
               {% set h = (((ns.prev_t + t) / 2) | timestamp_custom('%H', true)) | int %}
-              {% set f = horizon_factor(md, h) | float(1) %}
+              {% set f = hf_fassade(md, h) | float(1) %}
               {% if ns.prev_t >= now_ts %}
                 {% set ns.rem = ns.rem + delta * f %}
               {% elif t > now_ts %}
@@ -319,8 +121,10 @@ template:
         {% else %}
           {{ states('sensor.pv_forecast_forecastsolar_all') | float(0) }}
         {% endif %}
+
       om_today: >-
-        {% from 'horizon_mask.jinja' import horizon_factor_ts %}
+        {% from 'horizon_dach.jinja' import horizon_factor_ts as hf_ts_dach %}
+        {% from 'horizon_fassade.jinja' import horizon_factor_ts as hf_ts_fassade %}
         {% set dach = state_attr('sensor.pv_roof_openmeteo_production_today', 'wh_period') %}
         {% set fassade = state_attr('sensor.pv_fassade_openmeteo_production_today', 'wh_period') %}
         {% if dach is mapping and fassade is mapping %}
@@ -332,7 +136,7 @@ template:
           {% for ts, d_val in dach.items() if ts.startswith(today) %}
             {% set t = as_timestamp(ts) %}
             {% set f_val = fassade[ts] | float(0) if ts in fassade else 0 %}
-            {% set combined_wh = ((d_val | float(0)) + f_val) * (horizon_factor_ts(ts) | float(1)) %}
+            {% set combined_wh = ((d_val | float(0)) * (hf_ts_dach(ts) | float(1))) + (f_val * (hf_ts_fassade(ts) | float(1))) %}
             {% if t == current_hour_ts %}{% set ns.total = ns.total + (combined_wh * fraction_left) %}
             {% elif t > current_hour_ts %}{% set ns.total = ns.total + combined_wh %}{% endif %}
           {% endfor %}
@@ -340,8 +144,10 @@ template:
         {% else %}
           {{ states('sensor.pv_forecast_openmeteo_all') | float(0) }}
         {% endif %}
+
       dw_today: >-
-        {% from 'horizon_mask.jinja' import horizon_factor_ts %}
+        {% from 'horizon_dach.jinja' import horizon_factor_ts as hf_ts_dach %}
+        {% from 'horizon_fassade.jinja' import horizon_factor_ts as hf_ts_fassade %}
         {% set dach = state_attr('sensor.pv_roof_dwd_production_today', 'wh_period') %}
         {% set fassade = state_attr('sensor.pv_fassade_dwd_production_today', 'wh_period') %}
         {% if dach is mapping and fassade is mapping %}
@@ -353,7 +159,7 @@ template:
           {% for ts, d_val in dach.items() if ts.startswith(today) %}
             {% set t = as_timestamp(ts) %}
             {% set f_val = fassade[ts] | float(0) if ts in fassade else 0 %}
-            {% set combined_wh = ((d_val | float(0)) + f_val) * (horizon_factor_ts(ts) | float(1)) %}
+            {% set combined_wh = ((d_val | float(0)) * (hf_ts_dach(ts) | float(1))) + (f_val * (hf_ts_fassade(ts) | float(1))) %}
             {% if t == current_hour_ts %}{% set ns.total = ns.total + (combined_wh * fraction_left) %}
             {% elif t > current_hour_ts %}{% set ns.total = ns.total + combined_wh %}{% endif %}
           {% endfor %}
@@ -362,12 +168,13 @@ template:
           {{ states('sensor.pv_forecast_dwd_all') | float(0) }}
         {% endif %}
 
-      # --- TOMORROW source totals ---
       sc_tomorrow: >-
         {% set val = states('sensor.solcast_pv_forecast_prognose_morgen') %}
         {{ val | float if is_number(val) else states('sensor.pv_forecast_solcast_tomorrow') | float(0) }}
+
       sp_tomorrow: >-
-        {% from 'horizon_mask.jinja' import horizon_factor %}
+        {% from 'horizon_dach.jinja' import horizon_factor as hf_dach %}
+        {% from 'horizon_fassade.jinja' import horizon_factor as hf_fassade %}
         {% set dach_data = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
         {% set fassade_data = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
         {% if dach_data is mapping %}
@@ -378,14 +185,16 @@ template:
             {% set ts = (start_ts + i * 3600) | string %}
             {% set d = dach_data[ts][1] | float(0) if ts in dach_data else 0 %}
             {% set f = fassade_data[ts][1] | float(0) if fassade_data is mapping and ts in fassade_data else 0 %}
-            {% set ns.total = ns.total + (d + f) * (horizon_factor(md, i) | float(1)) %}
+            {% set ns.total = ns.total + (d * (hf_dach(md, i) | float(1)) + f * (hf_fassade(md, i) | float(1))) %}
           {% endfor %}
           {{ ns.total | round(2) }}
         {% else %}
           0.0
         {% endif %}
+
       fs_tomorrow: >-
-        {% from 'horizon_mask.jinja' import horizon_factor %}
+        {% from 'horizon_dach.jinja' import horizon_factor as hf_dach %}
+        {% from 'horizon_fassade.jinja' import horizon_factor as hf_fassade %}
         {% set tomorrow = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
         {% set md = (now() + timedelta(days=1)).strftime('%m-%d') %}
         {% set dach = state_attr('sensor.forecastsolar_api_raw_dach_stable', 'result') %}
@@ -399,7 +208,7 @@ template:
             {% set v = val | float(0) %}
             {% if ns.prev_t != 0 %}
               {% set h = (((ns.prev_t + t) / 2) | timestamp_custom('%H', true)) | int %}
-              {% set ns.total = ns.total + ([v - ns.prev_v, 0] | max) * (horizon_factor(md, h) | float(1)) %}
+              {% set ns.total = ns.total + ([v - ns.prev_v, 0] | max) * (hf_dach(md, h) | float(1)) %}
             {% endif %}
             {% set ns.prev_t = t %}{% set ns.prev_v = v %}
           {% endfor %}
@@ -409,7 +218,7 @@ template:
             {% set v = val | float(0) %}
             {% if ns.prev_t != 0 %}
               {% set h = (((ns.prev_t + t) / 2) | timestamp_custom('%H', true)) | int %}
-              {% set ns.total = ns.total + ([v - ns.prev_v, 0] | max) * (horizon_factor(md, h) | float(1)) %}
+              {% set ns.total = ns.total + ([v - ns.prev_v, 0] | max) * (hf_fassade(md, h) | float(1)) %}
             {% endif %}
             {% set ns.prev_t = t %}{% set ns.prev_v = v %}
           {% endfor %}
@@ -417,27 +226,28 @@ template:
         {% else %}
           0.0
         {% endif %}
+
       om_tomorrow: >-
         {% set dach = states('sensor.pv_roof_openmeteo_production_tomorrow') | float(0) %}
         {% set fassade = states('sensor.pv_fassade_openmeteo_production_tomorrow') | float(0) %}
         {{ dach + fassade }}
+
       dw_tomorrow: >-
         {% set dach = states('sensor.pv_roof_dwd_production_tomorrow') | float(0) %}
         {% set fassade = states('sensor.pv_fassade_dwd_production_tomorrow') | float(0) %}
         {{ dach + fassade }}
 
-      # --- DAY AFTER source totals ---
       om_day_after: >-
         {% set dach = states('sensor.pv_roof_openmeteo_production_day_after') | float(0) %}
         {% set fassade = states('sensor.pv_fassade_openmeteo_production_day_after') | float(0) %}
         {{ (dach + fassade) | round(2) }}
+
       dw_day_after: >-
         {% set dach = states('sensor.pv_roof_dwd_production_day_after') | float(0) %}
         {% set fassade = states('sensor.pv_fassade_dwd_production_day_after') | float(0) %}
         {{ (dach + fassade) | round(2) }}
 
     sensor:
-      # ---------- source sensors: emit the hoisted variable ----------
       - name: "PV Forecast Solarprognose all"
         unique_id: pv_forecast_solarprognose_all
         unit_of_measurement: "kWh"
@@ -493,7 +303,6 @@ template:
         unit_of_measurement: "kWh"
         state: "{{ dw_day_after }}"
 
-      # ---------- weighted ensembles: read variables only ----------
       - name: "PV Forecast Weighted"
         unique_id: pv_forecast_weighted
         unit_of_measurement: "kWh"
@@ -552,159 +361,3 @@ template:
           {% else %}
             0.0
           {% endif %}
-
-################################################################################
-# AUTOMATIONS (morning snapshot + daily Kalman update)
-################################################################################
-automation:
-  - alias: "PV: Fix Daily Forecast Morning"
-    id: pv_fix_daily_forecast_morning
-    trigger:
-      - platform: time
-        at: "06:30:00"
-    action:
-      - action: input_number.set_value
-        target:
-          entity_id: input_number.pv_prognose_this_morning
-        data:
-          value: "{{ states('sensor.pv_forecast_weighted') | float(0) | round(2) }}"
-      - repeat:
-          for_each:
-            ["solcast", "solarprognose", "forecastsolar", "openmeteo", "dwd"]
-          sequence:
-            - action: input_number.set_value
-              target:
-                entity_id: "input_number.pv_save_{{ repeat.item }}_morgens"
-              data:
-                value: "{{ states('sensor.pv_forecast_' ~ repeat.item ~ '_all') | float(0) }}"
-
-  - alias: "PV: Kalman-Update am Ende des Tages"
-    id: pv_daily_kalman_update
-    mode: single
-    trigger:
-      - platform: time
-        at: "23:55:00"
-    variables:
-      real: "{{ states('sensor.pv_energy_yield_today_um') | float(0) }}"
-      forecast_heute: "{{ states('input_number.pv_prognose_this_morning') | float(0) }}"
-      Q_bias: 0.001
-      R_bias: 0.04
-      Q_w: 0.005
-      beta_r: 0.9
-      R_floor: 0.05
-    action:
-      # 1. Bias Update (clean scalar Kalman, no forgetting)
-      - if:
-          - condition: template
-            value_template: "{{ forecast_heute > 2 and real > 0 }}"
-        then:
-          - variables:
-              bias_alt: "{{ states('input_number.pv_forecast_bias_korrekturfaktor') | float(1.0) }}"
-              P_bias_alt: "{{ states('input_number.pv_kalman_p_bias') | float(0.02) }}"
-              messung_bias: "{{ real * bias_alt / forecast_heute }}"
-          - variables:
-              P_bias_pred: "{{ P_bias_alt + Q_bias }}"
-          - variables:
-              K_bias: "{{ P_bias_pred / (P_bias_pred + R_bias) }}"
-          - action: input_number.set_value
-            target:
-              entity_id: input_number.pv_forecast_bias_korrekturfaktor
-            data:
-              value: "{{ (bias_alt + K_bias * (messung_bias - bias_alt)) | clamp(0.9, 1.1) | round(4) }}"
-          - action: input_number.set_value
-            target:
-              entity_id: input_number.pv_kalman_p_bias
-            data:
-              value: "{{ ((1 - K_bias) * P_bias_pred) | clamp(0.0001, 1.0) | round(5) }}"
-
-      # 2. Statistik
-      - action: input_number.set_value
-        target:
-          entity_id: input_number.pv_prognose_von_gestern
-        data:
-          value: "{{ forecast_heute }}"
-      - action: input_number.set_value
-        target:
-          entity_id: input_number.pv_reale_ernte_von_gestern
-        data:
-          value: "{{ real | round(1) }}"
-
-      # 3. Provider Gewichte Update
-      - if:
-          - condition: template
-            value_template: "{{ real > 1.0 }}"
-        then:
-          - repeat:
-              for_each:
-                - id: "solcast"
-                - id: "solarprognose"
-                - id: "forecastsolar"
-                - id: "openmeteo"
-                - id: "dwd"
-              sequence:
-                - variables:
-                    saved_forecast: "{{ states('input_number.pv_save_' ~ repeat.item.id ~ '_morgens') | float(0) }}"
-                    score_alt: "{{ states('input_number.pv_kalman_score_' ~ repeat.item.id) | float(1.0) }}"
-                    P_alt: "{{ states('input_number.pv_kalman_p_' ~ repeat.item.id) | float(0.1) }}"
-                    R_alt: "{{ states('input_number.pv_kalman_r_' ~ repeat.item.id) | float(0.1) }}"
-                - variables:
-                    obs_val: >-
-                      {% set rel_err = ((saved_forecast - real) | abs) / (real | float(1)) %}
-                      {{ 1.0 / (rel_err * 10 + 0.1) if saved_forecast > 0 else -1 }}
-                - if:
-                    - condition: template
-                      value_template: "{{ obs_val >= 0 }}"
-                  then:
-                    - variables:
-                        kalman_calc: >-
-                          {% set innovation = obs_val - score_alt %}
-                          {% set inno_var_new = R_alt * beta_r + (innovation ** 2) * (1 - beta_r) %}
-                          {% set p_pred = P_alt + Q_w %}
-                          {% set r_eff = [inno_var_new - p_pred, R_floor] | max %}
-                          {% set k = p_pred / (p_pred + r_eff) %}
-                          {% set s_neu = score_alt + k * innovation %}
-                          {% set p_neu = (1 - k) * p_pred %}
-                          {{ {'s': s_neu | round(5), 'p': p_neu | round(5), 'r': inno_var_new | round(5)} }}
-                    - action: input_number.set_value
-                      target:
-                        entity_id: "input_number.pv_kalman_score_{{ repeat.item.id }}"
-                      data:
-                        value: "{{ kalman_calc.s | clamp(0.0001, 15) }}"
-                    - action: input_number.set_value
-                      target:
-                        entity_id: "input_number.pv_kalman_p_{{ repeat.item.id }}"
-                      data:
-                        value: "{{ kalman_calc.p | clamp(0.0001, 1.0) }}"
-                    - action: input_number.set_value
-                      target:
-                        entity_id: "input_number.pv_kalman_r_{{ repeat.item.id }}"
-                      data:
-                        value: "{{ kalman_calc.r | clamp(0.0001, 50) }}"
-
-          # 4. Normierung Gewichte für Dashboard
-          - variables:
-              total_score: >-
-                {{ (states('input_number.pv_kalman_score_solcast') | float(0) +
-                    states('input_number.pv_kalman_score_solarprognose') | float(0) +
-                    states('input_number.pv_kalman_score_forecastsolar') | float(0) +
-                    states('input_number.pv_kalman_score_openmeteo') | float(0) +
-                    states('input_number.pv_kalman_score_dwd') | float(0)) }}
-          - if:
-              - condition: template
-                value_template: "{{ total_score > 0 }}"
-            then:
-              - repeat:
-                  for_each:
-                    [
-                      "solcast",
-                      "solarprognose",
-                      "forecastsolar",
-                      "openmeteo",
-                      "dwd",
-                    ]
-                  sequence:
-                    - action: input_number.set_value
-                      target:
-                        entity_id: "input_number.weight_{{ repeat.item }}"
-                      data:
-                        value: "{{ (states('input_number.pv_kalman_score_' ~ repeat.item) | float(0) / total_score) | round(3) }}"
