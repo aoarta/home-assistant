@@ -2,7 +2,7 @@
 """
 horizon_mask_gen.py
 
-Convert the horizon profile (produced by horizon_from_pv.py) into a precomputed
+Convert the horizon profile (produced by horizon_from_xxx.py) into a precomputed
 hourly mask table as a Jinja2 macro file for Home Assistant custom_templates.
 
 For every table day (keyed "MM-DD") and every local hour the script computes
