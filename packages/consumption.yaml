@@ -116,18 +116,18 @@ template:
                + states('sensor.ev_charging_power') | float(0)
               ) | round(0) }}
 
-      - name: "Charge Power"
-        unique_id: charge_power
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        availability: >-
-          {{ has_value('sensor.solarnet_leistung_vom_netz') and
-             has_value('sensor.marstek_ac_power_total') }}
-        state: >-
-          {{ ( states('sensor.solarnet_leistung_vom_netz') | float(0) +
-               states('sensor.marstek_ac_power_total') | float(0)
-              ) | round(0) }}
+      #      - name: "Charge Power"
+      #        unique_id: charge_power
+      #        unit_of_measurement: "W"
+      #        device_class: power
+      #        state_class: measurement
+      #        availability: >-
+      #          {{ has_value('sensor.solarnet_leistung_vom_netz') and
+      #              has_value('sensor.marstek_ac_power_total') }}
+      #        state: >-
+      #          {{ ( states('sensor.solarnet_leistung_vom_netz') | float(0) +
+      #                states('sensor.marstek_ac_power_total') | float(0)
+      #             ) | round(0) }}
 
       - name: "Expected Remaining Consumption Today"
         unique_id: expected_remaining_consumption_today
@@ -145,18 +145,48 @@ template:
 
   - triggers:
       - trigger: state
-        entity_id: sensor.charge_power
+        entity_id: sensor.solarnet_leistung_vom_netz
+      #      - trigger: state
+      #        entity_id: sensor.marstek_ac_power_total
+      - trigger: state
+        entity_id: binary_sensor.marstek_ringstrom_fehler
     sensor:
-      - name: "Stable Charge Power"
-        unique_id: ladeleistung_stabil
+      - name: "Charge Power"
+        unique_id: charge_power
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        availability: "{{ has_value('sensor.charge_power') }}"
+        availability: >-
+          {{ has_value('sensor.solarnet_leistung_vom_netz') and
+             has_value('sensor.marstek_ac_power_total') }}
         state: >-
-          {% set neu = states('sensor.charge_power') | float(0) %}
-          {% set alt = this.state | float(neu) %}
-          {{ neu | round(0) if (neu - alt) | abs >= 15 else alt }}
+          {# 1. Den theoretischen 100%-Zielwert berechnen #}
+          {% set netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
+          {% set marstek = states('sensor.marstek_ac_power_total') | float(0) %}
+          {% set ziel = netz + marstek %}
+
+          {# 2. Den aktuellen Zustand des Sensors auslesen #}
+          {% set aktuell = this.state | float(ziel) %}
+
+          {# 3. Zeit seit der letzten ECHTEN Änderung dieses Sensors berechnen #}
+          {% set letzte_aenderung = this.last_changed | default(now(), true) %}
+          {% set zeit_seit_aenderung = as_timestamp(now()) - as_timestamp(letzte_aenderung) %}
+
+          {# 4. P-Faktor anwenden (Sanfte Annäherung) #}
+          {% set p_faktor = 1.0 %}
+          {% set neu = aktuell + ((ziel - aktuell) * p_faktor) %}
+
+          {# Wenn der neue Wert im Betrag kleiner als 40W ist, erzwinge eine glatte Null #}
+          {% if neu | abs < 40 %}
+            {% set neu = 0 %}
+          {% endif %}
+
+          {# 5. Logik: Ändern bei >= 20W ODER wenn 1 Minute um ist #}
+          {% if (neu - aktuell) | abs >= 20 or zeit_seit_aenderung > 60 %}
+            {{ neu | round(0) }}
+          {% else %}
+            {{ aktuell | round(0) }}
+          {% endif %}
 
   - triggers:
       - trigger: state

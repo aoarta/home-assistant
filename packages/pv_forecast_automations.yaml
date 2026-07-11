@@ -1,0 +1,163 @@
+# packages/pv_forecast_automations.yaml
+automation:
+  - alias: "PV: API Daten gezielt holen"
+    id: pv_fetch_api_data_updates
+    trigger:
+      - platform: time
+        at: ["06:00:00", "11:30:00", "17:30:00"]
+    action:
+      - action: homeassistant.update_entity
+        target:
+          entity_id:
+            - sensor.solarprognose_api_source_dach
+            - sensor.solarprognose_api_source_fassade
+            - sensor.forecastsolar_api_source_dach
+            - sensor.forecastsolar_api_source_fassade
+
+  - alias: "PV: Fix Daily Forecast Morning"
+    id: pv_fix_daily_forecast_morning
+    trigger:
+      - platform: time
+        at: "06:30:00"
+    action:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.pv_prognose_this_morning
+        data:
+          value: "{{ states('sensor.pv_forecast_weighted') | float(0) | round(2) }}"
+      - repeat:
+          for_each:
+            ["solcast", "solarprognose", "forecastsolar", "openmeteo", "dwd"]
+          sequence:
+            - action: input_number.set_value
+              target:
+                entity_id: "input_number.pv_save_{{ repeat.item }}_morgens"
+              data:
+                value: "{{ states('sensor.pv_forecast_' ~ repeat.item ~ '_all') | float(0) }}"
+
+  - alias: "PV: Kalman-Update am Ende des Tages"
+    id: pv_daily_kalman_update
+    mode: single
+    trigger:
+      - platform: time
+        at: "23:55:00"
+    variables:
+      real: "{{ states('sensor.pv_energy_yield_today_um') | float(0) }}"
+      forecast_heute: "{{ states('input_number.pv_prognose_this_morning') | float(0) }}"
+      Q_bias: 0.001
+      R_bias: 0.04
+      Q_w: 0.005
+      beta_r: 0.9
+      R_floor: 0.05
+    action:
+      - if:
+          - condition: template
+            value_template: "{{ forecast_heute > 2 and real > 0 }}"
+        then:
+          - variables:
+              bias_alt: "{{ states('input_number.pv_forecast_bias_korrekturfaktor') | float(1.0) }}"
+              P_bias_alt: "{{ states('input_number.pv_kalman_p_bias') | float(0.02) }}"
+              messung_bias: "{{ real * bias_alt / forecast_heute }}"
+          - variables:
+              P_bias_pred: "{{ P_bias_alt + Q_bias }}"
+          - variables:
+              K_bias: "{{ P_bias_pred / (P_bias_pred + R_bias) }}"
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.pv_forecast_bias_korrekturfaktor
+            data:
+              value: "{{ (bias_alt + K_bias * (messung_bias - bias_alt)) | clamp(0.9, 1.1) | round(4) }}"
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.pv_kalman_p_bias
+            data:
+              value: "{{ ((1 - K_bias) * P_bias_pred) | clamp(0.0001, 1.0) | round(5) }}"
+
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.pv_prognose_von_gestern
+        data:
+          value: "{{ forecast_heute }}"
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.pv_reale_ernte_von_gestern
+        data:
+          value: "{{ real | round(1) }}"
+
+      - if:
+          - condition: template
+            value_template: "{{ real > 1.0 }}"
+        then:
+          - repeat:
+              for_each:
+                - id: "solcast"
+                - id: "solarprognose"
+                - id: "forecastsolar"
+                - id: "openmeteo"
+                - id: "dwd"
+              sequence:
+                - variables:
+                    saved_forecast: "{{ states('input_number.pv_save_' ~ repeat.item.id ~ '_morgens') | float(0) }}"
+                    score_alt: "{{ states('input_number.pv_kalman_score_' ~ repeat.item.id) | float(1.0) }}"
+                    P_alt: "{{ states('input_number.pv_kalman_p_' ~ repeat.item.id) | float(0.1) }}"
+                    R_alt: "{{ states('input_number.pv_kalman_r_' ~ repeat.item.id) | float(0.1) }}"
+                - variables:
+                    obs_val: >-
+                      {% set rel_err = ((saved_forecast - real) | abs) / (real | float(1)) %}
+                      {{ 1.0 / (rel_err * 10 + 0.1) if saved_forecast > 0 else -1 }}
+                - if:
+                    - condition: template
+                      value_template: "{{ obs_val >= 0 }}"
+                  then:
+                    - variables:
+                        kalman_calc: >-
+                          {% set innovation = obs_val - score_alt %}
+                          {% set inno_var_new = R_alt * beta_r + (innovation ** 2) * (1 - beta_r) %}
+                          {% set p_pred = P_alt + Q_w %}
+                          {% set r_eff = [inno_var_new - p_pred, R_floor] | max %}
+                          {% set k = p_pred / (p_pred + r_eff) %}
+                          {% set s_neu = score_alt + k * innovation %}
+                          {% set p_neu = (1 - k) * p_pred %}
+                          {{ {'s': s_neu | round(5), 'p': p_neu | round(5), 'r': inno_var_new | round(5)} }}
+                    - action: input_number.set_value
+                      target:
+                        entity_id: "input_number.pv_kalman_score_{{ repeat.item.id }}"
+                      data:
+                        value: "{{ kalman_calc.s | clamp(0.0001, 15) }}"
+                    - action: input_number.set_value
+                      target:
+                        entity_id: "input_number.pv_kalman_p_{{ repeat.item.id }}"
+                      data:
+                        value: "{{ kalman_calc.p | clamp(0.0001, 1.0) }}"
+                    - action: input_number.set_value
+                      target:
+                        entity_id: "input_number.pv_kalman_r_{{ repeat.item.id }}"
+                      data:
+                        value: "{{ kalman_calc.r | clamp(0.0001, 50) }}"
+
+          - variables:
+              total_score: >-
+                {{ (states('input_number.pv_kalman_score_solcast') | float(0) +
+                    states('input_number.pv_kalman_score_solarprognose') | float(0) +
+                    states('input_number.pv_kalman_score_forecastsolar') | float(0) +
+                    states('input_number.pv_kalman_score_openmeteo') | float(0) +
+                    states('input_number.pv_kalman_score_dwd') | float(0)) }}
+          - if:
+              - condition: template
+                value_template: "{{ total_score > 0 }}"
+            then:
+              - repeat:
+                  for_each:
+                    [
+                      "solcast",
+                      "solarprognose",
+                      "forecastsolar",
+                      "openmeteo",
+                      "dwd",
+                    ]
+                  sequence:
+                    - action: input_number.set_value
+                      target:
+                        entity_id: "input_number.weight_{{ repeat.item }}"
+                      data:
+                        value: "{{ (states('input_number.pv_kalman_score_' ~ repeat.item) | float(0) / total_score) | round(3) }}"

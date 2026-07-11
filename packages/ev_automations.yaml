@@ -361,8 +361,8 @@ automation:
   # ============================================================
   # STOP (vehicle=off): when unplugged
   # ============================================================
-  - alias: "Wallbox: Stop charging at limit or when mode is off"
-    id: wallbox_stop_on_limit_or_off
+  - alias: "Wallbox: Stop charging when cable gets unplugged"
+    id: wallbox_stop_when_unplug
     mode: single
     triggers:
       - trigger: state

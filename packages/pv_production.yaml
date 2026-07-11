@@ -134,7 +134,7 @@ template:
         device_class: power
         state_class: measurement
         availability: >-
-          {{ is_number(states('sensor.zwicknagl_martin_leistung_ac')) and
+          {{ is_number(states('sensor.zwicknagl_martin_leistung_ac')) or
              is_number(states('sensor.pv_production_balcony_power')) }}
         state: >-
           {% set s1 = states('sensor.zwicknagl_martin_leistung_ac') | float(0) %}
