@@ -16,11 +16,6 @@ input_number:
     min: 0.0001
     max: 15
     step: 0.001
-  pv_kalman_score_solarprognose:
-    name: "Kalman Score Solarprognose"
-    min: 0.0001
-    max: 15
-    step: 0.001
   pv_kalman_score_forecastsolar:
     name: "Kalman Score ForecastSolar"
     min: 0.0001
@@ -39,11 +34,6 @@ input_number:
 
   pv_kalman_p_solcast:
     name: "Kalman P Solcast"
-    min: 0.0001
-    max: 1
-    step: 0.0001
-  pv_kalman_p_solarprognose:
-    name: "Kalman P Solarprognose"
     min: 0.0001
     max: 1
     step: 0.0001
@@ -68,11 +58,6 @@ input_number:
     min: 0.0001
     max: 50
     step: 0.001
-  pv_kalman_r_solarprognose:
-    name: "Kalman R Solarprognose"
-    min: 0.0001
-    max: 50
-    step: 0.001
   pv_kalman_r_forecastsolar:
     name: "Kalman R ForecastSolar"
     min: 0.0001
@@ -94,11 +79,6 @@ input_number:
     min: 0
     max: 1
     step: 0.001
-  weight_solarprognose:
-    name: "Gewicht Solarprognose"
-    min: 0
-    max: 1
-    step: 0.001
   weight_forecastsolar:
     name: "Gewicht ForecastSolar"
     min: 0
@@ -117,11 +97,6 @@ input_number:
 
   pv_save_solcast_morgens:
     name: "Solcast Ref"
-    min: 0
-    max: 150
-    unit_of_measurement: "kWh"
-  pv_save_solarprognose_morgens:
-    name: "Solarprognose Ref"
     min: 0
     max: 150
     unit_of_measurement: "kWh"

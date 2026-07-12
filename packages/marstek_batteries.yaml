@@ -224,9 +224,7 @@ template:
           - input_number.manual_charge_power
           - input_boolean.override_soc
         for:
-          milliseconds: 1000
-      - trigger: state
-        entity_id: sensor.target_soc
+          milliseconds: 2000
       - trigger: state
         entity_id: sensor.charge_power
 
@@ -241,12 +239,12 @@ template:
         {% if ts >= t1130 and ts < sun_set_minus_3h and ziel_soc < 100 %}
           {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
           {% set dauer = [(sun_set_minus_3h - ts) / 3600, 0.01] | max %}
-          {% set fak = capacity / 100 / dauer * 1.25 %}
+          {% set fak = capacity / 100 / dauer * 2.5 %}
           {% set soc1 = states('sensor.venus_1_custom_soc') | float(20) %}
           {% set soc2 = states('sensor.venus_2_custom_soc') | float(20) %}
           {% set raw1 = [((ziel_soc - soc1) | clamp(0,100) * fak) | round(0) | int(0), 2500] | min %}
           {% set raw2 = [((ziel_soc - soc2) | clamp(0,100) * fak) | round(0) | int(0), 2500] | min %}
-          {{ { 'v1': [raw1, 200] | max if raw1 > 0 else 0, 'v2': [raw2, 200] | max if raw2 > 0 else 0 } }}
+          {{ { 'v1': [raw1, 500] | max if raw1 > 0 else 0, 'v2': [raw2, 500] | max if raw2 > 0 else 0 } }}
         {% else %}
           {{ default }}
         {% endif %}
@@ -275,14 +273,25 @@ template:
             {% set t1 = (w1 / sum_w * total) | round(0) | int(0) %}
             {% set t2 = (total - t1) | int(0) %}
 
-            {% if t1 < 200 and t2 < 200 %}
-              {% if (w1 - w2) | abs > 10 %}
-                {% set t1 = total if w1 > w2 else 0 %}
-                {% set t2 = total if w2 > w1 else 0 %}
-              {% else %}
-                {% set odd = (now().weekday() + now().hour) % 2 %}
-                {% set t1 = total if odd == 1 else 0 %}
-                {% set t2 = total if odd == 0 else 0 %}
+            {% if total > 1000 and (t1 < 500 or t2 < 500) %}
+              {# Fall: Charge > 1000, mindestens ein Wert muss 500 erreichen #}
+              {% set t1 = 500 if t1 < 500 else t1 %}
+              {% set t2 = 500 if t2 < 500 else t2 %}
+            {% elif total > 400 and (t1 < 200 or t2 < 200) %}
+              {# Fall: Charge > 400, mindestens ein Wert muss 200 erreichen #}
+              {% set t1 = 200 if t1 < 200 else t1 %}
+              {% set t2 = 200 if t2 < 200 else t2 %}
+            {% else %}
+              {# Fall: Abwechselnd laden, falls die Werte zu klein sind #}
+              {% if t1 < 200 and t2 < 200 %}
+                {% if (w1 - w2) | abs > 10 %}
+                  {% set t1 = total if w1 > w2 else 0 %}
+                  {% set t2 = total if w2 > w1 else 0 %}
+                {% else %}
+                  {% set odd = (now().weekday() + now().hour) % 2 %}
+                  {% set t1 = total if odd == 1 else 0 %}
+                  {% set t2 = total if odd == 0 else 0 %}
+                {% endif %}
               {% endif %}
             {% endif %}
 
@@ -588,8 +597,7 @@ automation:
     id: "sende_batterie_targets_v3"
     # Geändert von restart auf queued (max: 2), damit laufende Modbus-Sequenzen
     # nicht abgebrochen werden, falls sofort der nächste Trigger kommt.
-    mode: queued
-    max: 2
+    mode: restart
     triggers:
       - trigger: state
         entity_id: sensor.target_power_distribution_fast
@@ -599,9 +607,6 @@ automation:
           - input_number.manual_charge_power
 
     actions:
-      - delay:
-          milliseconds: 50
-
       - variables:
           c: >-
             {% set raw = state_attr('sensor.target_power_distribution_fast', 'charge') %}
