@@ -334,7 +334,20 @@ template:
             {% set t1 = (w1 / sum_w * total) | round(0) | int(0) %}
             {% set t2 = (total - t1) | int(0) %}
 
-            {% if t1 < 200 and t2 < 200 %}
+
+            {# NEU: Sanfter Ausgleich (Weiche Mindestlast von 200W) #}
+            {# Greift nur, wenn genug Gesamtleistung da ist, um BEIDE mit mind. 200W zu bedienen #}
+            {% if total > 500 %}
+              {% if t1 < 250 %}
+                {% set t1 = 250 %}
+                {% set t2 = total - 250 %}
+              {% elif t2 < 250 %}
+                {% set t2 = 250 %}
+                {% set t1 = total - 250 %}
+              {% endif %}
+            {% endif %}
+
+            {% if t1 < 250 and t2 < 250 %}
               {% if (w1 - w2) | abs > 10 %}
                 {% set t1 = total if w1 > w2 else 0 %}
                 {% set t2 = total if w2 > w1 else 0 %}
