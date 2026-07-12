@@ -41,39 +41,11 @@ template:
       total_correction: "{{ states('sensor.pv_total_correction_factor') | float(1) }}"
 
       bw_sc: "{{ (states('input_number.pv_kalman_score_solcast') | float(0)) / (states('input_number.pv_kalman_r_solcast') | float(0.1) + r_reg) }}"
-      bw_sp: "{{ (states('input_number.pv_kalman_score_solarprognose') | float(0)) / (states('input_number.pv_kalman_r_solarprognose') | float(0.1) + r_reg) }}"
       bw_fs: "{{ (states('input_number.pv_kalman_score_forecastsolar') | float(0)) / (states('input_number.pv_kalman_r_forecastsolar') | float(0.1) + r_reg) }}"
       bw_om: "{{ (states('input_number.pv_kalman_score_openmeteo') | float(0)) / (states('input_number.pv_kalman_r_openmeteo') | float(0.1) + r_reg) }}"
       bw_dw: "{{ (states('input_number.pv_kalman_score_dwd') | float(0)) / (states('input_number.pv_kalman_r_dwd') | float(0.1) + r_reg) }}"
 
       sc_today: "{{ states('sensor.pv_forecast_solcast_all') | float(0) }}"
-
-      sp_today: >-
-        {% from 'horizon_dach.jinja' import horizon_factor as hf_dach %}
-        {% from 'horizon_fassade.jinja' import horizon_factor as hf_fassade %}
-        {% set dach = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
-        {% set fassade = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
-        {% if dach is mapping %}
-          {% set ns = namespace(total=0) %}
-          {% set now_dt = now() %}
-          {% set md = '%02d-%02d' % (now_dt.month, now_dt.day) %}
-          {% set start_ts = now_dt.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() | int %}
-          {% set current_hour = now_dt.hour %}
-          {% set ts_now = (start_ts + current_hour * 3600) | string %}
-          {% set fraction_left = (3600 - (now_dt.minute * 60 + now_dt.second)) / 3600 %}
-          {% set d_now = dach[ts_now][1] | float(0) if ts_now in dach else 0 %}
-          {% set f_now = fassade[ts_now][1] | float(0) if (fassade is mapping and ts_now in fassade) else 0 %}
-          {% set ns.total = (d_now * (hf_dach(md, current_hour) | float(1)) + f_now * (hf_fassade(md, current_hour) | float(1))) * fraction_left %}
-          {% for i in range(current_hour + 1, 24) %}
-            {% set ts = (start_ts + i * 3600) | string %}
-            {% set d = dach[ts][1] | float(0) if ts in dach else 0 %}
-            {% set f = fassade[ts][1] | float(0) if (fassade is mapping and ts in fassade) else 0 %}
-            {% set ns.total = ns.total + (d * (hf_dach(md, i) | float(1)) + f * (hf_fassade(md, i) | float(1))) %}
-          {% endfor %}
-          {{ ns.total | round(1) }}
-        {% else %}
-          {{ states('sensor.pv_forecast_solarprognose_all') | float(0) }}
-        {% endif %}
 
       fs_today: >-
         {% from 'horizon_dach.jinja' import horizon_factor as hf_dach %}
@@ -172,26 +144,6 @@ template:
         {% set val = states('sensor.solcast_pv_forecast_prognose_morgen') %}
         {{ val | float if is_number(val) else states('sensor.pv_forecast_solcast_tomorrow') | float(0) }}
 
-      sp_tomorrow: >-
-        {% from 'horizon_dach.jinja' import horizon_factor as hf_dach %}
-        {% from 'horizon_fassade.jinja' import horizon_factor as hf_fassade %}
-        {% set dach_data = state_attr('sensor.solarprognose_api_raw_dach_stable', 'data') %}
-        {% set fassade_data = state_attr('sensor.solarprognose_api_raw_fassade_stable', 'data') %}
-        {% if dach_data is mapping %}
-          {% set ns = namespace(total=0) %}
-          {% set md = (now() + timedelta(days=1)).strftime('%m-%d') %}
-          {% set start_ts = (now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp() + 86400) | int %}
-          {% for i in range(24) %}
-            {% set ts = (start_ts + i * 3600) | string %}
-            {% set d = dach_data[ts][1] | float(0) if ts in dach_data else 0 %}
-            {% set f = fassade_data[ts][1] | float(0) if fassade_data is mapping and ts in fassade_data else 0 %}
-            {% set ns.total = ns.total + (d * (hf_dach(md, i) | float(1)) + f * (hf_fassade(md, i) | float(1))) %}
-          {% endfor %}
-          {{ ns.total | round(2) }}
-        {% else %}
-          0.0
-        {% endif %}
-
       fs_tomorrow: >-
         {% from 'horizon_dach.jinja' import horizon_factor as hf_dach %}
         {% from 'horizon_fassade.jinja' import horizon_factor as hf_fassade %}
@@ -248,11 +200,6 @@ template:
         {{ (dach + fassade) | round(2) }}
 
     sensor:
-      - name: "PV Forecast Solarprognose all"
-        unique_id: pv_forecast_solarprognose_all
-        unit_of_measurement: "kWh"
-        state: "{{ sp_today }}"
-
       - name: "PV Forecast Forecastsolar all"
         unique_id: pv_forecast_forecastsolar_all
         unit_of_measurement: "kWh"
@@ -272,11 +219,6 @@ template:
         unique_id: pv_forecast_solcast_tomorrow
         unit_of_measurement: "kWh"
         state: "{{ sc_tomorrow }}"
-
-      - name: "PV Forecast Solarprognose Tomorrow"
-        unique_id: pv_forecast_solarprognose_tomorrow
-        unit_of_measurement: "kWh"
-        state: "{{ sp_tomorrow }}"
 
       - name: "PV Forecast ForecastSolar Tomorrow"
         unique_id: pv_forecast_forecastsolar_tomorrow
@@ -308,18 +250,16 @@ template:
         unit_of_measurement: "kWh"
         state: >-
           {% set sc = sc_today | float(0) %}
-          {% set sp = sp_today | float(0) %}
           {% set fs = fs_today | float(0) %}
           {% set om = om_today | float(0) %}
           {% set dw = dw_today | float(0) %}
           {% set sc_w = bw_sc if sc > 0 else 0 %}
-          {% set sp_w = bw_sp if sp > 0 else 0 %}
           {% set fs_w = bw_fs if fs > 0 else 0 %}
           {% set om_w = bw_om if om > 0 else 0 %}
           {% set dw_w = bw_dw if dw > 0 else 0 %}
-          {% set total_weight = sc_w + sp_w + fs_w + om_w + dw_w %}
+          {% set total_weight = sc_w + fs_w + om_w + dw_w %}
           {% if total_weight > 0 %}
-            {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias * total_correction) | round(1) }}
+            {{ ((sc_w * sc + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias * total_correction) | round(1) }}
           {% elif is_state('sun.sun', 'below_horizon') and not state_attr('sun.sun', 'rising') %}
             0.0
           {% else %}
@@ -331,18 +271,16 @@ template:
         unit_of_measurement: "kWh"
         state: >-
           {% set sc = sc_tomorrow | float(0) %}
-          {% set sp = sp_tomorrow | float(0) %}
           {% set fs = fs_tomorrow | float(0) %}
           {% set om = om_tomorrow | float(0) %}
           {% set dw = dw_tomorrow | float(0) %}
           {% set sc_w = bw_sc if sc > 0 else 0 %}
-          {% set sp_w = bw_sp if sp > 0 else 0 %}
           {% set fs_w = bw_fs if fs > 0 else 0 %}
           {% set om_w = bw_om if om > 0 else 0 %}
           {% set dw_w = bw_dw if dw > 0 else 0 %}
-          {% set total_weight = sc_w + sp_w + fs_w + om_w + dw_w %}
+          {% set total_weight = sc_w + fs_w + om_w + dw_w %}
           {% if total_weight > 0 %}
-            {{ ((sc_w * sc + sp_w * sp + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias * total_correction) | round(2) }}
+            {{ ((sc_w * sc + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias * total_correction) | round(2) }}
           {% else %}
             0.0
           {% endif %}
