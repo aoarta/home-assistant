@@ -56,11 +56,7 @@ template:
         state: >-
           {% set val = states('sensor.balkon_inverter_energy_total') | float(none) %}
           {% set last = this.state | float(none) %}
-          {% if last is not none %}
-            {{ [val, last] | max }}
-          {% else %}
-            {{ val }}
-          {% endif %}
+          {{ [val, last] | max if last is not none else val }}
 
       - name: "Balcony Inverter 2 Energy"
         unique_id: balcony_inverter_2_energy
@@ -71,11 +67,7 @@ template:
         state: >-
           {% set val = states('sensor.balkon_inverter2_energy_total') | float(none) %}
           {% set last = this.state | float(none) %}
-          {% if last is not none %}
-            {{ [val, last] | max }}
-          {% else %}
-            {{ val }}
-          {% endif %}
+          {{ [val, last] | max if last is not none else val }}
 
       - name: "Garage Inverter Energy"
         unique_id: garage_inverter_energy
@@ -86,11 +78,7 @@ template:
         state: >-
           {% set val = states('sensor.garage_inverter_energy_total') | float(none) %}
           {% set last = this.state | float(none) %}
-          {% if last is not none %}
-            {{ [val, last] | max }}
-          {% else %}
-            {{ val }}
-          {% endif %}
+          {{ [val, last] | max if last is not none else val }}
 
       - name: "PV Production Balcony power"
         unique_id: pv_production_balcony_power

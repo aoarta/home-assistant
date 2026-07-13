@@ -22,12 +22,6 @@ input_datetime:
 
 template:
   - sensor:
-      - name: "Tick"
-        unique_id: takt
-        device_class: timestamp
-        state: >
-          {{ as_timestamp(states('input_datetime.takt_base'), 0) | timestamp_utc }}
-
       - name: "Solar Time Logic"
         unique_id: solar_zeit_logik
         availability: "{{ state_attr('sun.sun', 'next_setting') is not none }}"
@@ -69,25 +63,6 @@ template:
           {% set ups = states('sensor.ups_ac_power') | float(0) %}
           {{ (venus1 + venus2 + ups) | round(0) }}
 
-  # 2. Trigger-based sensors
-  - trigger:
-      - trigger: time_pattern
-        minutes: "/2"
-      - trigger: state
-        entity_id:
-          - input_number.manual_charge_power
-          - input_boolean.override_soc
-          - binary_sensor.battery_maintenance_required
-          - sensor.pv_forecast_weighted
-          - sensor.pv_forecast_weighted_tomorrow
-          - sensor.pv_forecast_weighted_day_after
-          - sensor.pv_energy_yield_today_um
-          - sensor.expected_daily_consumption
-          - sensor.expected_daily_consumption_tomorrow
-          - sensor.expected_daily_consumption_day_after
-          - sensor.house_consumption_energy_today
-          - sensor.dynamic_soc
-    sensor:
       - name: "Remaining PV Today"
         unique_id: remaining_pv_today
         unit_of_measurement: "kWh"
@@ -95,19 +70,33 @@ template:
           {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}
           {{ ([0, pv_forecast_today] | max) | round(2) }}
 
-      - name: "Remaining Consumption Today"
-        unique_id: remaining_consumption_today
-        unit_of_measurement: "kWh"
+      - name: "Dynamic SOC"
+        unique_id: dynamic_soc
+        unit_of_measurement: "%"
         state: >-
-          {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
-          {% set hausverbrauch_heute = states('sensor.house_consumption_energy_today') | float(0) %}
-          {{ ([0, expected_daily_consumption - hausverbrauch_heute] | max) | round(2) }}
+          {% set ts = as_timestamp(now()) %}
+          {% set s_rise = state_attr('sensor.solar_zeit_logik', 'sun_rise') | float(0) %}
+          {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
+          {% set sun_set_minus_3h = state_attr('sensor.solar_zeit_logik', 'sun_set_minus_3h') | float(0) %}
+          {% set s_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
+
+          {% if ts < s_rise %}
+            {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
+          {% elif ts < t1130 %}
+            {{ state_attr('sensor.dynamic_soc_grenzen', 'low') | float(60) }}
+          {% elif ts < sun_set_minus_3h %}
+            {{ state_attr('sensor.dynamic_soc_grenzen', 'mid') | float(90) }}
+          {% elif ts < s_set %}
+            {{ state_attr('sensor.dynamic_soc_grenzen', 'high') | float(100) }}
+          {% else %}
+            {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
+          {% endif %}
 
       - name: "Target SOC Status"
         unique_id: target_soc_status
         icon: mdi:battery-clock
         state: >-
-          {% set t = states('sensor.target_soc') | int(-1) %}
+          {% set t = states('sensor.target_soc') | float(-1) %}
           {% if t == 101 %}
             Manual override active — charging to 100%
           {% elif t == 110 %}
@@ -125,17 +114,35 @@ template:
             {% set grenzen_max = state_attr('sensor.dynamic_soc_grenzen', 'max') | float(100.5) %}
             {% if t | float(-1) == grenzen_max %}
               PV surplus insufficient for dynamic target — cap opened to max
-            {% elif t == dynamic | int %}
+            {% elif t == dynamic | float %}
               Following dynamic schedule — target {{ t }}%
             {% else %}
               Unknown state ({{ t }})
             {% endif %}
           {% endif %}
         attributes:
-          target_soc_raw: "{{ states('sensor.target_soc') | int(-1) }}"
+          target_soc_raw: "{{ states('sensor.target_soc') | float(-1) }}"
           dynamic_soc: "{{ states('sensor.dynamic_soc') | float(0) }}"
           override_active: "{{ is_state('input_boolean.override_soc', 'on') }}"
           maintenance_active: "{{ is_state('binary_sensor.battery_maintenance_required', 'on') }}"
+
+  # 2. Trigger-based sensors
+  - trigger:
+      - trigger: time_pattern
+        minutes: "/5"
+      - trigger: state
+        entity_id:
+          - input_number.manual_charge_power
+          - input_boolean.override_soc
+          - binary_sensor.battery_maintenance_required
+    sensor:
+      - name: "Remaining Consumption Today"
+        unique_id: remaining_consumption_today
+        unit_of_measurement: "kWh"
+        state: >-
+          {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
+          {% set hausverbrauch_heute = states('sensor.house_consumption_energy_today') | float(0) %}
+          {{ ([0, expected_daily_consumption - hausverbrauch_heute] | max) | round(2) }}
 
       - name: "Target SOC"
         unique_id: target_soc
@@ -210,39 +217,11 @@ template:
               {% set target_energy = (target / 100) * max_storage %}
 
               {% if projected_energy < target_energy %}
-                {#{{ state_attr('sensor.dynamic_soc_grenzen', 'max') }}#}
-                {{ target }}
+                {{ state_attr('sensor.dynamic_soc_grenzen', 'max') }}
               {% else %}
                 {{ target }}
               {% endif %}
             {% endif %}
-
-          {% endif %}
-
-  - trigger:
-      - trigger: time_pattern
-        minutes: "/2"
-    sensor:
-      - name: "Dynamic SOC"
-        unique_id: dynamic_soc
-        unit_of_measurement: "%"
-        state: >-
-          {% set ts = as_timestamp(now()) %}
-          {% set s_rise = state_attr('sensor.solar_zeit_logik', 'sun_rise') | float(0) %}
-          {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
-          {% set sun_set_minus_3h = state_attr('sensor.solar_zeit_logik', 'sun_set_minus_3h') | float(0) %}
-          {% set s_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
-
-          {% if ts < s_rise %}
-            {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
-          {% elif ts < t1130 %}
-            {{ state_attr('sensor.dynamic_soc_grenzen', 'low') | float(60) }}
-          {% elif ts < sun_set_minus_3h %}
-            {{ state_attr('sensor.dynamic_soc_grenzen', 'mid') | float(90) }}
-          {% elif ts < s_set %}
-            {{ state_attr('sensor.dynamic_soc_grenzen', 'high') | float(100) }}
-          {% else %}
-            {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
           {% endif %}
 
   - binary_sensor:
@@ -269,25 +248,3 @@ template:
           v1_days: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.venus_1_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.venus_1_last_full') else '?' }}"
           v2_days: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.venus_2_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.venus_2_last_full') else '?' }}"
           ups_days: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.ups_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.ups_last_full') else '?' }}"
-
-automation:
-  - alias: "Tick Engine"
-    mode: single
-
-    triggers:
-      - trigger: time_pattern
-        seconds: "/1"
-
-    conditions:
-      - condition: template
-        value_template: >
-          {% set interval = states('input_number.takt_interval_sekunden') | int(10) %}
-          {% set last = as_timestamp(states('input_datetime.takt_base')) %}
-          {{ as_timestamp(now()) - last >= interval }}
-
-    actions:
-      - action: input_datetime.set_datetime
-        target:
-          entity_id: input_datetime.takt_base
-        data:
-          datetime: "{{ now().isoformat() }}"

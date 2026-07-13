@@ -105,4 +105,3 @@ command_line:
       unit_of_measurement: "MHz"
       value_template: "{{ (value | float / 1000) | round(0) }}"
       scan_interval: 86400 # Once per day is sufficient
-

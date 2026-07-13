@@ -13,12 +13,14 @@
 #      scan_interval: 30
 #      value_template: "{{ value }}"
 
-input_number:
-  ups_energyflow_wh_counter:
-    name: UPS Energiefluss Counter
-    min: -50000
-    max: 50000
-    step: 0.01
+sensor:
+  - platform: integration
+    # Achtung ups_dc_power ist bei Entladung positiv, anders als die AC-Power
+    source: sensor.ups_dc_power
+    name: "UPS Riemann Energy"
+    unit_prefix: k # Riemann liefert kWh
+    round: 3
+    method: left
 
 ################################################################################
 # TEMPLATE SENSOREN
@@ -31,7 +33,9 @@ template:
         device_class: energy
         state_class: total
         state: >
-          {{ states('input_number.ups_energyflow_wh_counter') }}
+          {# Vorzeichenkorrektur: BMS entlädt positiv, also 1000 statt (-1000) #}
+          {% set val = states('sensor.ups_riemann_energy') | float(0) * 1000 %}          
+          {{ [[val, -50000] | max, 50000] | min }}
 
       - name: "Battery total charge power"
         unique_id: battery_total_charge_power
@@ -145,7 +149,10 @@ template:
             {% set capacity = state_attr('sensor.global_parameter', 'ups_capacity_wh') | float(2200) %}
             {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
             {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
-            {% if hw_soc <= stop_soc or drift_too_high %}
+
+            {% if custom_soc == 0 and hw_soc is not none and current_energy is not none %}
+              {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
+            {% elif hw_soc <= stop_soc or drift_too_high %}
               {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
             {% elif hw_soc >= 100 or high_cell > lfp_max_voltage %}
               {{ current_energy }}
@@ -207,32 +214,6 @@ template:
 # 4. AUTOMATIONEN
 ################################################################################
 automation:
-  - alias: "UPS Energieintegration"
-    id: ups_energieintegration
-    mode: queued
-    trigger:
-      - platform: state
-        entity_id: sensor.takt
-    variables:
-      power: "{{ states('sensor.ups_dc_power') | float(0) }}"
-      own_consumption_w: "{{ state_attr('sensor.global_parameter', 'ups_own_consumption_w') | float(10) }}"
-      delta_t: "{{ states('input_number.takt_interval_sekunden') | float(1)  }}"
-      delta_wh: >-
-        {% set delta_t_h = delta_t / 3600 %}
-        {% set standby_loss = own_consumption_w * delta_t_h %}
-        {% set delta_p = power * delta_t_h %}
-        {% set max_delta_p = 2500 * delta_t_h  %}
-        {# wenn delta > max_delta, dann ist etwas faul.#}
-        {{ (delta_p + standby_loss) if (delta_p | abs) < max_delta_p else standby_loss }}
-    action:
-      - service: input_number.set_value
-        target:
-          entity_id: input_number.ups_energyflow_wh_counter
-        data:
-          value: >
-            {% set new = states('input_number.ups_energyflow_wh_counter') | float(0) + delta_wh %}
-            {{ [[new, -50000] | max, 50000] | min }}
-
   - alias: "UPS coarse_control"
     id: ups_coarse_control
     mode: queued
@@ -483,27 +464,23 @@ automation:
 
   - alias: "UPS SOC Counter Reset"
     id: ups_soc_counter_reset
-    description: "Setzt den UPS Wh-Counter auf Max-Kapazität bei Vollladung"
     trigger:
-      # Trigger 1: Hardware SOC meldet voll
       - platform: numeric_state
         entity_id: sensor.ups_soc
         above: 99.8
-      # Trigger 2: Höchste Zelle erreicht Ladeschlussspannung (Sicherheits-Sync)
       - platform: numeric_state
         entity_id: sensor.ups_highest_cell
         above: 3.58
-    action:
-      - service: input_number.set_value
-        target:
-          entity_id: input_number.ups_energyflow_wh_counter
-        data:
-          value: >
-            {# Kapazität aus deinen zentralen Parametern auslesen #}
-            {{ state_attr('sensor.global_parameter', 'ups_capacity_wh') | float(2200) }}
 
-      # Optional: Benachrichtigung im Logbuch
-      - service: logbook.log
+    action:
+      - action: homeassistant.turn_off
+        target:
+          entity_id: sensor.ups_riemann_energy
+      - delay: "00:00:01"
+      - action: homeassistant.turn_on
+        target:
+          entity_id: sensor.ups_riemann_energy
+      - action: logbook.log
         data:
           name: "UPS Reset"
-          message: "Wh-Counter wurde auf Max-Kapazität synchronisiert (Batterie voll)."
+          message: "Riemann-Sensor wurde durch Turn-Off/On zurückgesetzt."
