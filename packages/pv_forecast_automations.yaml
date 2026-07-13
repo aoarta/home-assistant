@@ -9,8 +9,6 @@ automation:
       - action: homeassistant.update_entity
         target:
           entity_id:
-            - sensor.solarprognose_api_source_dach
-            - sensor.solarprognose_api_source_fassade
             - sensor.forecastsolar_api_source_dach
             - sensor.forecastsolar_api_source_fassade
 
@@ -26,8 +24,7 @@ automation:
         data:
           value: "{{ states('sensor.pv_forecast_weighted') | float(0) | round(2) }}"
       - repeat:
-          for_each:
-            ["solcast", "solarprognose", "forecastsolar", "openmeteo", "dwd"]
+          for_each: ["solcast", "forecastsolar", "openmeteo", "dwd"]
           sequence:
             - action: input_number.set_value
               target:
@@ -91,7 +88,6 @@ automation:
           - repeat:
               for_each:
                 - id: "solcast"
-                - id: "solarprognose"
                 - id: "forecastsolar"
                 - id: "openmeteo"
                 - id: "dwd"
@@ -138,7 +134,6 @@ automation:
           - variables:
               total_score: >-
                 {{ (states('input_number.pv_kalman_score_solcast') | float(0) +
-                    states('input_number.pv_kalman_score_solarprognose') | float(0) +
                     states('input_number.pv_kalman_score_forecastsolar') | float(0) +
                     states('input_number.pv_kalman_score_openmeteo') | float(0) +
                     states('input_number.pv_kalman_score_dwd') | float(0)) }}
@@ -147,14 +142,7 @@ automation:
                 value_template: "{{ total_score > 0 }}"
             then:
               - repeat:
-                  for_each:
-                    [
-                      "solcast",
-                      "solarprognose",
-                      "forecastsolar",
-                      "openmeteo",
-                      "dwd",
-                    ]
+                  for_each: ["solcast", "forecastsolar", "openmeteo", "dwd"]
                   sequence:
                     - action: input_number.set_value
                       target:

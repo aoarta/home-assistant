@@ -1,5 +1,18 @@
 # packages/marstek_batteries.yaml
 
+input_number:
+  venus_1_energy_wh_counter:
+    name: Venus 1 Energiefluss Counter
+    min: -50000
+    max: 50000
+    step: 1
+
+  venus_2_energy_wh_counter:
+    name: Venus 2 Energiefluss Counter
+    min: -50000
+    max: 50000
+    step: 1
+
 sensor:
   - platform: filter
     name: "Marstek Venus 1 AC Leistung glatt"
@@ -17,20 +30,6 @@ sensor:
       - filter: lowpass
         time_constant: 5
         precision: 0
-
-  - platform: integration
-    source: sensor.marstek_venus_1_batterieleistung
-    name: "Venus 1 Riemann"
-    unit_prefix: k # Ergebnis ist in kWh
-    round: 3
-    method: left
-
-  - platform: integration
-    source: sensor.marstek_venus_2_batterieleistung
-    name: "Venus 2 Riemann"
-    unit_prefix: k
-    round: 3
-    method: left
 
 ################################################################################
 ################################################################################
@@ -62,11 +61,8 @@ template:
           {% set hw_soc = states('sensor.marstek_venus_1_soc') | float(none) %}
           {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
           {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
-          {% set custom_soc = states('sensor.venus_1_custom_soc') | float(none) %}
 
-          {% if custom_soc == 0 and hw_soc is not none and current_energy is not none %}
-            {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-          {% elif hw_soc is none or current_energy is none %}
+          {% if hw_soc is none or current_energy is none %}
             {{ last_reset if last_reset is not none else (this.state if is_number(this.state) else 0) }}
           {% else %}
             {% set last_reset = last_reset if last_reset is not none else current_energy %}
@@ -104,11 +100,8 @@ template:
           {% set hw_soc = states('sensor.marstek_venus_2_soc') | float(none) %}
           {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
           {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
-          {% set custom_soc = states('sensor.venus_2_custom_soc') | float(none) %}
 
-          {% if custom_soc == 0 and hw_soc is not none and current_energy is not none %}
-            {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-          {% elif hw_soc is none or current_energy is none %}
+          {% if hw_soc is none or current_energy is none %}
             {{ last_reset if last_reset is not none else (this.state if is_number(this.state) else 0) }}
           {% else %}
             {% set last_reset = last_reset if last_reset is not none else current_energy %}
@@ -122,6 +115,26 @@ template:
               {{ last_reset }}
             {% endif %}
           {% endif %}
+
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: homeassistant
+        event: start
+    sensor:
+      - name: "Venus 1 Energy Wh"
+        unique_id: venus_1_energy_wh
+        unit_of_measurement: "Wh"
+        device_class: energy
+        state_class: total
+        state: "{{ states('input_number.venus_1_energy_wh_counter') }}"
+
+      - name: "Venus 2 Energy Wh"
+        unique_id: venus_2_energy_wh
+        unit_of_measurement: "Wh"
+        device_class: energy
+        state_class: total
+        state: "{{ states('input_number.venus_2_energy_wh_counter') }}"
 
   - triggers:
       - trigger: homeassistant
@@ -146,7 +159,6 @@ template:
             {{ this.state if is_number(this.state) else hw_soc }}
           {% elif hw_soc >= 100 %}
             100
-
           {% else %}
             {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
             {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
@@ -557,26 +569,43 @@ template:
           {{ is_number(states('sensor.marstek_venus_1_batterieleistung')) and
              is_number(states('sensor.marstek_venus_2_batterieleistung')) }}
 
-      - name: "Venus 1 Energy Wh"
-        unique_id: venus_1_energy_wh
-        unit_of_measurement: "Wh"
-        device_class: energy
-        state_class: total
-        state: >
-          {# Riemann liefert kWh -> * 1000 = Wh. Offset von 50000 dazu #}
-          {% set val = (states('sensor.venus_1_riemann') | float(0) * (-1000)) + 50000 %}
-          {{ [[val, 0] | max, 100000] | min }}
-
-      - name: "Venus 2 Energy Wh"
-        unique_id: venus_2_energy_wh
-        unit_of_measurement: "Wh"
-        device_class: energy
-        state_class: total
-        state: >
-          {% set val = (states('sensor.venus_2_riemann') | float(0) * (-1000)) + 50000 %}
-          {{ [[val, 0] | max, 100000] | min }}
-
 automation:
+  - alias: "Venus Energieintegration"
+    mode: queued
+    triggers:
+      - trigger: state
+        entity_id: sensor.takt
+    actions:
+      - variables:
+          delta_t_h: "{{ (states('input_number.takt_interval_sekunden') | float(1)) / 3600 }}"
+
+      - parallel:
+          - sequence:
+              - variables:
+                  power: "{{ -(states('sensor.marstek_venus_1_batterieleistung') | float(0)) }}"
+                  delta_wh: >-
+                    {{ (power * delta_t_h) if (power | abs) < 3200 else 0 }}
+              - action: input_number.set_value
+                target:
+                  entity_id: input_number.venus_1_energy_wh_counter
+                data:
+                  value: >
+                    {% set new = states('input_number.venus_1_energy_wh_counter') | float(0) + delta_wh %}
+                    {{ [[new, -50000] | max, 50000] | min }}
+
+          - sequence:
+              - variables:
+                  power: "{{ -(states('sensor.marstek_venus_2_batterieleistung') | float(0)) }}"
+                  delta_wh: >-
+                    {{ (power * delta_t_h) if (power | abs) < 3200 else 0 }}
+              - action: input_number.set_value
+                target:
+                  entity_id: input_number.venus_2_energy_wh_counter
+                data:
+                  value: >
+                    {% set new = states('input_number.venus_2_energy_wh_counter') | float(0) + delta_wh %}
+                    {{ [[new, -50000] | max, 50000] | min }}
+
   - alias: "Sende Lade und Entladebefehle an Hardware"
     id: "sende_batterie_targets_v3"
     # Geändert von restart auf queued (max: 2), damit laufende Modbus-Sequenzen
@@ -589,6 +618,7 @@ automation:
         entity_id:
           - input_boolean.override_soc
           - input_number.manual_charge_power
+
     actions:
       - variables:
           c: >-
@@ -854,41 +884,3 @@ automation:
                     data:
                       value: 0
                     continue_on_error: true
-
-  - alias: "Energy Integration: Venus 1 Reset"
-    id: energy_reset_venus_1
-    trigger:
-      - platform: numeric_state
-        entity_id: sensor.venus_1_custom_soc
-        above: 99.9
-    action:
-      - action: homeassistant.turn_off
-        target:
-          entity_id: sensor.venus_1_riemann
-      - delay: "00:00:05"
-      - action: homeassistant.turn_on
-        target:
-          entity_id: sensor.venus_1_riemann
-      - action: logbook.log
-        data:
-          name: "Energy Reset"
-          message: "Venus 1 Riemann-Counter auf 0 zurückgesetzt (Batterie voll)."
-
-  - alias: "Energy Integration: Venus 2 Reset"
-    id: energy_reset_venus_2
-    trigger:
-      - platform: numeric_state
-        entity_id: sensor.venus_2_custom_soc
-        above: 99.9
-    action:
-      - action: homeassistant.turn_off
-        target:
-          entity_id: sensor.venus_2_riemann
-      - delay: "00:00:05"
-      - action: homeassistant.turn_on
-        target:
-          entity_id: sensor.venus_2_riemann
-      - action: logbook.log
-        data:
-          name: "Energy Reset"
-          message: "Venus 2 Riemann-Counter auf 0 zurückgesetzt (Batterie voll)."
