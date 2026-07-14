@@ -221,15 +221,13 @@ automation:
     trigger:
       - platform: state
         entity_id:
-          - sensor.solarnet_leistung_vom_netz
-          - sensor.marstek_ac_power_total
-          - sensor.ups_ac_power
+          - sensor.charge_power
           - sensor.ups_custom_soc
           - sensor.ups_lowest_cell
           - sensor.ups_highest_cell
           - input_number.manual_charge_power
       - platform: time_pattern
-        seconds: "/10" # Fallback: läuft alle 15 s vom Minutenstart aus
+        minutes: "/2" # Fallback
     condition:
       - condition: template
         value_template: >-
