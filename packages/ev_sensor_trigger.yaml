@@ -35,16 +35,9 @@ template:
             {% set floor = consumption_remaining / max_storage * 100 %}
             {{ [[floor, 10] | max, 100] | min | round(1) }}
           {% endif %}
-        attributes:
-          consumption_remaining_kwh: >-
-            {% set buffer = 1.10 %}
-            {% set static = [0, states('sensor.expected_daily_consumption') | float(0)
-                                - states('sensor.house_consumption_energy_today') | float(0)] | max %}
-            {% set live = states('sensor.estimated_remaining_consumption') | float(none) %}
-            {{ (((0.5 * static + 0.5 * live) if live is not none else static) * buffer) | round(2) }}
 
   # ----------------------------------------------------------
-  # TARGET CHARGING CURRENT -- single source of truth.
+  # TARGET CHARGING CURRENT -- die neue Logik-Zentrale
   # ----------------------------------------------------------
   - triggers:
       - trigger: time_pattern
@@ -52,6 +45,7 @@ template:
       - trigger: state
         entity_id:
           - sensor.pv_dynamic_charging_current
+          - sensor.pv_dynamic_charging_current_battery_first
           - sensor.marstek_total_soc
           - sensor.battery_floor_soc_for_ev
           - input_select.ev_charge_mode
@@ -74,19 +68,40 @@ template:
               {{ manual }}
             {% else %}
               {% set mode = states('input_select.ev_charge_mode') %}
-              {% set surplus = states('sensor.pv_dynamic_charging_current') | int(0) %}
-              {% if mode == 'pv_surplus' %}
-                {{ surplus }}
-              {% elif mode == 'pv_battery_floor' %}
-                {% if surplus >= 6 %}
-                  {{ surplus }}
+              {% set surplus_ev_first = states('sensor.pv_dynamic_charging_current') | int(0) %}
+              {% set surplus_bat_first = states('sensor.pv_dynamic_charging_current_battery_first') | int(0) %}
+              {% set max_amps = state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) %}
+              {% set soc = states('sensor.marstek_total_soc') | float(0) %}
+              {% set floor = states('sensor.battery_floor_soc_for_ev') | float(100) %}
+
+              {# --- MODUS 1: PV-Überschuss Fahrzeug priorisiert --- #}
+              {% if mode == 'pv_ev_first' %}
+                {{ surplus_ev_first }}
+
+              {# --- MODUS 2: PV-Überschuss Batterien priorisiert --- #}
+              {% elif mode == 'pv_battery_first' %}
+                {{ surplus_bat_first }}
+
+              {# --- MODUS 3: PV-Überschuss 50/50 geteilt --- #}
+              {% elif mode == 'pv_shared_50_50' %}
+                {# Wir ermitteln den Gesamtüberschuss (EV First) und nehmen davon die Hälfte #}
+                {% set half_amps = (surplus_ev_first / 2) | round(0, 'floor') | int %}
+                {{ half_amps if half_amps >= 6 else 0 }}
+
+              {# --- MODUS 4: Mind. 1.3kW (6A) / Max PV-Überschuss (Batterieschutz aktiv) --- #}
+              {% elif mode == 'min_6a_floor_battery' %}
+                {# Wenn genug Überschuss da ist, lade voll dynamisch mit Überschuss #}
+                {% if surplus_ev_first >= 6 %}
+                  {{ surplus_ev_first }}
                 {% else %}
-                  {% set soc   = states('sensor.marstek_total_soc') | float(0) %}
-                  {% set floor = states('sensor.battery_floor_soc_for_ev') | float(100) %}
+                  {# Ist zu wenig Sonne da, lade mit 6A (1.3kW) sofern SOC > Min-SOC #}
                   {{ 6 if soc > floor else 0 }}
                 {% endif %}
-              {% elif mode == 'pv_grid_floor' %}
-                {{ [surplus, 6] | max }}
+
+              {# --- MODUS 5: Mind. 1.3kW (6A) / Max PV-Überschuss (ohne Batterieschutz) --- #}
+              {% elif mode == 'min_6a_floor_grid' %}
+                {{ [surplus_ev_first, 6] | max }}
+
               {% else %}
                 0
               {% endif %}
