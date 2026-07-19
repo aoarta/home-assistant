@@ -26,10 +26,10 @@ template:
           # Wallbox
           wallbox_max_amps: 22
           # Zero
-          zero_capacity: 14.4
+          zero_capacity: 13.6 # 14.4 kWh brutto
           zero_charge_efficienty: 0.88 # AC-DC efficiency
           # Honda e
-          honda_e_capacity: 35.5 # NEU — Honda e: 35,5 kWh brutto
+          honda_e_capacity: 28.5 # NEU — Honda e: 35,5 kWh brutto
           honda_e_charge_efficiency: 0.88 # NEU — anpassen wenn gemessen
 
           # calculated Attribut (2* Venus * 0.8 + UPS * 0.6)

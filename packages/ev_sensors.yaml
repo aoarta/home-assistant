@@ -55,8 +55,8 @@ template:
         entity_id:
           - sensor.warp3_2ita_powernow
           - sensor.solarnet_leistung_vom_netz
-          - sensor.marstek_venus_1_ac_power_glatt
-          - sensor.marstek_venus_2_ac_power_glatt
+          - sensor.marstek_venus_1_ac_power
+          - sensor.marstek_venus_2_ac_power
     sensor:
       - name: "PV Dynamic Charging Current Battery First"
         unique_id: pv_dynamic_charging_current_battery_first
@@ -70,8 +70,8 @@ template:
           {% else %}
             {% set charger_power = states('sensor.warp3_2ita_powernow') | float(0) %}
             {% set power_from_net = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
-            {% set venus1 = states('sensor.marstek_venus_1_ac_power_glatt') | float(0) %}
-            {% set venus2 = states('sensor.marstek_venus_2_ac_power_glatt') | float(0) %}
+            {% set venus1 = states('sensor.marstek_venus_1_ac_power') | float(0) %}
+            {% set venus2 = states('sensor.marstek_venus_2_ac_power') | float(0) %}
 
             {# Falls Batterie lädt (Wert negativ), ignorieren wir diesen Anteil im Überschuss #}
             {% set v1_clean = [venus1, 0] | max %}
