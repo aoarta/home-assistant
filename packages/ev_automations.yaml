@@ -89,7 +89,7 @@ automation:
       - trigger: state
         entity_id: input_select.ev_vehicle_mode
       - trigger: state
-        entity_id: input_number.ev_charge_percent
+        entity_id: input_number.ev_charge_by_percent
     conditions:
       - condition: state
         entity_id: binary_sensor.warp3_2ita_cable
@@ -362,7 +362,48 @@ automation:
     actions:
       - action: input_select.select_option
         target:
-          # Hier wurde der Punkt vor 'mode' korrigiert:
           entity_id: input_select.ev_vehicle_mode
         data:
-          option: "off" # 'value' ist veraltet, 'option' ist der korrekte Key für select_option
+          option: "off"
+
+    # ===================================================================
+    # calculate charge energy delta, when target soc or vehicle changes
+    # ===================================================================
+  - alias: "Wallbox: Lademenge (Delta) aus Ziel-SOC berechnen"
+    id: wallbox_calc_charge_delta
+    mode: restart
+    triggers:
+      # 1. Auslösen, wenn sich der gewünschte Ziel-SOC ändert
+      - trigger: state
+        entity_id: input_number.ev_charge_to_percent
+      # 2. Auslösen, wenn das Fahrzeug gewechselt wird (damit das Delta sofort zum neuen Auto passt)
+      - trigger: state
+        entity_id: input_select.ev_vehicle_mode
+    conditions:
+      # Nur ausführen, wenn auch wirklich ein Fahrzeug aktiv ausgewählt ist
+      - condition: template
+        value_template: "{{ states('input_select.ev_vehicle_mode') in ['zero', 'honda_e'] }}"
+    actions:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.ev_charge_by_percent
+        data:
+          value: >-
+            {% set target = states('input_number.ev_charge_to_percent') | float(0) %}
+            {% set vehicle = states('input_select.ev_vehicle_mode') %}
+
+            {# Fahrzeugspezifischen aktuellen SOC ermitteln #}
+            {% if vehicle == 'zero' %}
+              {% set current_soc = states('sensor.zero_soc') | float(0) %}
+            {% elif vehicle == 'honda_e' %}
+              {% set current_soc = states('sensor.hondae_soc') | float(0) %}
+            {% else %}
+              {% set current_soc = 0 %}
+            {% endif %}
+
+            {# Berechnung: Ziel-SOC minus aktueller SOC #}
+            {% set delta = target - current_soc %}
+
+            {# Sicherheits-Mathematik: Wert darf nicht unter 0 % fallen (falls Auto schon voller ist) #}
+            {# und nicht über 100 % steigen. Abgerundet auf ganze Zahlen. #}
+            {{ [0, [delta, 100] | min] | max | round(1) }}

@@ -31,10 +31,11 @@ template:
             {% set power_from_net = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
             {% set venus1 = states('sensor.marstek_venus_1_ac_power_glatt') | float(0) %}
             {% set venus2 = states('sensor.marstek_venus_2_ac_power_glatt') | float(0) %}
+            {% set charger_voltage = states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) %}
 
             {# Batterie-Ladung (negativ) wird abgezogen (erhöht den Überschuss) #}
             {% set surplus = charger_power - power_from_net - venus1 - venus2 %}
-            {% set amps = (surplus / 230) | round(0, 'floor') | int %}
+            {% set amps = (surplus / charger_voltage + 0.2) | round(0, 'floor') | int %} 
             {% set max_amps = state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) %}
 
             {% if amps >= 6 %}
@@ -72,13 +73,14 @@ template:
             {% set power_from_net = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
             {% set venus1 = states('sensor.marstek_venus_1_ac_power') | float(0) %}
             {% set venus2 = states('sensor.marstek_venus_2_ac_power') | float(0) %}
+            {% set charger_voltage = states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) %}
 
             {# Falls Batterie lädt (Wert negativ), ignorieren wir diesen Anteil im Überschuss #}
             {% set v1_clean = [venus1, 0] | max %}
             {% set v2_clean = [venus2, 0] | max %}
 
             {% set surplus = charger_power - power_from_net - v1_clean - v2_clean %}
-            {% set amps = (surplus / 230) | round(0, 'floor') | int %}
+            {% set amps = (surplus / charger_voltage + 0.2) | round(0, 'floor') | int %}
             {% set max_amps = state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) %}
 
             {% if amps >= 6 %}
@@ -119,7 +121,7 @@ template:
         state_class: total
         state: >-
           {% set mode = states('input_select.ev_vehicle_mode') %}
-          {% set pct = states('input_number.ev_charge_percent') | float(0) %}
+          {% set pct = states('input_number.ev_charge_by_percent') | float(0) %}
           {% if mode == 'off' or pct == 0 %}
             0
           {% else %}
@@ -147,3 +149,25 @@ template:
         state: >-
           {% set power = states('sensor.warp3_2ita_powernow') | float(0) %}
           {{ -power if power is not none else 0 }}
+
+      - name: "Zero SOC"
+        unique_id: zero_soc
+        unit_of_measurement: "%"
+        state: >-
+          {% set raw = states('sensor.zero_sr_s_mbb_zero_soc') %}
+          {% if is_number(raw) %}
+            {{ raw | float | round(0) }}
+          {% else %}
+            {{ this.state | float(-1) }}
+          {% endif %}
+
+      - name: "HondaE SOC"
+        unique_id: hondae_soc
+        unit_of_measurement: "%"
+        state: >-
+          {% set raw = states('sensor.nix_da') %}
+          {% if is_number(raw) %}
+            {{ raw | float | round(0) }}
+          {% else %}
+            {{ this.state | float(0) }}
+          {% endif %}
