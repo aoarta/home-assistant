@@ -33,8 +33,17 @@ input_number:
     unit_of_measurement: "A"
     icon: mdi:car-speed-limiter
 
-  ev_charge_percent:
-    name: "EV Charge Target (% of battery)"
+  ev_charge_by_percent:
+    name: "EV charge BY Percent"
+    initial: 50
+    min: 0
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:battery-charging-50
+
+  ev_charge_to_percent:
+    name: "EV charge TO Percent"
     initial: 50
     min: 0
     max: 100
