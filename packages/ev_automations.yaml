@@ -218,6 +218,9 @@ automation:
     triggers:
       - trigger: state
         entity_id: sensor.ev_target_charging_current
+      - trigger: state
+        entity_id: sensor.charge_power
+
     conditions:
       - condition: state
         entity_id: binary_sensor.warp3_2ita_charging
@@ -243,7 +246,7 @@ automation:
           value: "{{ target_amps }}"
       # ...then HOLD so the battery loop settles before the next EV step.
       - delay:
-          minutes: 2
+          minutes: 1
 
   # ============================================================
   # STOP (idle): target current dropped below 6 A for 2 minutes.
@@ -407,3 +410,118 @@ automation:
             {# Sicherheits-Mathematik: Wert darf nicht unter 0 % fallen (falls Auto schon voller ist) #}
             {# und nicht über 100 % steigen. Abgerundet auf ganze Zahlen. #}
             {{ [0, [delta, 100] | min] | max | round(1) }}
+
+  - alias: "Wallbox: WARP3 LED Fahrzeug & SoC Steuerung"
+    id: wallbox_LED
+    description: "Steuert die LED nach Fahrzeugfarbe, Ladestand (1Hz / 2Hz) und Regenbogen bei voll."
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.warp3_2ita_charging
+      - platform: state
+        entity_id: sensor.zero_soc
+      - platform: state
+        entity_id: sensor.hondae_soc
+      - platform: state
+        entity_id: binary_sensor.zero_sr_s_mbb_zero_angesteckt
+      - platform: state
+        entity_id: binary_sensor.hondae_connected
+    action:
+      - choose:
+          # =========================================================
+          # 1. BEREITSCHAFT: Grün, dauerhaft an
+          # =========================================================
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.warp3_2ita_charging
+                state: "ready"
+            sequence:
+              - action: mqtt.publish
+                data:
+                  topic: warp/2itA/evse/indicator_led_set
+                  payload: '{"state": 255, "color_h": 120, "color_s": 255, "color_v": 255}'
+
+          # =========================================================
+          # 2. HONDA E (Farbe: Weiß)
+          # =========================================================
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.hondae_connected
+                state: "on"
+            sequence:
+              - choose:
+                  # VOLL: Regenbogen-Effekt (state: 4)
+                  - conditions:
+                      - condition: numeric_state
+                        entity_id: sensor.hondae_soc
+                        above: 98
+                    sequence:
+                      - action: mqtt.publish
+                        data:
+                          topic: warp/2itA/evse/indicator_led_set
+                          payload: '{"state": 4, "color_h": 360, "color_s": 0, "color_v": 0}'
+
+                  # MITTE (50% bis 98%): Weiß schnelles Blinken (2 Hz -> state: 3)
+                  - conditions:
+                      - condition: numeric_state
+                        entity_id: sensor.hondae_soc
+                        above: 49
+                        below: 99
+                    sequence:
+                      - action: mqtt.publish
+                        data:
+                          topic: warp/2itA/evse/indicator_led_set
+                          payload: '{"state": 3, "color_h": 360, "color_s": 255, "color_v": 255}'
+                  # ANFANG (< 50%): Weiß langsames Blinken (1 Hz -> state: 2)
+                  - conditions:
+                      - condition: numeric_state
+                        entity_id: sensor.hondae_soc
+                        below: 50
+                    sequence:
+                      - action: mqtt.publish
+                        data:
+                          topic: warp/2itA/evse/indicator_led_set
+                          payload: '{"state": 2, "color_h": 360, "color_s": 0, "color_v": 255}'
+
+          # =========================================================
+          # 3. ZERO (Farbe: Rot)
+          # =========================================================
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.zero_sr_s_mbb_zero_angesteckt
+                state: "on"
+            sequence:
+              - choose:
+                  # VOLL: Regenbogen-Effekt (state: 4)
+                  - conditions:
+                      - condition: numeric_state
+                        entity_id: sensor.zero_soc
+                        above: 98
+                    sequence:
+                      - action: mqtt.publish
+                        data:
+                          topic: warp/2itA/evse/indicator_led_set
+                          payload: '{"state": 4, "color_h": 360, "color_s": 0, "color_v": 0}'
+
+                  # MITTE (50% bis 98%): Rot schnelles Blinken (2 Hz -> state: 3)
+                  - conditions:
+                      - condition: numeric_state
+                        entity_id: sensor.zero_soc
+                        above: 49
+                        below: 99
+                    sequence:
+                      - action: mqtt.publish
+                        data:
+                          topic: warp/2itA/evse/indicator_led_set
+                          payload: '{"state": 3, "color_h": 360, "color_s": 255, "color_v": 255}'
+
+                  # ANFANG (< 50%): Rot langsames Blinken (1 Hz -> state: 2)
+                  - conditions:
+                      - condition: numeric_state
+                        entity_id: sensor.zero_soc
+                        below: 50
+                    sequence:
+                      - action: mqtt.publish
+                        data:
+                          topic: warp/2itA/evse/indicator_led_set
+                          payload: '{"state": 2, "color_h": 360, "color_s": 255, "color_v": 255}'
