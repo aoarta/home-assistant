@@ -653,7 +653,7 @@ automation:
                             data: { value: 0 }
                             continue_on_error: true
               - sequence:
-                  - delay: { milliseconds: 20 }
+                  - delay: { milliseconds: 10 }
                   - if:
                       - condition: template
                         value_template: "{{ leaving_v2 }}"
@@ -677,7 +677,7 @@ automation:
                               entity_id: number.marstek_venus_2_discharge_power
                             data: { value: 0 }
                             continue_on_error: true
-          - delay: { milliseconds: 250 }
+          - delay: { milliseconds: 120 }
 
       - parallel:
           - sequence:
@@ -713,7 +713,7 @@ automation:
                     continue_on_error: true
 
           - sequence:
-              - delay: { milliseconds: 20 }
+              - delay: { milliseconds: 10 }
               - if:
                   - condition: template
                     value_template: "{{ states('select.marstek_venus_2_force_mode') != target_mode_v2 }}"
@@ -840,7 +840,7 @@ automation:
                     continue_on_error: true
 
           - sequence:
-              - delay: "00:00:00.150"
+              - delay: "00:00:00.20"
               - if:
                   - condition: template
                     value_template: >-

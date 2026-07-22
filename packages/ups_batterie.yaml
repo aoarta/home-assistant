@@ -237,7 +237,7 @@ automation:
       #      - delay: "00:00:12"
       # --- VARIABLEN VORZIEHEN ---
       - variables:
-          netz: "{{ states('sensor.solarnet_leistung_vom_netz') | float(0) }}" # <0 wenn einspeisung
+          netz: "{{ states('sensor.leistung_vom_netz') | float(0) }}" # <0 wenn einspeisung
           bat_pwr: "{{ states('sensor.marstek_ac_power_total') | float(0) }}" # <0 wenn laden
           ups_pwr: "{{ states('sensor.ups_ac_power') | float(0) }}" # <0 wenn laden
           # Feedback-free balance: add UPS output back so the inverter's own

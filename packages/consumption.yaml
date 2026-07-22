@@ -65,7 +65,7 @@ sensor:
   - platform: filter
     name: "PV Production 5 Min Average"
     unique_id: pv_produktion_5min_avg
-    entity_id: sensor.solarnet_pv_leistung
+    entity_id: sensor.leistung_von_pv_ac
     filters:
       - filter: time_simple_moving_average
         window_size: "00:05:00"
@@ -74,9 +74,9 @@ sensor:
         window_size: 300
 
   - platform: filter
-    name: "Solarnet Grid Power 5 Min Average"
-    unique_id: solarnet_leistung_vom_netz_5min_avg
-    entity_id: sensor.solarnet_leistung_vom_netz
+    name: "Grid Power 5 Min Average"
+    unique_id: leistung_vom_netz_5min_avg
+    entity_id: sensor.leistung_vom_netz
     filters:
       - filter: time_simple_moving_average
         window_size: "00:05:00"
@@ -104,13 +104,13 @@ template:
         device_class: power
         state_class: measurement
         availability: >-
-          {{ has_value('sensor.solarnet_leistung_vom_netz') and
+          {{ has_value('sensor.leistung_vom_netz') and
              has_value('sensor.marstek_ac_power_total') and
              has_value('sensor.pv_production_power') and
              has_value('sensor.ev_charging_power')
              }}
         state: >-
-          {{ ( states('sensor.solarnet_leistung_vom_netz') | float(0)
+          {{ ( states('sensor.leistung_vom_netz') | float(0)
                + states('sensor.marstek_ac_power_total') | float(0)
                + states('sensor.pv_production_power') | float(0) 
                + states('sensor.ev_charging_power') | float(0)
@@ -122,10 +122,10 @@ template:
       #        device_class: power
       #        state_class: measurement
       #        availability: >-
-      #          {{ has_value('sensor.solarnet_leistung_vom_netz') and
+      #          {{ has_value('sensor.leistung_vom_netz') and
       #              has_value('sensor.marstek_ac_power_total') }}
       #        state: >-
-      #          {{ ( states('sensor.solarnet_leistung_vom_netz') | float(0) +
+      #          {{ ( states('sensor.leistung_vom_netz') | float(0) +
       #                states('sensor.marstek_ac_power_total') | float(0)
       #             ) | round(0) }}
 
@@ -145,7 +145,7 @@ template:
 
   - triggers:
       - trigger: state
-        entity_id: sensor.solarnet_leistung_vom_netz
+        entity_id: sensor.leistung_vom_netz
       #      - trigger: state
       #        entity_id: sensor.marstek_ac_power_total
       - trigger: state
@@ -157,11 +157,11 @@ template:
         device_class: power
         state_class: measurement
         availability: >-
-          {{ has_value('sensor.solarnet_leistung_vom_netz') and
+          {{ has_value('sensor.leistung_vom_netz') and
              has_value('sensor.marstek_ac_power_total') }}
         state: >-
           {# 1. Den theoretischen 100%-Zielwert berechnen #}
-          {% set netz = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
+          {% set netz = states('sensor.leistung_vom_netz') | float(0) %}
           {% set marstek = states('sensor.marstek_ac_power_total') | float(0) %}
           {% set ziel = netz + marstek %}
 

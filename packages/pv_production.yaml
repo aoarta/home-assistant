@@ -100,9 +100,9 @@ template:
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
-        availability: "{{ is_number(states('sensor.zwicknagl_martin_energie_gesamt')) }}"
+        availability: "{{ is_number(states('sensor.energie_von_pv_ac')) }}"
         state: >-
-          {% set raw = states('sensor.zwicknagl_martin_energie_gesamt') | float(none) %}
+          {% set raw = states('sensor.energie_von_pv_ac') | float(none) %}
           {% set last = this.state | float(none) %}
           {% if raw is not none %}
             {% set val = (raw / 1000) | round(2) %}
@@ -122,10 +122,10 @@ template:
         device_class: power
         state_class: measurement
         availability: >-
-          {{ is_number(states('sensor.zwicknagl_martin_leistung_ac')) or
+          {{ is_number(states('sensor.leistung_von_pv_ac')) or
              is_number(states('sensor.pv_production_balcony_power')) }}
         state: >-
-          {% set s1 = states('sensor.zwicknagl_martin_leistung_ac') | float(0) %}
+          {% set s1 = states('sensor.leistung_von_pv_ac') | float(0) %}
           {% set s2 = states('sensor.pv_production_balcony_power') | float(0) %}
           {# Only add values that are actually available as numbers #}
           {{ (s1 + s2) | round(0) }}

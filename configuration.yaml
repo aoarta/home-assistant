@@ -41,7 +41,7 @@ recorder:
       - sensor.prognose_ubermorgen
       - sensor.pv_energy_yield_today_um
       - sensor.pv_production_power
-      - sensor.solarnet_leistung_vom_netz
+      - sensor.leistung_vom_netz
       - sensor.battery_ac_power_total
 
   exclude:
