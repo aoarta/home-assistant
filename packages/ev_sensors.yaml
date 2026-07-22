@@ -13,7 +13,7 @@ template:
       - trigger: state
         entity_id:
           - sensor.warp3_2ita_powernow
-          - sensor.solarnet_leistung_vom_netz
+          - sensor.leistung_vom_netz
           - sensor.marstek_venus_1_ac_power_glatt
           - sensor.marstek_venus_2_ac_power_glatt
     sensor:
@@ -28,7 +28,7 @@ template:
             0
           {% else %}
             {% set charger_power = states('sensor.warp3_2ita_powernow') | float(0) %}
-            {% set power_from_net = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
+            {% set power_from_net = states('sensor.leistung_vom_netz') | float(0) %}
             {% set venus1 = states('sensor.marstek_venus_1_ac_power_glatt') | float(0) %}
             {% set venus2 = states('sensor.marstek_venus_2_ac_power_glatt') | float(0) %}
             {% set charger_voltage = states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) %}
@@ -55,9 +55,9 @@ template:
       - trigger: state
         entity_id:
           - sensor.warp3_2ita_powernow
-          - sensor.solarnet_leistung_vom_netz
-          - sensor.marstek_venus_1_ac_power
-          - sensor.marstek_venus_2_ac_power
+          - sensor.leistung_vom_netz
+          - sensor.marstek_venus_1_ac_power_glatt
+          - sensor.marstek_venus_2_ac_power_glatt
     sensor:
       - name: "PV Dynamic Charging Current Battery First"
         unique_id: pv_dynamic_charging_current_battery_first
@@ -70,9 +70,9 @@ template:
             0
           {% else %}
             {% set charger_power = states('sensor.warp3_2ita_powernow') | float(0) %}
-            {% set power_from_net = states('sensor.solarnet_leistung_vom_netz') | float(0) %}
-            {% set venus1 = states('sensor.marstek_venus_1_ac_power') | float(0) %}
-            {% set venus2 = states('sensor.marstek_venus_2_ac_power') | float(0) %}
+            {% set power_from_net = states('sensor.leistung_vom_netz') | float(0) %}
+            {% set venus1 = states('sensor.marstek_venus_1_ac_power_glatt') | float(0) %}
+            {% set venus2 = states('sensor.marstek_venus_2_ac_power_glatt') | float(0) %}
             {% set charger_voltage = states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) %}
 
             {# Falls Batterie lädt (Wert negativ), ignorieren wir diesen Anteil im Überschuss #}

@@ -51,102 +51,7 @@ template:
           - input_select.ev_charge_mode
           - input_select.ev_vehicle_mode
           - input_number.ev_manual_charging_current
-    sensor:
-      - name: "EV Target Charging Current alt"
-        unique_id: ev_target_charging_current_alt
-        unit_of_measurement: "A"
-        device_class: current
-        state_class: measurement
-        state: >-
-          {% set vehicle = states('input_select.ev_vehicle_mode') %}
-          {% set cable = is_state('binary_sensor.warp3_2ita_cable', 'on') %}
-          {% if vehicle == 'off' or not cable %}
-            0
-          {% else %}
-            {% set manual = states('input_number.ev_manual_charging_current') | int(0) %}
-            {% if manual >= 6 %}
-              {{ manual }}
-            {% else %}
-              {% set mode = states('input_select.ev_charge_mode') %}
-              {% set surplus_ev_first = states('sensor.pv_dynamic_charging_current') | int(0) %}
-              {% set surplus_bat_first = states('sensor.pv_dynamic_charging_current_battery_first') | int(0) %}
-              {% set max_amps = state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) %}
-              {% set soc = states('sensor.marstek_total_soc') | float(0) %}
-              {% set floor = states('sensor.battery_floor_soc_for_ev') | float(100) %}
-
-              {# --- MODUS 1: PV-Überschuss Fahrzeug priorisiert --- #}
-              {% if mode == 'pv_ev_first' %}
-                {{ surplus_ev_first }}
-
-              {# --- MODUS 2: PV-Überschuss Batterien priorisiert --- #}
-              {% elif mode == 'pv_battery_first' %}
-                {{ surplus_bat_first }}
-
-              {# --- MODUS 3: PV-Überschuss 50/50 geteilt (Dynamisch nach Füllstand) --- #}
-              {% elif mode == 'pv_shared_50_50' %}
-                {% set ev_energy = states('sensor.ev_session_energy') | float(0) %}
-                {% set ev_limit = states('sensor.ev_max_charge_energy') | float(0) %}
-                
-                {# Fahrzeugspezifischen SOC abfragen #}
-                {% set ev_soc = 0 %}
-                {% if vehicle == 'zero' %}
-                  {% set ev_soc = states('sensor.zero_soc') | float(0) %}
-                {% elif vehicle == 'honda_e' %}
-                  {% set ev_soc = states('sensor.hondae_soc') | float(0) %}
-                {% endif %}
-                
-                {# Vehicle gilt als voll, wenn das berechnete Energielimit erreicht ist ODER der Fahrzeug-SOC > 95.5% ist #}
-                {% set ev_full = (ev_limit > 0 and ev_energy >= ev_limit) or (ev_soc > 95.5) %}
-
-                {% if ev_full %}
-                  {# Vehicle voll: Ladung stoppen (0A), gesamter Überschuss geht in die Hausbatterie #}
-                  0
-                {% elif soc >= 99 %}
-                  {# Hausbatterie voll: Gesamter Überschuss ins Auto (wie ev_first) #}
-                  {{ surplus_ev_first }}
-                {% else %}
-                  {# Weder noch voll: 50/50 Aufteilung #}
-                  {% set half_amps = (surplus_ev_first / 2) | round(0, 'floor') | int %}
-                  {{ half_amps if half_amps >= 6 else 0 }}
-                {% endif %}
-
-              {# --- MODUS 4: Mind. 1.3kW (6A) / Max PV-Überschuss (Batterieschutz aktiv) --- #}
-              {% elif mode == 'min_6a_floor_battery' %}
-                {# Wenn genug Überschuss da ist, lade voll dynamisch mit Überschuss #}
-                {% if surplus_ev_first >= 6 %}
-                  {{ surplus_ev_first }}
-                {% else %}
-                  {# Ist zu wenig Sonne da, lade mit 6A (1.3kW) sofern SOC > Min-SOC #}
-                  {{ 6 if soc > floor else 0 }}
-                {% endif %}
-
-              {# --- MODUS 5: Mind. 1.3kW (6A) / Max PV-Überschuss (ohne Batterieschutz) --- #}
-              {% elif mode == 'min_6a_floor_grid' %}
-                {{ [surplus_ev_first, 6] | max }}
-
-              {% else %}
-                0
-              {% endif %}
-            {% endif %}
-          {% endif %}
-        attributes:
-          charge_mode: "{{ states('input_select.ev_charge_mode') }}"
-
-  - triggers:
-      - trigger: state
-        entity_id:
-          - sensor.pv_dynamic_charging_current
-          - sensor.pv_dynamic_charging_current_battery_first
-          - sensor.marstek_total_soc
-          - sensor.battery_floor_soc_for_ev
-          - sensor.ev_session_energy
-          - sensor.ev_max_charge_energy
-          - sensor.zero_soc
-          - sensor.hondae_soc
-          - input_select.ev_charge_mode
-          - input_select.ev_vehicle_mode
-          - input_number.ev_manual_charging_current
-          - sensor.target_power_distribution_fast # Wichtig für Updates, wenn sich die Batterielimits ändern
+          - sensor.target_power_distribution_fast
     sensor:
       - name: "EV Target Charging Current"
         unique_id: ev_target_charging_current
@@ -166,13 +71,15 @@ template:
               {% set mode = states('input_select.ev_charge_mode') %}
               {% set surplus_ev_first = states('sensor.pv_dynamic_charging_current') | int(0) %}
               {% set surplus_bat_first = states('sensor.pv_dynamic_charging_current_battery_first') | int(0) %}
-              {% set max_amps = state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) %}
               {% set soc = states('sensor.marstek_total_soc') | float(0) %}
               {% set floor = states('sensor.battery_floor_soc_for_ev') | float(100) %}
 
               {# --- NEU: Berechnung der maximalen Batterieaufnahme (v1 + v2) --- #}
               {% set charge_attr = state_attr('sensor.target_power_distribution_fast', 'charge') %}
-              {% set bat_max_amps = ((charge_attr.get('v1', 0) | int(0)) + (charge_attr.get('v2', 0) | int(0))) if charge_attr is mapping else 0 %}
+              {% set bat_max_watt = ((charge_attr.get('v1', 0) | int(0)) + (charge_attr.get('v2', 0) | int(0))) if charge_attr is mapping else 0 %}
+              {% set charger_voltage = states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) %}
+
+              {% set bat_max_amps = (bat_max_watt / charger_voltage) | int(0) %}
 
               {# --- MODUS 1: PV-Überschuss Fahrzeug priorisiert --- #}
               {% if mode == 'pv_ev_first' %}
@@ -235,7 +142,6 @@ template:
               {# --- MODUS 5: Mind. 1.3kW (6A) / Max PV-Überschuss (ohne Batterieschutz) --- #}
               {% elif mode == 'min_6a_floor_grid' %}
                 {{ [surplus_ev_first, 6] | max }}
-
               {% else %}
                 0
               {% endif %}
