@@ -1,0 +1,81 @@
+modbus:
+  - name: "fronius_inverter"
+    type: tcp
+    host: 192.168.0.49
+    port: 502
+    sensors:
+      # Rohe Netzleistung (kann positiv für Bezug oder negativ für Einspeisung sein)
+      - name: "Fronius SmartMeter Power Raw"
+        unique_id: fronius_smartmeter_power_raw
+        slave: 200
+        address: 40097 # 40096 # SunSpec Register für AC Leistung (M_AC_Power)
+        input_type: holding
+        data_type: float32
+        #        swap: word # kein swap
+        scan_interval: 2
+
+      - name: "Fronius Inverter Power Raw"
+        unique_id: fronius_inverter_power_raw
+        slave: 1
+        address: 40091
+        input_type: holding
+        data_type: float32
+        #        swap: word # kein swap beim inverter
+        scan_interval: 2
+
+      - name: "Fronius Inverter Energy Raw"
+        unique_id: fronius_inverter_energy_raw
+        slave: 1
+        address: 40101
+        input_type: holding
+        data_type: float32
+        #        swap: word # kein swap beim inverter
+        scan_interval: 20 # no need to read that fast
+
+template:
+  - sensor:
+      - name: "Leistung vom Netz"
+        unique_id: leistung_vom_netz
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {% set raw = states('sensor.fronius_smartmeter_power_raw') | float(none) %}
+          {#% set raw = states('sensor.fronius_netzleistung') | float(0) %#}
+          {% if raw is not none and raw | round(0) | abs < 20000 %}
+            {% set alpha = 0.3 %}
+            {% set alt = this.state | float(raw) %}
+            {{ (alt + alpha * (raw - alt)) | round(0) }}
+          {% else %}
+            unavailable
+          {% endif %}
+
+  - sensor:
+      - name: "Leistung von PV AC"
+        unique_id: leistung_von_pv_ac
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {% set raw = states('sensor.fronius_inverter_power_raw') | float(none) %}
+          {% if raw is not none and raw | round(0) | abs < 20000 %}
+            {% set alpha = 0.3 %}
+            {% set alt = this.state | float(raw) %}
+            {{ (alt + alpha * (raw - alt)) | round(0) }}
+          {% else %}
+            unavailable
+          {% endif %}
+
+  - sensor:
+      - name: "Energie von PV AC"
+        unique_id: energie_von_pv_ac
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        state: >
+          {% set raw = states('sensor.fronius_inverter_energy_raw') | float(none) %}
+          {% if raw is not none and sf is not none %}
+            {{ raw | round(0) }}
+          {% else %}
+            unavailable
+          {% endif %}
