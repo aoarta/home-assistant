@@ -517,9 +517,9 @@ template:
           {% if soc1 >= 0 and soc2 >= 0 %}
             {{ ((soc1 + soc2) / 2) | round(0) | int(0) }}
           {% elif soc1 >= 0 %}
-            {{ soc1 | round(0) | int(0) }}
+            {{ soc1 | int(0) }}
           {% elif soc2 >= 0 %}
-            {{ soc2 | round(0) | int(0) }}
+            {{ soc2 | int(0) }}
           {% else %}
             {% set hw1 = states('sensor.marstek_venus_1_soc') | float(0) %}
             {% set hw2 = states('sensor.marstek_venus_2_soc') | float(0) %}
@@ -581,7 +581,7 @@ automation:
     id: "sende_batterie_targets_v3"
     # Geändert von restart auf queued (max: 2), damit laufende Modbus-Sequenzen
     # nicht abgebrochen werden, falls sofort der nächste Trigger kommt.
-    mode: restart
+    mode: single
     triggers:
       - trigger: state
         entity_id: sensor.target_power_distribution_fast
@@ -744,6 +744,7 @@ automation:
                       { entity_id: number.marstek_venus_2_discharge_power }
                     data: { value: "{{ v2_discharge }}" }
                     continue_on_error: true
+      - delay: { milliseconds: 1200 }
 
   - alias: "Marstek: Zeitstempel Batterie voll aktualisieren"
     id: marstek_set_last_full_timestamp

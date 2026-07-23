@@ -43,7 +43,7 @@ template:
           {% set raw = states('sensor.fronius_smartmeter_power_raw') | float(none) %}
           {#% set raw = states('sensor.fronius_netzleistung') | float(0) %#}
           {% if raw is not none and raw | round(0) | abs < 20000 %}
-            {% set alpha = 0.3 %}
+            {% set alpha = 0.4 %} {# ca. 12s bis 90% #}
             {% set alt = this.state | float(raw) %}
             {{ (alt + alpha * (raw - alt)) | round(0) }}
           {% else %}
@@ -59,7 +59,7 @@ template:
         state: >
           {% set raw = states('sensor.fronius_inverter_power_raw') | float(none) %}
           {% if raw is not none and raw | round(0) | abs < 20000 %}
-            {% set alpha = 0.3 %}
+            {% set alpha = 0.3 %} {# ca. 18s bis 90% #}
             {% set alt = this.state | float(raw) %}
             {{ (alt + alpha * (raw - alt)) | round(0) }}
           {% else %}
