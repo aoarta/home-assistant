@@ -38,7 +38,7 @@ automation:
   # ============================================================
   - alias: "Wallbox: Enforce OFF mode (never charge when vehicle = off)"
     id: wallbox_enforce_off
-    mode: restart
+    mode: single
     triggers:
       # Vehicle mode switched to off.
       - trigger: state
@@ -231,23 +231,25 @@ automation:
       - condition: numeric_state
         entity_id: input_number.ev_manual_charging_current
         below: 6
-    variables:
-      target_amps: "{{ states('sensor.ev_target_charging_current') | int(6) }}"
-      current_amps: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
-      adjust_threshold_amps: 1 # wider deadband: ignore < ~230 W wobble
     actions:
-      # Only write on a meaningful change...
-      - condition: template
-        value_template: "{{ (target_amps - current_amps) | abs >= adjust_threshold_amps }}"
-      - action: number.set_value
-        target:
-          entity_id: number.warp3_2ita_globalcurrent
-        data:
-          value: "{{ target_amps }}"
-      # ...then HOLD so the battery loop settles before the next EV step.
-      - delay:
-          minutes: 1
-
+      - repeat:
+          sequence:
+            - variables:
+                target_amps: "{{ states('sensor.ev_target_charging_current') | int(6) }}"
+                current_amps: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
+            - condition: template
+              value_template: "{{ target_amps != current_amps }}"
+            - action: number.set_value
+              target:
+                entity_id: number.warp3_2ita_globalcurrent
+              data:
+                value: "{{ target_amps }}"
+            - delay:
+                seconds: 45
+          # Wiederholt die Schleife so lange, wie der Ist-Wert noch nicht dem aktuellen Target entspricht
+          until:
+            - condition: template
+              value_template: "{{ states('sensor.ev_target_charging_current') | int(6) == states('number.warp3_2ita_globalcurrent') | int(0) }}"
   # ============================================================
   # STOP (idle): target current dropped below 6 A for 2 minutes.
   # Covers pv_surplus losing the sun and pv_battery_floor hitting the SOC floor.
