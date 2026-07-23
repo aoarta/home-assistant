@@ -526,10 +526,8 @@ template:
             {{ ((hw1 + hw2) / 2) | round(0) | int(0) }}
           {% endif %}
         availability: >-
-          {{ is_number(states('sensor.venus_1_custom_soc')) and
-             is_number(states('sensor.venus_2_custom_soc')) and
-             is_number(states('sensor.marstek_venus_1_soc')) and
-             is_number(states('sensor.marstek_venus_2_soc')) }}
+          {{ (is_number(states('sensor.venus_1_custom_soc')) and is_number(states('sensor.venus_2_custom_soc')))
+             or (is_number(states('sensor.marstek_venus_1_soc')) and is_number(states('sensor.marstek_venus_2_soc'))) }}
 
       - name: "Marstek AC Power Total"
         unique_id: marstek_ac_power_total
