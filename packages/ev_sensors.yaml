@@ -7,10 +7,10 @@ template:
   # 1. PV Dynamic Current (EV FIRST)
   # Hausbatterie-Ladestrom (negativer Wert) wird freigegeben.
   # ----------------------------------------------------------
-  - triggers:
-      - trigger: time_pattern
+  - trigger:
+      - platform: time_pattern
         seconds: "/30"
-      - trigger: state
+      - platform: state
         entity_id:
           - sensor.warp3_2ita_powernow
           - sensor.leistung_vom_netz
@@ -49,10 +49,10 @@ template:
   # 2. PV Dynamic Current (BATTERY FIRST)
   # Hausbatterie wird geschont. Ihr Ladestrom wird NICHT der Wallbox zugeschlagen.
   # ----------------------------------------------------------
-  - triggers:
-      - trigger: time_pattern
+  - trigger:
+      - platform: time_pattern
         seconds: "/30"
-      - trigger: state
+      - platform: state
         entity_id:
           - sensor.warp3_2ita_powernow
           - sensor.leistung_vom_netz
@@ -80,7 +80,7 @@ template:
             {% set v2_clean = [venus2, 0] | max %}
 
             {% set surplus = charger_power - power_from_net - v1_clean - v2_clean %}
-            {% set amps = (surplus / charger_voltage + 0.2) | round(0, 'floor') | int %}
+            {% set amps = (surplus / charger_voltage + 0.2) | int %}
             {% set max_amps = state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) %}
 
             {% if amps >= 6 %}
@@ -93,11 +93,12 @@ template:
   # ----------------------------------------------------------
   # Standard-Einträge für Energie-Berechnungen belassen
   # ----------------------------------------------------------
-  - triggers:
-      - trigger: state
+  - trigger:
+      - platform: state
         entity_id: sensor.warp3_2ita_energyabs
-      - trigger: state
+      - platform: state
         entity_id: input_number.ev_session_start_energy_kwh
+
     sensor:
       - name: "EV Session Energy"
         unique_id: ev_session_energy
