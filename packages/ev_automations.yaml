@@ -250,6 +250,7 @@ automation:
           until:
             - condition: template
               value_template: "{{ states('sensor.ev_target_charging_current') | int(6) == states('number.warp3_2ita_globalcurrent') | int(0) }}"
+              
   # ============================================================
   # STOP (idle): target current dropped below 6 A for 2 minutes.
   # Covers pv_surplus losing the sun and pv_battery_floor hitting the SOC floor.

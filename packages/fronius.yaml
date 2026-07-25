@@ -33,33 +33,39 @@ modbus:
         scan_interval: 20 # no need to read that fast
 
 template:
-  - sensor:
+  - trigger:
+      - platform: state
+        entity_id: sensor.fronius_smartmeter_power_raw
+    sensor:
       - name: "Leistung vom Netz"
         unique_id: leistung_vom_netz
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
         state: >
-          {% set raw = states('sensor.fronius_smartmeter_power_raw') | float(none) %}
-          {#% set raw = states('sensor.fronius_netzleistung') | float(0) %#}
+          {# Verwende den Wert direkt aus dem Trigger anstatt states() aufzurufen #}
+          {% set raw = trigger.to_state.state | float(none) %}
           {% if raw is not none and raw | round(0) | abs < 20000 %}
-            {% set alpha = 0.4 %} {# ca. 12s bis 90% #}
+            {% set alpha = 0.4 %}  {# ca. 12s bis 90% #}
             {% set alt = this.state | float(raw) %}
             {{ (alt + alpha * (raw - alt)) | round(0) }}
           {% else %}
             unavailable
           {% endif %}
 
-  - sensor:
+  - trigger:
+      - platform: state
+        entity_id: sensor.fronius_inverter_power_raw
+    sensor:
       - name: "Leistung von PV AC"
         unique_id: leistung_von_pv_ac
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
         state: >
-          {% set raw = states('sensor.fronius_inverter_power_raw') | float(none) %}
+          {% set raw = trigger.to_state.state | float(none) %}
           {% if raw is not none and raw | round(0) | abs < 20000 %}
-            {% set alpha = 0.3 %} {# ca. 18s bis 90% #}
+            {% set alpha = 0.3 %}  {# ca. 18s bis 90% #}
             {% set alt = this.state | float(raw) %}
             {{ (alt + alpha * (raw - alt)) | round(0) }}
           {% else %}
