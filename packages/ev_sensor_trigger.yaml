@@ -19,7 +19,7 @@ template:
         state_class: measurement
         state: >-
           {% set consumption_buffer = 1.10 %}
-          {% set max_storage = state_attr('sensor.global_parameter', 'max_usable_energy') | float(10) %}
+          {% set max_storage = state_attr('sensor.global_parameter', 'calculated_combined_capacity_kwh') | float(10) %}
           {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
           {% set consumption_today = states('sensor.house_consumption_energy_today') | float(0) %}
           {% set consumption_static = [0, expected_daily_consumption - consumption_today] | max %}

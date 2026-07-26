@@ -29,8 +29,8 @@ template:
         unique_id: pv_total_correction_factor
         unit_of_measurement: ""
         state: >-
-          {{ (states('sensor.pv_height_correction_factor') | float(1)) *
-             (states('sensor.pv_albedo_correction_factor') | float(1)) | round(3) }}
+          {{ ((states('sensor.pv_height_correction_factor') | float(1)) *
+              (states('sensor.pv_albedo_correction_factor') | float(1))) | round(3) }}
 
   - trigger:
       - trigger: time_pattern

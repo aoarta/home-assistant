@@ -27,7 +27,7 @@ template:
           wallbox_max_amps: 22
           # Zero
           zero_capacity: 13.6 # 14.4 kWh brutto
-          zero_charge_efficienty: 0.88 # AC-DC efficiency
+          zero_charge_efficiency: 0.88 # AC-DC efficiency
           # Honda e
           honda_e_capacity: 28.5 # NEU — Honda e: 35,5 kWh brutto
           honda_e_charge_efficiency: 0.88 # NEU — anpassen wenn gemessen
@@ -37,5 +37,3 @@ template:
             {% set venus = this.attributes.get('venus_capacity_wh', 0) | float(0) %}
             {% set ups = this.attributes.get('ups_capacity_wh', 0) | float(0) %}
             {{ ((venus * 2 * 0.8) + (ups * 0.6)) / 1000 }}
-
-          battery_floor_soc_for_ev: 50

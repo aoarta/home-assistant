@@ -21,6 +21,7 @@ sensor:
   - platform: integration
     source: sensor.marstek_venus_1_batterieleistung
     name: "Venus 1 Riemann"
+    unique_id: venus_1_riemann
     unit_prefix: k # Ergebnis ist in kWh
     round: 3
     method: left
@@ -28,6 +29,7 @@ sensor:
   - platform: integration
     source: sensor.marstek_venus_2_batterieleistung
     name: "Venus 2 Riemann"
+    unique_id: venus_2_riemann
     unit_prefix: k
     round: 3
     method: left

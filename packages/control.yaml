@@ -159,7 +159,7 @@ template:
             {% set usable_energy = states('sensor.marstek_usable_energy') | float(0) %}
 
             {# === Max storable energy (battery cap) === #}
-            {% set max_storage = state_attr('sensor.global_parameter', 'max_usable_energy') | float(10) %}
+            {% set max_storage = state_attr('sensor.global_parameter', 'calculated_combined_capacity_kwh') | float(10) %}
 
             {# === Safety factors === #}
             {% set pv_factor = 1.00 %}
