@@ -176,10 +176,11 @@ template:
             {# Static estimate: learned daily bucket minus what's already used this cycle #}
             {% set consumption_static = [0, expected_daily_consumption - consumption_today] | max %}
             {# Live estimate: current 1h-avg power projected to next sunrise (same window) #}
-            {% set consumption_live = states('sensor.estimated_remaining_consumption') | float(consumption_static) %}
+            {% set estimated_consumption = states('sensor.estimated_remaining_consumption') | float(consumption_static) %}
+            {% set expected_consumption = states('sensor.expected_remaining_consumption_today') | float(consumption_static) %}
             {# Blend both (fallback to static if live is unavailable), then apply the buffer #}
-            {% set consumption_blended = (0.5 * consumption_static + 0.5 * consumption_live)
-                                          if consumption_live is not none else consumption_static %}
+            {% set consumption_blended = (1/3 * consumption_static + 1/3 * estimated_consumption + 1/3 * expected_consumption)
+                                          if estimated_consumption is not none else consumption_static %}
             {% set consumption_remaining_today = consumption_blended * consumption_buffer %}
 
             {# === Tomorrow === #}
