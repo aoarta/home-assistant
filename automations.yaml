@@ -144,12 +144,6 @@
       minutes: "/10"
     - trigger: homeassistant
       event: start
-  #    - trigger: numeric_state
-  #      entity_id:
-  #        - sensor.venus_1_custom_soc
-  #        - sensor.venus_2_custom_soc
-  #        - sensor.ups_custom_soc
-  #      above: 99.9
   actions:
     - choose:
         # --- Turn ON: any battery overdue ---
