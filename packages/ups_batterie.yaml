@@ -111,66 +111,20 @@ template:
             {{ this.state if is_number(this.state) else 'unknown' }}
           {% endif %}
 
-  - trigger:
-      - platform: numeric_state
+  - triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: sensor.ups_energyflow_wh
+      - trigger: numeric_state
         entity_id: sensor.ups_highest_cell
         above: 3.55
         for: "00:00:10"
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.ups_soc
         above: "99.9"
         for: "00:01:00"
-      - platform: numeric_state
-        entity_id: sensor.ups_custom_soc
-        above: "99.9"
-      - platform: time_pattern
-        minutes: "/5"
-      - platform: homeassistant
-        event: start
-    sensor:
-      - name: "UPS SOC Reset Point"
-        unique_id: ups_soc_reset_point
-        unit_of_measurement: "Wh"
-        state: >-
-          {% set raw_energy = states('sensor.ups_energyflow_wh') %}
-          {% if not is_number(raw_energy) %}
-            {# Energy flow not available yet (e.g. right after restart). Hold the last
-              reset point. Falling back to 0 here would trigger the
-              'current_energy < last_reset' branch and snap the point to 0. #}
-            {{ this.state }}
-          {% else %}
-            {% set current_energy = raw_energy | float %}
-            {% set raw_last_reset = states('sensor.ups_soc_reset_point') %}
-            {% set hw_soc = states('sensor.ups_soc') | float(0) %}
-            {% set custom_soc = states('sensor.ups_custom_soc') | float(none) %}
-            {% set high_cell = states('sensor.ups_highest_cell') | float(0) %}
-            {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
-            {% set lfp_max_voltage = state_attr('sensor.global_parameter', 'lfp_max_voltage') | float(3.60) %}
-            {% set capacity = state_attr('sensor.global_parameter', 'ups_capacity_wh') | float(2200) %}
-            {% set last_reset = raw_last_reset | float(current_energy) if is_number(raw_last_reset) else current_energy %}
-            {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
-
-            {% if custom_soc == 0 and hw_soc is not none and current_energy is not none %}
-              {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-            {% elif hw_soc <= stop_soc or drift_too_high %}
-              {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-            {% elif hw_soc >= 100 or high_cell > lfp_max_voltage %}
-              {{ current_energy }}
-            {% elif current_energy < last_reset %}
-              {{ current_energy }}
-            {% else %}
-              {{ last_reset }}
-            {% endif %}
-          {% endif %}
-
-  - trigger:
-      - platform: state
-        entity_id: sensor.ups_energyflow_wh
-      - platform: state
-        entity_id: sensor.ups_soc_reset_point
-      - platform: homeassistant
-        event: start
-      - platform: time_pattern
+      - trigger: time_pattern
         minutes: "/5"
     sensor:
       - name: "UPS Custom SOC"
@@ -180,7 +134,7 @@ template:
         state: >-
           {% set hw_soc = states('sensor.ups_soc') | float(-1) %}
           {% set neu_wh = states('sensor.ups_energyflow_wh') | float(none) %}
-          {% set reset_wh = states('sensor.ups_soc_reset_point') | float(none) %}
+          {% set reset_wh = this.attributes.get('reset_point') | float(-1210) %}
 
           {% if neu_wh is none or reset_wh is none %}
             {{ this.state if is_number(this.state) else hw_soc }}
@@ -191,6 +145,35 @@ template:
             {% set calc_soc = 100 - ((neu_wh - reset_wh) / capacity * 100) %}
             {{ calc_soc | round(1) | clamp(0, 100) }}
           {% endif %}
+        attributes:
+          reset_point: >-
+            {% set raw_energy = states('sensor.ups_energyflow_wh') %}
+            {% if not is_number(raw_energy) %}
+              {# Energieflow noch nicht verfügbar (z.B. nach Neustart) -> letzten Wert halten #}
+              {{ this.attributes.get('reset_point', 0) }}
+            {% else %}
+              {% set current_energy = raw_energy | float %}
+              {% set last_reset = this.attributes.get('reset_point') | float(-1210) %}
+              {% set hw_soc = states('sensor.ups_soc') | float(0) %}
+              {% set custom_soc = this.state | float(none) %}
+              {% set high_cell = states('sensor.ups_highest_cell') | float(0) %}
+              {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
+              {% set lfp_max_voltage = state_attr('sensor.global_parameter', 'lfp_max_voltage') | float(3.60) %}
+              {% set capacity = state_attr('sensor.global_parameter', 'ups_capacity_wh') | float(2200) %}
+              {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
+
+              {% if custom_soc == 0 and hw_soc is not none and current_energy is not none %}
+                {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
+              {% elif hw_soc <= stop_soc or drift_too_high %}
+                {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
+              {% elif hw_soc >= 100 or high_cell > lfp_max_voltage %}
+                {{ current_energy }}
+              {% elif current_energy < last_reset %}
+                {{ current_energy }}
+              {% else %}
+                {{ last_reset }}
+              {% endif %}
+            {% endif %}
 
   - trigger:
       - platform: state

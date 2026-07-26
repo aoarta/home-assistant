@@ -38,100 +38,14 @@ sensor:
 ################################################################################
 ################################################################################
 template:
-  # ==========================================================
-  # Venus SOC Reset Points
-  # ==========================================================
-  - triggers:
-      - trigger: homeassistant
-        event: start
-      - trigger: numeric_state
-        entity_id: sensor.venus_1_custom_soc
-        above: 99.9
-      - trigger: numeric_state
-        entity_id: sensor.marstek_venus_1_soc
-        above: 99.9
-      - trigger: time_pattern
-        minutes: "/5"
-    sensor:
-      - name: "Venus 1 SOC Reset Point"
-        unique_id: venus_1_soc_reset_point
-        unit_of_measurement: "Wh"
-        state: >-
-          {% set current_energy = states('sensor.venus_1_energy_wh') | float(none) %}
-          {% set raw_last_reset = states('sensor.venus_1_soc_reset_point') %}
-          {% set last_reset = raw_last_reset | float(none) if is_number(raw_last_reset) else none %}
-
-          {% set hw_soc = states('sensor.marstek_venus_1_soc') | float(none) %}
-          {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
-          {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
-          {% set custom_soc = states('sensor.venus_1_custom_soc') | float(none) %}
-
-          {% if custom_soc == 0 and hw_soc is not none and current_energy is not none %}
-            {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-          {% elif hw_soc is none or current_energy is none %}
-            {{ last_reset if last_reset is not none else (this.state if is_number(this.state) else 0) }}
-          {% else %}
-            {% set last_reset = last_reset if last_reset is not none else current_energy %}
-            {% if hw_soc <= stop_soc %}
-              {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-            {% elif hw_soc >= 100 %}
-              {{ current_energy }}
-            {% elif current_energy < last_reset %}
-              {{ current_energy }}
-            {% else %}
-              {{ last_reset }}
-            {% endif %}
-          {% endif %}
-
-  - triggers:
-      - trigger: homeassistant
-        event: start
-      - trigger: numeric_state
-        entity_id: sensor.venus_2_custom_soc
-        above: 99.9
-      - trigger: numeric_state
-        entity_id: sensor.marstek_venus_2_soc
-        above: 99.9
-      - trigger: time_pattern
-        minutes: "/5"
-    sensor:
-      - name: "Venus 2 SOC Reset Point"
-        unique_id: venus_2_soc_reset_point
-        unit_of_measurement: "Wh"
-        state: >-
-          {% set current_energy = states('sensor.venus_2_energy_wh') | float(none) %}
-          {% set raw_last_reset = states('sensor.venus_2_soc_reset_point') %}
-          {% set last_reset = raw_last_reset | float(none) if is_number(raw_last_reset) else none %}
-
-          {% set hw_soc = states('sensor.marstek_venus_2_soc') | float(none) %}
-          {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
-          {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
-          {% set custom_soc = states('sensor.venus_2_custom_soc') | float(none) %}
-
-          {% if custom_soc == 0 and hw_soc is not none and current_energy is not none %}
-            {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-          {% elif hw_soc is none or current_energy is none %}
-            {{ last_reset if last_reset is not none else (this.state if is_number(this.state) else 0) }}
-          {% else %}
-            {% set last_reset = last_reset if last_reset is not none else current_energy %}
-            {% if hw_soc <= stop_soc %}
-              {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-            {% elif hw_soc >= 100 %}
-              {{ current_energy }}
-            {% elif current_energy < last_reset %}
-              {{ current_energy }}
-            {% else %}
-              {{ last_reset }}
-            {% endif %}
-          {% endif %}
-
   - triggers:
       - trigger: homeassistant
         event: start
       - trigger: state
         entity_id: sensor.venus_1_energy_wh
-      - trigger: state
-        entity_id: sensor.venus_1_soc_reset_point
+      - trigger: numeric_state
+        entity_id: sensor.marstek_venus_1_soc
+        above: 99.9
       - trigger: time_pattern
         minutes: "/5"
     sensor:
@@ -142,26 +56,51 @@ template:
         state: >-
           {% set hw_soc = states('sensor.marstek_venus_1_soc') | float(-1) %}
           {% set neu_wh = states('sensor.venus_1_energy_wh') | float(none) %}
-          {% set reset_wh = states('sensor.venus_1_soc_reset_point') | float(none) %}
+          {% set reset_wh = this.attributes.get('reset_point') | float(48840) %} 
 
           {% if neu_wh is none or reset_wh is none %}
             {{ this.state if is_number(this.state) else hw_soc }}
           {% elif hw_soc >= 100 %}
             100
-
           {% else %}
             {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
             {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
             {{ calc_soc | round(1) | clamp(0, 100) }}
           {% endif %}
+        attributes:
+          reset_point: >-
+            {% set current_energy = states('sensor.venus_1_energy_wh') | float(none) %}
+            {% set last_reset = this.attributes.get('reset_point') | float(48840) %}
+            {% set hw_soc = states('sensor.marstek_venus_1_soc') | float(none) %}
+            {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
+            {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
+            {% set custom_soc = this.state | float(none) %}
+
+            {% if custom_soc == 0 and hw_soc is not none and current_energy is not none %}
+              {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
+            {% elif hw_soc is none or current_energy is none %}
+              {{ last_reset if last_reset is not none else 0 }}
+            {% else %}
+              {% set last_reset = last_reset if last_reset is not none else current_energy %}
+              {% if hw_soc <= stop_soc %}
+                {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
+              {% elif hw_soc >= 100 %}
+                {{ current_energy }}
+              {% elif current_energy < last_reset %}
+                {{ current_energy }}
+              {% else %}
+                {{ last_reset }}
+              {% endif %}
+            {% endif %}
 
   - triggers:
       - trigger: homeassistant
         event: start
       - trigger: state
         entity_id: sensor.venus_2_energy_wh
-      - trigger: state
-        entity_id: sensor.venus_2_soc_reset_point
+      - trigger: numeric_state
+        entity_id: sensor.marstek_venus_2_soc
+        above: 99.9
       - trigger: time_pattern
         minutes: "/5"
     sensor:
@@ -172,7 +111,7 @@ template:
         state: >-
           {% set hw_soc = states('sensor.marstek_venus_2_soc') | float(-1) %}
           {% set neu_wh = states('sensor.venus_2_energy_wh') | float(none) %}
-          {% set reset_wh = states('sensor.venus_2_soc_reset_point') | float(none) %}
+          {% set reset_wh = this.attributes.get('reset_point') | float(47381.0) %}
 
           {% if neu_wh is none or reset_wh is none %}
             {{ this.state if is_number(this.state) else hw_soc }}
@@ -183,7 +122,44 @@ template:
             {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
             {{ calc_soc | round(1) | clamp(0, 100) }}
           {% endif %}
+        attributes:
+          reset_point: >-
+            {% set current_energy = states('sensor.venus_2_energy_wh') | float(none) %}
+            {% set last_reset = this.attributes.get('reset_point') | float(47381) %}
+            {% set hw_soc = states('sensor.marstek_venus_2_soc') | float(none) %}
+            {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
+            {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
+            {% set custom_soc = this.state | float(none) %}
 
+            {% if custom_soc == 0 and hw_soc is not none and current_energy is not none %}
+              {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
+            {% elif hw_soc is none or current_energy is none %}
+              {{ last_reset if last_reset is not none else 0 }}
+            {% else %}
+              {% set last_reset = last_reset if last_reset is not none else current_energy %}
+              {% if hw_soc <= stop_soc %}
+                {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
+              {% elif hw_soc >= 100 %}
+                {{ current_energy }}
+              {% elif current_energy < last_reset %}
+                {{ current_energy }}
+              {% else %}
+                {{ last_reset }}
+              {% endif %}
+            {% endif %}
+
+  - triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: numeric_state
+        entity_id: sensor.marstek_venus_1_soc
+        above: 99.9
+      - trigger: numeric_state
+        entity_id: sensor.marstek_venus_2_soc
+        above: 99.9
+      - trigger: time_pattern
+        minutes: "/5"
+    sensor:
       - name: "Marstek usable Energy"
         unique_id: marstek_usable_energy
         unit_of_measurement: "kWh"
