@@ -3,10 +3,6 @@
 # ============================================================
 
 template:
-  # ----------------------------------------------------------
-  # 1. PV Dynamic Current (EV FIRST)
-  # Hausbatterie-Ladestrom (negativer Wert) wird freigegeben.
-  # ----------------------------------------------------------
   - trigger:
       - platform: time_pattern
         seconds: "/30"
@@ -16,78 +12,51 @@ template:
           - sensor.leistung_vom_netz
           - sensor.marstek_venus_1_ac_power_glatt
           - sensor.marstek_venus_2_ac_power_glatt
+    variables:
+      cable_connected: "{{ is_state('binary_sensor.warp3_2ita_cable', 'on') }}"
+      charger_power: "{{ states('sensor.warp3_2ita_powernow') | float(0) }}"
+      power_from_net: "{{ states('sensor.leistung_vom_netz') | float(0) }}"
+      venus1: "{{ states('sensor.marstek_venus_1_ac_power_glatt') | float(0) }}"
+      venus2: "{{ states('sensor.marstek_venus_2_ac_power_glatt') | float(0) }}"
+      charger_voltage: "{{ states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) }}"
+      max_amps: "{{ state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) }}"
     sensor:
+      # ----------------------------------------------------------
+      # 1. PV Dynamic Current (EV FIRST)
+      # Hausbatterie-Ladestrom (negativer Wert) wird freigegeben.
+      # ----------------------------------------------------------
       - name: "PV Dynamic Charging Current"
         unique_id: pv_dynamic_charging_current
         unit_of_measurement: "A"
         device_class: current
         state_class: measurement
         state: >-
-          {% set cable_connected = is_state('binary_sensor.warp3_2ita_cable', 'on') %}
           {% if not cable_connected %}
             0
           {% else %}
-            {% set charger_power = states('sensor.warp3_2ita_powernow') | float(0) %}
-            {% set power_from_net = states('sensor.leistung_vom_netz') | float(0) %}
-            {% set venus1 = states('sensor.marstek_venus_1_ac_power_glatt') | float(0) %}
-            {% set venus2 = states('sensor.marstek_venus_2_ac_power_glatt') | float(0) %}
-            {% set charger_voltage = states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) %}
-
-            {# Batterie-Ladung (negativ) wird abgezogen (erhöht den Überschuss) #}
             {% set surplus = charger_power - power_from_net - venus1 - venus2 %}
-            {% set amps = (surplus / charger_voltage + 0.2) | round(0, 'floor') | int %} 
-            {% set max_amps = state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) %}
-
-            {% if amps >= 6 %}
-              {{ [amps, max_amps] | min }}
-            {% else %}
-              0
-            {% endif %}
+            {% set amps = (surplus / charger_voltage + 0.2) | int %}
+            {{ [amps, max_amps] | min if amps >= 6 else 0 }}
           {% endif %}
 
-  # ----------------------------------------------------------
-  # 2. PV Dynamic Current (BATTERY FIRST)
-  # Hausbatterie wird geschont. Ihr Ladestrom wird NICHT der Wallbox zugeschlagen.
-  # ----------------------------------------------------------
-  - trigger:
-      - platform: time_pattern
-        seconds: "/30"
-      - platform: state
-        entity_id:
-          - sensor.warp3_2ita_powernow
-          - sensor.leistung_vom_netz
-          - sensor.marstek_venus_1_ac_power_glatt
-          - sensor.marstek_venus_2_ac_power_glatt
-    sensor:
+        # ----------------------------------------------------------
+        # 2. PV Dynamic Current (BATTERY FIRST)
+        # Hausbatterie wird geschont. Ihr Ladestrom wird NICHT der Wallbox zugeschlagen.
+        # ----------------------------------------------------------
       - name: "PV Dynamic Charging Current Battery First"
         unique_id: pv_dynamic_charging_current_battery_first
         unit_of_measurement: "A"
         device_class: current
         state_class: measurement
         state: >-
-          {% set cable_connected = is_state('binary_sensor.warp3_2ita_cable', 'on') %}
           {% if not cable_connected %}
             0
           {% else %}
-            {% set charger_power = states('sensor.warp3_2ita_powernow') | float(0) %}
-            {% set power_from_net = states('sensor.leistung_vom_netz') | float(0) %}
-            {% set venus1 = states('sensor.marstek_venus_1_ac_power_glatt') | float(0) %}
-            {% set venus2 = states('sensor.marstek_venus_2_ac_power_glatt') | float(0) %}
-            {% set charger_voltage = states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) %}
-
-            {# Falls Batterie lädt (Wert negativ), ignorieren wir diesen Anteil im Überschuss #}
             {% set v1_clean = [venus1, 0] | max %}
             {% set v2_clean = [venus2, 0] | max %}
-
             {% set surplus = charger_power - power_from_net - v1_clean - v2_clean %}
             {% set amps = (surplus / charger_voltage + 0.2) | int %}
-            {% set max_amps = state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) %}
-
-            {% if amps >= 6 %}
-              {{ [amps, max_amps] | min }}
-            {% else %}
-              0
-            {% endif %}
+            {{ [amps, max_amps] | min if amps >= 6 else 0 }}
           {% endif %}
 
   # ----------------------------------------------------------
