@@ -124,7 +124,7 @@ template:
         entity_id: sensor.ups_custom_soc
         above: "99.9"
       - platform: time_pattern
-        minutes: "/1" # xxx
+        minutes: "/5"
       - platform: homeassistant
         event: start
     sensor:
@@ -171,7 +171,7 @@ template:
       - platform: homeassistant
         event: start
       - platform: time_pattern
-        minutes: "/1"
+        minutes: "/5"
     sensor:
       - name: "UPS Custom SOC"
         unique_id: ups_custom_soc

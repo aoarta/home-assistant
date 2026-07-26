@@ -213,7 +213,7 @@ template:
       - trigger: state
         entity_id: sensor.average_consumption_last_1h
       - trigger: time_pattern
-        minutes: "/1"
+        minutes: "51"
       - trigger: homeassistant
         event: start
     sensor:
