@@ -22,39 +22,34 @@ input_datetime:
 
 template:
   - sensor:
-      - name: "Solar Time Logic"
-        unique_id: solar_zeit_logik
+      - name: "Solar SOC Logic"
+        unique_id: solar_soc_logic
         availability: "{{ state_attr('sun.sun', 'next_setting') is not none }}"
         state: >-
-          {% set now_ts = as_timestamp(now()) %} {# CHANGED: now() nur einmal berechnet #}
-          {% set next_setting = as_timestamp(state_attr('sun.sun', 'next_setting'), 0) %} {# CHANGED: default direkt in as_timestamp #}
-          {% set next_rising = as_timestamp(state_attr('sun.sun', 'next_rising'), 0) %} {# CHANGED: default direkt in as_timestamp #}
+          {% set now_ts = as_timestamp(now()) %}
+          {% set next_rising = as_timestamp(state_attr('sun.sun', 'next_rising'), 0) %}
+          {% set next_setting = as_timestamp(state_attr('sun.sun', 'next_setting'), 0) %}
           {% set today_rising = next_rising - 86400 if next_rising > now_ts else next_rising %}
           {% set today_setting = next_setting - 86400 if next_setting > as_timestamp(now().replace(hour=23, minute=59)) else next_setting %}
           {{ 'Day' if today_rising <= now_ts <= today_setting else 'Night' }}
         attributes:
           now_ts: "{{ as_timestamp(now()) }}"
           sun_rise: >-
-            {% set ts = as_timestamp(state_attr('sun.sun', 'next_rising'), 0) %} {# CHANGED: default direkt in as_timestamp #}
+            {% set ts = as_timestamp(state_attr('sun.sun', 'next_rising'), 0) %}
             {{ ts - 86400 if ts > as_timestamp(now()) else ts }}
           sun_set: >-
-            {% set ts = as_timestamp(state_attr('sun.sun', 'next_setting'), 0) %} {# CHANGED: default direkt in as_timestamp #}
+            {% set ts = as_timestamp(state_attr('sun.sun', 'next_setting'), 0) %}
             {{ ts - 86400 if ts > as_timestamp(now().replace(hour=23, minute=59)) else ts }}
           t1130: "{{ as_timestamp(now().replace(hour=11, minute=30, second=0, microsecond=0)) }}"
           sun_set_minus_3h: >-
-            {% set ts = as_timestamp(state_attr('sun.sun', 'next_setting'), 0) %} {# CHANGED: default direkt in as_timestamp #}
-            {{ (ts - 86400 if ts > as_timestamp(now().replace(hour=23, minute=59)) else ts) - 3*3600 }}
-
-      - name: "Dynamic SOC Limits"
-        unique_id: dynamic_soc_grenzen
-        state: "OK"
-        attributes:
-          min: "{{ [10, state_attr('sensor.global_parameter','stop_soc') | float(10)] | max }}"
-
-          low: "{{ [60, state_attr('sensor.global_parameter','stop_soc') | float(60)] | max }}"
-          mid: "{{ [80, state_attr('sensor.global_parameter','stop_soc') | float(80)] | max }}"
-          high: "{{ [90, state_attr('sensor.global_parameter','stop_soc') | float(90)] | max }}"
-          max: "{{ [100.5, state_attr('sensor.global_parameter','stop_soc') | float(100.5)] | max }}"
+            {% set ts = as_timestamp(state_attr('sun.sun', 'next_setting'), 0) %}
+            {% set today_set = ts - 86400 if ts > as_timestamp(now().replace(hour=23, minute=59)) else ts %}
+            {{ today_set - 3*3600 }}
+          min: "{{ [10, state_attr('sensor.global_parameter', 'stop_soc') | float(10)] | max }}"
+          low: "{{ [60, state_attr('sensor.global_parameter', 'stop_soc') | float(60)] | max }}"
+          mid: "{{ [80, state_attr('sensor.global_parameter', 'stop_soc') | float(80)] | max }}"
+          high: "{{ [90, state_attr('sensor.global_parameter', 'stop_soc') | float(90)] | max }}"
+          max: "{{ [100.5, state_attr('sensor.global_parameter', 'stop_soc') | float(100.5)] | max }}"
 
       - name: "Battery AC Power total"
         unique_id: battery_ac_power_total
@@ -79,21 +74,21 @@ template:
         unit_of_measurement: "%"
         state: >-
           {% set ts = as_timestamp(now()) %}
-          {% set s_rise = state_attr('sensor.solar_zeit_logik', 'sun_rise') | float(0) %}
-          {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
-          {% set sun_set_minus_3h = state_attr('sensor.solar_zeit_logik', 'sun_set_minus_3h') | float(0) %}
-          {% set s_set = state_attr('sensor.solar_zeit_logik', 'sun_set') | float(0) %}
+          {% set s_rise = state_attr('sensor.solar_soc_logic', 'sun_rise') | float(0) %}
+          {% set t1130 = state_attr('sensor.solar_soc_logic', 't1130') | float(0) %}
+          {% set sun_set_minus_3h = state_attr('sensor.solar_soc_logic', 'sun_set_minus_3h') | float(0) %}
+          {% set s_set = state_attr('sensor.solar_soc_logic', 'sun_set') | float(0) %}
 
           {% if ts < s_rise %}
-            {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
+            {{ state_attr('sensor.solar_soc_logic', 'min') | float(20) }}
           {% elif ts < t1130 %}
-            {{ state_attr('sensor.dynamic_soc_grenzen', 'low') | float(60) }}
+            {{ state_attr('sensor.solar_soc_logic', 'low') | float(60) }}
           {% elif ts < sun_set_minus_3h %}
-            {{ state_attr('sensor.dynamic_soc_grenzen', 'mid') | float(90) }}
+            {{ state_attr('sensor.solar_soc_logic', 'mid') | float(80) }}
           {% elif ts < s_set %}
-            {{ state_attr('sensor.dynamic_soc_grenzen', 'high') | float(100) }}
+            {{ state_attr('sensor.solar_soc_logic', 'high') | float(90) }}
           {% else %}
-            {{ state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) }}
+            {{ state_attr('sensor.solar_soc_logic', 'min') | float(20) }}
           {% endif %}
 
       - name: "Target SOC Status"
@@ -115,7 +110,7 @@ template:
             Day after tomorrow's energy balance negative — charging to 100%
           {% else %}
             {% set dynamic = states('sensor.dynamic_soc') | float(0) %}
-            {% set grenzen_max = state_attr('sensor.dynamic_soc_grenzen', 'max') | float(100.5) %}
+            {% set grenzen_max = state_attr('sensor.solar_soc_logic', 'max') | float(100.5) %}
             {% if t | float(-1) == grenzen_max %}
               PV surplus insufficient for dynamic target — cap opened to max
             {% elif t == dynamic | float %}
@@ -130,7 +125,6 @@ template:
           override_active: "{{ is_state('input_boolean.override_soc', 'on') }}"
           maintenance_active: "{{ is_state('binary_sensor.battery_maintenance_required', 'on') }}"
 
-  # 2. Trigger-based sensors
   - trigger:
       - trigger: time_pattern
         minutes: "/5"
@@ -165,35 +159,25 @@ template:
             {# === Max storable energy (battery cap) === #}
             {% set max_storage = state_attr('sensor.global_parameter', 'calculated_combined_capacity_kwh') | float(10) %}
 
-            {# === Safety factors === #}
-            {% set pv_factor = 1.00 %}
-            {% set consumption_buffer = 1.00 %}
-
             {# === Today (remaining) === #}
             {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}
-            {% set pv_yield_today = states('sensor.pv_energy_yield_today_um') | float(0) %}
-            {#{% set pv_remaining_today = ([0, pv_forecast_today - pv_yield_today] | max) * pv_factor %}#}  
             {% set pv_remaining_today = pv_forecast_today %}
             {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
             {% set consumption_today = states('sensor.house_consumption_energy_today') | float(0) %}
 
-            {# Static estimate: learned daily bucket minus what's already used this cycle #}
             {% set consumption_static = [0, expected_daily_consumption - consumption_today] | max %}
-            {# Live estimate: current 1h-avg power projected to next sunrise (same window) #}
             {% set estimated_consumption = states('sensor.estimated_remaining_consumption') | float(consumption_static) %}
             {% set expected_consumption = states('sensor.expected_remaining_consumption_today') | float(consumption_static) %}
-            {# Blend both (fallback to static if live is unavailable), then apply the buffer #}
-            {% set consumption_blended = (1/3 * consumption_static + 1/3 * estimated_consumption + 1/3 * expected_consumption)
-                                          if estimated_consumption is not none else consumption_static %}
-            {% set consumption_remaining_today = consumption_blended * consumption_buffer %}
+            {% set consumption_blended = (consumption_static + estimated_consumption + expected_consumption) / 3 %}
+            {% set consumption_remaining_today = consumption_blended %}
 
             {# === Tomorrow === #}
-            {% set pv_tomorrow = states('sensor.pv_forecast_weighted_tomorrow') | float(0) * pv_factor %}
-            {% set consumption_tomorrow = states('sensor.expected_daily_consumption_tomorrow') | float(expected_daily_consumption) * consumption_buffer %}
+            {% set pv_tomorrow = states('sensor.pv_forecast_weighted_tomorrow') | float(0) %}
+            {% set consumption_tomorrow = states('sensor.expected_daily_consumption_tomorrow') | float(expected_daily_consumption) %}
 
             {# === Day after tomorrow === #}
-            {% set pv_day_after = states('sensor.pv_forecast_weighted_day_after') | float(0) * pv_factor %}
-            {% set consumption_day_after = states('sensor.expected_daily_consumption_day_after') | float(expected_daily_consumption) * consumption_buffer %}
+            {% set pv_day_after = states('sensor.pv_forecast_weighted_day_after') | float(0) %}
+            {% set consumption_day_after = states('sensor.expected_daily_consumption_day_after') | float(expected_daily_consumption) %}
 
             {# === Rolling balance: simulate battery state over the next days === #}
             {% set balance_today = [usable_energy + pv_remaining_today - consumption_remaining_today, max_storage] | min %}
@@ -202,11 +186,11 @@ template:
 
             {# === Decision: most urgent shortfall wins === #}
             {% if balance_today < 0 %}
-              130   {# Today's energy insufficient — charge to 100% now #}
+              130
             {% elif balance_tomorrow < 0 %}
-              131   {# Tomorrow will fall short #}
+              131
             {% elif balance_day_after < 0 %}
-              133   {# Day after tomorrow will fall short #}
+              133
             {% else %}
               {# No multi-day shortfall — normally follow the dynamic schedule.        #}
               {# But: if today's remaining PV surplus cannot lift the battery to the   #}
@@ -222,7 +206,7 @@ template:
               {% set target_energy = (target / 100) * max_storage %}
 
               {% if projected_energy < target_energy %}
-                {{ state_attr('sensor.dynamic_soc_grenzen', 'max') }}
+                {{ state_attr('sensor.solar_soc_logic', 'max') }}
               {% else %}
                 {{ target }}
               {% endif %}

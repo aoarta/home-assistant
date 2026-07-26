@@ -165,7 +165,7 @@ template:
         unit_of_measurement: "kWh"
         device_class: energy
         state: >-
-          {% set min_soc = state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) %}
+          {% set min_soc = state_attr('sensor.solar_soc_logic', 'min') %}
           {% set cap1 = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) %}
           {% set cap2 = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) %}
 
@@ -197,9 +197,9 @@ template:
     variables:
       limits_map: >-
         {% set default = {'v1': 2500, 'v2': 2500} %}
-        {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
-        {% set sun_set_minus_3h = state_attr('sensor.solar_zeit_logik', 'sun_set_minus_3h') | float(0) %}
-        {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
+        {% set ts = state_attr('sensor.solar_soc_logic', 'now_ts') | float(0) %}
+        {% set sun_set_minus_3h = state_attr('sensor.solar_soc_logic', 'sun_set_minus_3h') | float(0) %}
+        {% set t1130 = state_attr('sensor.solar_soc_logic', 't1130') | float(0) %}
         {% set ziel_soc = states('sensor.target_soc') | float(80) %}
 
         {% if ts >= t1130 and ts < sun_set_minus_3h and ziel_soc < 100 %}
@@ -283,7 +283,7 @@ template:
         {% set zero = {'v1': 0, 'v2': 0} %}
 
         {% if total > 0 %}
-          {% set min_soc = state_attr('sensor.dynamic_soc_grenzen', 'min') | float(20) %}
+          {% set min_soc = state_attr('sensor.solar_soc_logic', 'min') %}
           {% set min_v = state_attr('sensor.global_parameter', 'lfp_min_voltage') | float(2.90) %}
 
           {% set v1_cell_max = states('sensor.marstek_venus_1_modbus_minimale_zellenspannung') | float(0) %}
