@@ -124,9 +124,9 @@ template:
         unique_id: zero_soc
         unit_of_measurement: "%"
         state: >-
-          {% set raw = states('sensor.zero_sr_s_mbb_zero_soc') %}
+          {% set raw = states('sensor.zero_sr_batteriestand') %}
           {% if is_number(raw) %}
-            {{ raw | float | round(0) }}
+            {{ raw | float | round(1) if raw | float(-1) > 0 else this.state | float(-1) }}
           {% else %}
             {{ this.state | float(-1) }}
           {% endif %}
@@ -135,7 +135,7 @@ template:
         unique_id: hondae_soc
         unit_of_measurement: "%"
         state: >-
-          {% set raw = states('sensor.nix_da') %}
+          {% set raw = states('sensor.honda_e_batteriestand') %}
           {% if is_number(raw) %}
             {{ raw | float | round(0) }}
           {% else %}
