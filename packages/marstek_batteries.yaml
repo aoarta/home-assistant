@@ -555,8 +555,6 @@ template:
 automation:
   - alias: "Sende Lade und Entladebefehle an Hardware"
     id: "sende_batterie_targets_v3"
-    # Geändert von restart auf queued (max: 2), damit laufende Modbus-Sequenzen
-    # nicht abgebrochen werden, falls sofort der nächste Trigger kommt.
     mode: single
     triggers:
       - trigger: state
@@ -722,6 +720,48 @@ automation:
                     continue_on_error: true
       - delay: { milliseconds: 1200 }
 
+  - alias: "Battery Maintenance: Set Venus 1 lastfull timestamp"
+    id: battery_maintenance_set_venus_1_lastfull_timestamp
+    triggers:
+      - trigger: time_pattern
+        minutes: "/10"
+      - trigger: numeric_state
+        entity_id:
+          - sensor.marstek_venus_1_soc
+        above: 99.5
+    conditions:
+      - condition: numeric_state
+        entity_id: sensor.marstek_venus_1_soc
+        above: 99.5
+    actions:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id:
+            - input_datetime.venus_1_last_full
+        data:
+          timestamp: "{{ now().timestamp() }}"
+
+  - alias: "Battery Maintenance: Set Venus 2 lastfull timestamp"
+    id: battery_maintenance_set_venus_2_lastfull_timestamp
+    triggers:
+      - trigger: time_pattern
+        minutes: "/10"
+      - trigger: numeric_state
+        entity_id:
+          - sensor.marstek_venus_2_soc
+        above: 99.5
+    conditions:
+      - condition: numeric_state
+        entity_id: sensor.marstek_venus_2_soc
+        above: 99.5
+    actions:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id:
+            - input_datetime.venus_2_last_full
+        data:
+          timestamp: "{{ now().timestamp() }}"
+
   - alias: "Marstek: Zeitstempel Batterie voll aktualisieren"
     id: marstek_set_last_full_timestamp
     triggers:
@@ -729,7 +769,7 @@ automation:
         entity_id:
           - sensor.marstek_venus_1_soc
           - sensor.marstek_venus_2_soc
-        above: 99
+        above: 99.5
         for: "00:00:10"
         id: "sensor_update"
       - trigger: time_pattern
@@ -869,3 +909,111 @@ automation:
         data:
           name: "Energy Reset"
           message: "Venus 2 Riemann-Counter auf 0 zurückgesetzt (Batterie voll)."
+
+  - alias: "Battery Maintenance: Start Night Charge"
+    id: battery_maintenance_night_charge
+    triggers:
+      - trigger: sun
+        event: sunset
+        offset: "00:05:00"
+      - trigger: state
+        entity_id: binary_sensor.battery_maintenance_required
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.battery_maintenance_required
+        state: "on"
+      - condition: sun
+        after: sunset
+    actions:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.manual_charge_power
+        data:
+          value: 1000.0
+
+  - alias: "Battery Maintenance: Stop When Full"
+    id: battery_maintenance_stop_when_full
+    triggers:
+      - trigger: time_pattern
+        minutes: "/10"
+      - trigger: numeric_state
+        entity_id:
+          - sensor.marstek_venus_1_soc
+          - sensor.marstek_venus_2_soc
+        above: 99.5
+    conditions:
+      - condition: numeric_state
+        entity_id: input_number.manual_charge_power
+        above: 0
+      - condition: numeric_state
+        entity_id: sensor.marstek_venus_1_soc
+        above: 99.5
+      - condition: numeric_state
+        entity_id: sensor.marstek_venus_2_soc
+        above: 99.5
+    actions:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.manual_charge_power
+        data:
+          value: 0
+
+  - alias: "Battery Maintenance: Enable SOC Override When Overdue"
+    description: >
+      Turns on SOC override if any battery has not been fully charged within
+      the configured number of days; turns it off once all are fresh OR once
+      all three batteries report a full charge (hardware SOC and custom SOC).
+    id: soc_override_weekly_control
+    triggers:
+      - trigger: time_pattern
+        minutes: "/10"
+      - trigger: homeassistant
+        event: start
+    actions:
+      - choose:
+          # --- Turn ON: any battery overdue ---
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {% set days = state_attr('sensor.global_parameter', 'override_soc_days') | float(5) %}
+                  {% set threshold = days * 86400 %}
+                  {% set now_ts = as_timestamp(now()) %}
+                  {% set ages = [
+                    (now_ts - as_timestamp(states('input_datetime.venus_1_last_full'), 0)) if has_value('input_datetime.venus_1_last_full') else 0,
+                    (now_ts - as_timestamp(states('input_datetime.venus_2_last_full'), 0)) if has_value('input_datetime.venus_2_last_full') else 0,
+                    (now_ts - as_timestamp(states('input_datetime.ups_last_full'), 0)) if has_value('input_datetime.ups_last_full') else 0
+                  ] %}
+                  {{ ages | max > threshold }}
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.override_soc
+
+          # --- Turn OFF: all three batteries fully charged (HW SOC + custom SOC) ---
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ states('sensor.marstek_venus_1_soc') | float(0) >= 100
+                    and states('sensor.venus_1_custom_soc') | float(0) >= 100
+                    and states('sensor.marstek_venus_2_soc') | float(0) >= 100
+                    and states('sensor.venus_2_custom_soc') | float(0) >= 100
+                    and states('sensor.ups_soc') | float(0) >= 100
+                    and states('sensor.ups_custom_soc') | float(0) >= 100 }}
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.override_soc
+        default:
+          - condition: template
+            value_template: >-
+              {% set now_ts = as_timestamp(now()) %}
+              {% set ages = [
+                (now_ts - as_timestamp(states('input_datetime.venus_1_last_full'), now_ts)) if has_value('input_datetime.venus_1_last_full') else now_ts,
+                (now_ts - as_timestamp(states('input_datetime.venus_2_last_full'), now_ts)) if has_value('input_datetime.venus_2_last_full') else now_ts,
+                (now_ts - as_timestamp(states('input_datetime.ups_last_full'), now_ts)) if has_value('input_datetime.ups_last_full') else now_ts
+              ] %}
+              {{ ages | min < 30 }}
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.override_soc

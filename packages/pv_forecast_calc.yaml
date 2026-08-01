@@ -38,6 +38,9 @@ template:
     variables:
       r_reg: 0.1
       bias: "{{ states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) }}"
+      # Nicht mehr in den Weighted-Sensoren verwendet (siehe dortige Kommentare) -
+      # nur noch als Variable vorhanden, falls du den statischen Faktor
+      # spaeter testweise wieder einbauen willst.
       total_correction: "{{ states('sensor.pv_total_correction_factor') | float(1) }}"
 
       bw_sc: "{{ (states('input_number.pv_kalman_score_solcast') | float(0)) / (states('input_number.pv_kalman_r_solcast') | float(0.1) + r_reg) }}"
@@ -259,7 +262,18 @@ template:
           {% set dw_w = bw_dw if dw > 0 else 0 %}
           {% set total_weight = sc_w + fs_w + om_w + dw_w %}
           {% if total_weight > 0 %}
-            {{ ((sc_w * sc + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias * total_correction) | round(1) }}
+            {# total_correction (Hoehe x Albedo) wird bewusst NICHT multipliziert:
+               zusammen mit dem gelernten Bias konnte die Gesamtkorrektur im
+               Winter nie unter ~1.04 fallen, selbst wenn 1.0 richtig gewesen
+               waere. Der Bias allein deckt das ab, sensor.pv_total_correction_factor
+               bleibt nur zur Diagnose erhalten. #}
+            {# Live-Nowcast-Korrektur aus gemessener Einstrahlung, siehe
+               pv_forecast_nowcast.yaml. Nur fuer HEUTE relevant - vor
+               Sonnenaufgang/bei zu wenig Signal ist der Faktor 1.0 (neutral),
+               beruehrt also weder den Morgen-Snapshot noch die
+               Bias-Lernschleife in pv_forecast_automations.yaml. #}
+            {% set nowcast = states('sensor.pv_nowcast_correction_factor') | float(1) %}
+            {{ ((sc_w * sc + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias * nowcast) | round(1) }}
           {% elif is_state('sun.sun', 'below_horizon') and not state_attr('sun.sun', 'rising') %}
             0.0
           {% else %}
@@ -280,7 +294,7 @@ template:
           {% set dw_w = bw_dw if dw > 0 else 0 %}
           {% set total_weight = sc_w + fs_w + om_w + dw_w %}
           {% if total_weight > 0 %}
-            {{ ((sc_w * sc + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias * total_correction) | round(2) }}
+            {{ ((sc_w * sc + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias) | round(2) }}
           {% else %}
             0.0
           {% endif %}
@@ -295,7 +309,7 @@ template:
           {% set dw_w = bw_dw if dw > 0 else 0 %}
           {% set total_weight = om_w + dw_w %}
           {% if total_weight > 0 %}
-            {{ ((om_w * om + dw_w * dw ) / total_weight * bias * total_correction) | round(2) }}
+            {{ ((om_w * om + dw_w * dw ) / total_weight * bias) | round(2) }}
           {% else %}
             0.0
           {% endif %}

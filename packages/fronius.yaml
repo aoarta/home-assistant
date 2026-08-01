@@ -75,13 +75,13 @@ template:
   - sensor:
       - name: "Energie von PV AC"
         unique_id: energie_von_pv_ac
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
         state: >
           {% set raw = states('sensor.fronius_inverter_energy_raw') | float(none) %}
-          {% if raw is not none and sf is not none %}
-            {{ raw | round(0) }}
+          {% if raw is not none %}
+            {{ (raw / 1000) | round(1) }}
           {% else %}
             unavailable
           {% endif %}

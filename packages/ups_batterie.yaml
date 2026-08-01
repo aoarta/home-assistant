@@ -253,7 +253,7 @@ automation:
           # 0 --- keine Verbindung zum BMS
           - conditions:
               - condition: template
-                value_template: "{{ max_v == 0 and min_v == 0 }}"
+                value_template: "{{ high_cell == 0 and low_cell == 0 }}"
             sequence:
               - action: switch.turn_off
                 target:

@@ -10,15 +10,46 @@ input_boolean:
     icon: mdi:battery-lock
 
 input_number:
-  takt_interval_sekunden:
-    min: 1
-    max: 300
-    step: 1
+  # Manuelle Ladevorgabe in W je Speicher.
+  #   0      = aus, normale Regelung laeuft
+  #   > 0    = charge_map setzt beide Venus fest auf diesen Wert (target_soc -> 110)
+  #   >= 1000 = ups_coarse_control wertet das als Wartungsmodus
+  # Max 2500 W entspricht der Grenze in charge_map / sende_batterie_targets_v3.
+  # Kein "initial:" -> der Wert ueberlebt einen Neustart, damit eine laufende
+  # Wartungsladung nicht stillschweigend abbricht. Beendet wird sie von
+  # "Battery Maintenance: Stop When Full".
+  manual_charge_power:
+    name: "Manual Charge Power"
+    min: 0
+    max: 2500
+    step: 50
+    unit_of_measurement: "W"
+    mode: box
+    icon: mdi:battery-charging-high
 
 input_datetime:
-  takt_base:
+  # Zeitstempel "Batterie war zuletzt voll".
+  # Geschrieben von: marstek_set_last_full_timestamp (Venus 1/2) und
+  #                  ups_set_last_full_timestamp (USV).
+  # Gelesen von:     binary_sensor.battery_maintenance_required und
+  #                  soc_override_weekly_control.
+  venus_1_last_full:
+    name: "Venus 1 zuletzt voll"
     has_date: true
     has_time: true
+    icon: mdi:battery-clock
+
+  venus_2_last_full:
+    name: "Venus 2 zuletzt voll"
+    has_date: true
+    has_time: true
+    icon: mdi:battery-clock
+
+  ups_last_full:
+    name: "USV zuletzt voll"
+    has_date: true
+    has_time: true
+    icon: mdi:battery-clock
 
 template:
   - sensor:

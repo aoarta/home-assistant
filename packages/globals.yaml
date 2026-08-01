@@ -32,8 +32,11 @@ template:
           honda_e_capacity: 28.5 # NEU — Honda e: 35,5 kWh brutto
           honda_e_charge_efficiency: 0.88 # NEU — anpassen wenn gemessen
 
+          # bei Änderung oben auch hier anpassen
           # calculated Attribut (2* Venus * 0.8 + UPS * 0.6)
           calculated_combined_capacity_kwh: >-
-            {% set venus = this.attributes.get('venus_capacity_wh', 0) | float(0) %}
-            {% set ups = this.attributes.get('ups_capacity_wh', 0) | float(0) %}
+            {#{% set venus = this.attributes.get('venus_capacity_wh', 0) | float(0) %}#}
+            {#{% set ups = this.attributes.get('ups_capacity_wh', 0) | float(0) %}#}
+            {% set venus = 5120 %}
+            {% set ups = 2200 %}
             {{ ((venus * 2 * 0.8) + (ups * 0.6)) / 1000 }}

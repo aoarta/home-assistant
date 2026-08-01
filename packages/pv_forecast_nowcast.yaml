@@ -1,0 +1,138 @@
+# packages/pv_forecast_nowcast.yaml
+#
+# Live-Korrektur der Tagesprognose aus gemessener Globalstrahlung
+# (sensor.solar_radiation aus weewx_sensor.yaml).
+#
+# Warum ein eigenes Modul und kein 5. Kalman-Provider in pv_forecast_calc.yaml:
+# Der Morgen-Snapshot (pv_fix_daily_forecast_morning) liegt kurz vor
+# Sonnenaufgang - da ist die gemessene Einstrahlung noch ~0, ein "Messung"-
+# Provider waere zu diesem Zeitpunkt zwangslaeufig identisch mit OpenMeteo
+# und liesse sich vom Kalman-Filter nicht sinnvoll bewerten. Stattdessen
+# wirkt dieses Modul als MULTIPLIKATIVE Live-Korrektur, die erst tagsueber
+# aktiv wird (siehe Naechte-/Daemmerungs-Guard unten) und den bereits
+# Kalman-gewichteten sensor.pv_forecast_weighted nachschaerft. Der
+# Morgen-Snapshot selbst (vor Sonnenaufgang, Faktor per Guard = 1.0) bleibt
+# unangetastet - die Bias-Lernschleife aus pv_forecast_automations.yaml
+# sieht von diesem Modul nichts.
+#
+# Warum Einstrahlung und nicht einfach "PV Production Power" vs. Modell:
+# Die Einstrahlungsmessung ist unabhaengig vom PV-System selbst. Schnee auf
+# den Panels, ein Wechselrichterfehler oder Verschattung druecken die PV-
+# Leistung, nicht aber die gemessene Einstrahlung - genau die Faelle, in
+# denen ein reiner Leistungsvergleich die Prognose faelschlich nach unten
+# ziehen wuerde, obwohl es nur ein Problem der Anlage ist, nicht des Wetters.
+#
+# Ablauf:
+#   1. Einstrahlung ueber ~30 Min glaetten (EMA)
+#   2. Aus Ist-Leistung / Ist-Einstrahlung einen anlagenspezifischen
+#      Umrechnungsfaktor lernen (sehr langsame EMA - der Faktor soll die
+#      Anlage beschreiben, nicht das aktuelle Wetter; siehe Einschraenkung
+#      unten zu Einstrahlwinkel-Effekten)
+#   3. Damit aus der geglaetteten Einstrahlung eine "gemessene" aktuelle
+#      PV-Leistung ableiten
+#   4. Gegen die fuer die aktuelle Stunde MODELLIERTE Leistung (OpenMeteo,
+#      da dessen stuendliche Rohdaten schon fuer fs_today/om_today in
+#      pv_forecast_calc.yaml aufbereitet werden) vergleichen -> Faktor
+#   5. Faktor in pv_forecast_calc.yaml NUR in "PV Forecast Weighted" (heute)
+#      multiplizieren - nicht in Tomorrow/Day After, da eine Live-Messung
+#      fuer die Zukunft nichts aussagt.
+#
+# Bekannte Einschraenkung: der gelernte Umrechnungsfaktor (Schritt 2) ist
+# durch Einfallswinkel-Effekte bei fest montierten Panels im Tagesverlauf
+# nicht wirklich konstant (Vormittag/Nachmittag/Mittag unterscheiden sich
+# bei gleicher Einstrahlung in der Ausbeute). Fuer eine grobe Live-Korrektur
+# reicht das; fuer mehr Praezision muesste der Faktor tageszeitabhaengig
+# gelernt werden (z.B. getrennt fuer 2h-Fenster) - bewusst nicht gemacht,
+# um die Komplexitaet ueberschaubar zu halten.
+#
+template:
+  - trigger:
+      - trigger: time_pattern
+        minutes: "/1"
+    sensor:
+      - name: "PV Solar Radiation EMA 30min"
+        unique_id: pv_solar_radiation_ema_30min
+        unit_of_measurement: "W/m²"
+        state_class: measurement
+        state: >-
+          {% set raw = states('sensor.wetterstation_solarstrahlung') | float(none) %}
+          {% if raw is none %}
+            {{ this.state | float(0) }}
+          {% else %}
+            {% set alpha = 0.065 %}  {# Faustregel 2/(N+1) fuer N=30 Perioden bei 1-Min-Takt #}
+            {% set alt = this.state | float(raw) %}
+            {{ (alt + alpha * (raw - alt)) | round(1) }}
+          {% endif %}
+
+      - name: "PV Solar Gain Factor"
+        unique_id: pv_solar_gain_factor
+        unit_of_measurement: "W/(W/m²)"
+        state: >-
+          {% set irr = states('sensor.wetterstation_solarstrahlung') | float(0) %}
+          {% set pv = states('sensor.pv_production_power') | float(0) %}
+          {% set alt = this.state | float(8) %}
+          {# grober Startwert 8 - lernt sich an ein paar sonnigen Tagen ein #}
+          {% if irr > 100 %}
+            {% set alpha = 0.01 %}
+            {# absichtlich sehr langsam: soll die Anlage beschreiben, nicht #}
+            {# das aktuelle Wetter oder einzelne Wolkenluecken #}
+            {{ (alt + alpha * ((pv / irr) - alt)) | round(3) }}
+          {% else %}
+            {{ alt }}
+          {% endif %}
+
+  - trigger:
+      - trigger: time_pattern
+        minutes: "/5"
+      - trigger: state
+        entity_id:
+          - sensor.pv_roof_openmeteo_production_today
+          - sensor.pv_fassade_openmeteo_production_today
+    sensor:
+      - name: "PV Forecast Current Hour Modeled"
+        unique_id: pv_forecast_current_hour_modeled
+        unit_of_measurement: "W"
+        state: >-
+          {% from 'horizon_dach.jinja' import horizon_factor_ts as hf_ts_dach %}
+          {% from 'horizon_fassade.jinja' import horizon_factor_ts as hf_ts_fassade %}
+          {% set dach = state_attr('sensor.pv_roof_openmeteo_production_today', 'wh_period') %}
+          {% set fassade = state_attr('sensor.pv_fassade_openmeteo_production_today', 'wh_period') %}
+          {% if dach is mapping and fassade is mapping %}
+            {% set now_dt = now() %}
+            {% set today = now_dt.strftime('%Y-%m-%d') %}
+            {% set current_hour_ts = now_dt.replace(minute=0, second=0, microsecond=0).timestamp() %}
+            {% set ns = namespace(val=0) %}
+            {% for ts, d_val in dach.items() if ts.startswith(today) %}
+              {% set t = as_timestamp(ts) %}
+              {% if t == current_hour_ts %}
+                {% set f_val = fassade[ts] | float(0) if ts in fassade else 0 %}
+                {% set ns.val = ((d_val | float(0)) * (hf_ts_dach(ts) | float(1))) + (f_val * (hf_ts_fassade(ts) | float(1))) %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.val | round(0) }}
+          {% else %}
+            0
+          {% endif %}
+        # Hinweis: das ist die modellierte Wh-Menge FUER DIE AKTUELLE STUNDE
+        # (nicht der Tagesrest wie om_today in pv_forecast_calc.yaml) -
+        # numerisch gleich der modellierten Durchschnittsleistung in W.
+
+      - name: "PV Nowcast Correction Factor"
+        unique_id: pv_nowcast_correction_factor
+        state: >-
+          {% set irr = states('sensor.pv_solar_radiation_ema_30min') | float(0) %}
+          {% set gain = states('sensor.pv_solar_gain_factor') | float(0) %}
+          {% set modeled = states('sensor.pv_forecast_current_hour_modeled') | float(0) %}
+          {% set measured = irr * gain %}
+          {% if modeled > 20 and measured > 20 %}
+            {{ (measured / modeled) | clamp(0.3, 2.5) | round(3) }}
+          {% else %}
+            1.0
+          {% endif %}
+          {# Guard >20 deckt Nacht/Daemmerung ab: dann bleibt der Faktor #}
+          {# neutral und pv_forecast_weighted verhaelt sich exakt wie ohne #}
+          {# dieses Modul. Clamp 0.3-2.5 faengt MQTT-Aussetzer, kurzzeitige #}
+          {# Messfehler oder Wolkenluecken-Spitzen ab. #}
+        attributes:
+          measured_power_w: "{{ ((states('sensor.pv_solar_radiation_ema_30min') | float(0)) * (states('sensor.pv_solar_gain_factor') | float(0))) | round(0) }}"
+          modeled_power_w: "{{ states('sensor.pv_forecast_current_hour_modeled') }}"

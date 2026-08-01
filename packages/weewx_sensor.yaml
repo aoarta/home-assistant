@@ -5,62 +5,74 @@ mqtt:
       state_topic: "weather/loop"
       expire_after: 600
       unit_of_measurement: "°C"
-      value_template: "{{ value_json.outTemp_C | float(none) | round(1) }}"
-      device_class: temperature
+      value_template: >-
+        {% set v = value_json.outTemp_C | default(none) %}
+        {{ v | float | round(1) if v is not none else none }}      device_class: temperature
       state_class: measurement
       device: &ws_device
         identifiers: "wetterstation_mqtt_01"
         name: "Weather Station"
         model: "WeeWX / MQTT Gateway"
+        manufacturer: "DIY"
 
     - name: "Humidity"
       unique_id: ws_out_hum
       state_topic: "weather/loop"
       expire_after: 600
       unit_of_measurement: "%"
-      value_template: "{{ value_json.outHumidity | float(none) | round(0) }}"
       device_class: humidity
       state_class: measurement
       device: *ws_device
+      value_template: >-
+        {% set v = value_json.outHumidity | default(none) %}
+        {{ v | float | round(1) if v is not none else none }}
 
     - name: "Barometric Pressure"
       unique_id: ws_pressure
       state_topic: "weather/loop"
       expire_after: 600
       unit_of_measurement: "hPa"
-      value_template: "{{ value_json.barometer_mbar | float(none) | round(1) }}"
       device_class: pressure
       state_class: measurement
       device: *ws_device
+      value_template: >-
+        {% set v = value_json.barometer_mbar | default(none) %}
+        {{ v | float | round(1) if v is not none else none }}
 
     - name: "Wind Speed"
       unique_id: ws_wind_speed
       state_topic: "weather/loop"
       expire_after: 600
       unit_of_measurement: "km/h"
-      value_template: "{{ value_json.windSpeed_kph | float(none) | round(1) }}"
       device_class: wind_speed
       state_class: measurement
       device: *ws_device
+      value_template: >-
+        {% set v = value_json.windSpeed_kph | default(none) %}
+        {{ v | float | round(1) if v is not none else none }}
 
     - name: "Wind Gusts"
       unique_id: ws_wind_gust
       state_topic: "weather/loop"
       expire_after: 600
       unit_of_measurement: "km/h"
-      value_template: "{{ value_json.windGust_kph | float(none) | round(1) }}"
       device_class: wind_speed
       state_class: measurement
       device: *ws_device
+      value_template: >-
+        {% set v = value_json.windGust_kph | default(none) %}
+        {{ v | float | round(1) if v is not none else none }}
 
     - name: "Wind Direction"
       unique_id: ws_wind_dir
       state_topic: "weather/loop"
       expire_after: 600
       unit_of_measurement: "°"
-      value_template: "{{ value_json.windDir | float(none) | round(0) }}"
       icon: "mdi:compass"
       device: *ws_device
+      value_template: >-
+        {% set v = value_json.windDir | default(none) %}
+        {{ v | float | round(1) if v is not none else none }}
 
     - name: "Rain Rate"
       unique_id: ws_rain_rate
@@ -97,48 +109,58 @@ mqtt:
       state_topic: "weather/loop"
       expire_after: 600
       unit_of_measurement: "W/m²"
-      value_template: "{{ value_json.radiation_Wpm2 | float(none) | round(0) }}"
       device_class: irradiance
       state_class: measurement
       device: *ws_device
+      value_template: >-
+        {% set v = value_json.radiation_Wpm2 | default(none) %}
+        {{ v | float | round(1) if v is not none else none }}
 
     - name: "UV Index"
       unique_id: ws_uv_index
       state_topic: "weather/loop"
-      expire_after: 600
       value_template: "{{ value_json.UV | float(none) | round(1) }}"
       icon: "mdi:weather-sunny-alert"
       state_class: measurement
       device: *ws_device
+      value_template: >-
+        {% set v = value_json.UV | default(none) %}
+        {{ v | float | round(1) if v is not none else none }}
 
     - name: "Dew Point"
       unique_id: ws_dewpoint
       state_topic: "weather/loop"
       expire_after: 600
       unit_of_measurement: "°C"
-      value_template: "{{ value_json.dewpoint_C | float(none) | round(1) }}"
       device_class: temperature
       state_class: measurement
       device: *ws_device
+      value_template: >-
+        {% set v = value_json.dewpoint_C | default(none) %}
+        {{ v | float | round(1) if v is not none else none }}
 
     - name: "Apparent Temperature"
       unique_id: ws_app_temp
       state_topic: "weather/loop"
       expire_after: 600
       unit_of_measurement: "°C"
-      value_template: "{{ value_json.appTemp_C | float(none) | round(1) }}"
       device_class: temperature
       state_class: measurement
       device: *ws_device
+      value_template: >-
+        {% set v = value_json.appTemp_C | default(none) %}
+        {{ v | float | round(1) if v is not none else none }}
 
     - name: "Cloud Base"
       unique_id: ws_cloudbase
       state_topic: "weather/loop"
       expire_after: 600
       unit_of_measurement: "m"
-      value_template: "{{ value_json.cloudbase_meter | float(none) | round(0) }}"
       icon: "mdi:weather-cloudy"
       device: *ws_device
+      value_template: >-
+        {% set v = value_json.cloudbase_meter | default(none) %}
+        {{ v | float | round(1) if v is not none else none }}
 
     - name: "Evapotranspiration (ET)"
       unique_id: ws_evapotranspiration
@@ -147,7 +169,7 @@ mqtt:
       unit_of_measurement: "mm"
       value_template: "{{ (value_json.ET_cm | float(0) * 10) | round(2) }}"
       icon: "mdi:water-percent"
-      state_class: total_increasing
+      state_class: measurement
       device: *ws_device
 
     - name: "Indoor Temperature"
@@ -155,7 +177,10 @@ mqtt:
       state_topic: "weather/loop"
       expire_after: 600
       unit_of_measurement: "°C"
-      value_template: "{{ value_json.inTemp_C | float(none) | round(1) }}"
       device_class: temperature
       state_class: measurement
       device: *ws_device
+      value_template: >-
+        {% set v = value_json.inTemp_C | default(none) %}
+        {{ v | float | round(1) if v is not none else none }}
+

@@ -105,7 +105,7 @@ template:
           {% set raw = states('sensor.energie_von_pv_ac') | float(none) %}
           {% set last = this.state | float(none) %}
           {% if raw is not none %}
-            {% set val = (raw / 1000) | round(2) %}
+            {% set val = raw | round(2) %}
             {% if last is not none %}
               {# Prevents value from decreasing but allows initialization #}
               {{ [val, last] | max }}
