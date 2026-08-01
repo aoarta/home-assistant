@@ -142,8 +142,6 @@ template:
         entity_id: sensor.leistung_vom_netz
       #      - trigger: state
       #        entity_id: sensor.marstek_ac_power_total
-      - trigger: state
-        entity_id: binary_sensor.marstek_ringstrom_fehler
     sensor:
       - name: "Charge Power"
         unique_id: charge_power

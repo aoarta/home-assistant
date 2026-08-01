@@ -33,7 +33,7 @@ sensor:
     entity_id: sensor.pv_energy_yield_balcony_today_um
     filters:
       - filter: range
-        upper_bound: 15
+        upper_bound: 35
 
   - platform: filter
     name: "PV Energy Yield Roof Today"

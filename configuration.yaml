@@ -60,20 +60,6 @@ recorder:
       - sensor.*energy_factor*
       - sensor.*ant_bms*
 
-sql:
-  - name: "DB Top 10 Writers"
-    query: >
-      SELECT
-          m.entity_id,
-          COUNT(*) AS count
-      FROM states s
-      JOIN states_meta m ON s.metadata_id = m.metadata_id
-      WHERE s.last_updated_ts >= UNIX_TIMESTAMP(NOW() - INTERVAL 15 MINUTE)
-      GROUP BY s.metadata_id
-      ORDER BY count DESC
-      LIMIT 10;
-    column: "entity_id"
-
 command_line:
   - sensor:
       name: "CPU Current Speed"

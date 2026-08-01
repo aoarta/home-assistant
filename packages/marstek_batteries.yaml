@@ -566,7 +566,8 @@ template:
 automation:
   - alias: "Sende Lade und Entladebefehle an Hardware"
     id: "sende_batterie_targets_v3"
-    mode: single
+    mode: queued
+    max: 3
     triggers:
       - trigger: state
         entity_id: sensor.target_power_distribution_fast
@@ -729,7 +730,7 @@ automation:
                       { entity_id: number.marstek_venus_2_discharge_power }
                     data: { value: "{{ v2_discharge }}" }
                     continue_on_error: true
-      - delay: { milliseconds: 1200 }
+      - delay: { milliseconds: 400 }
 
   - alias: "Marstek: Zeitstempel Batterie voll aktualisieren"
     id: marstek_set_last_full_timestamp
@@ -840,50 +841,6 @@ automation:
                     data:
                       value: 0
                     continue_on_error: true
-
-  # ACHTUNG / ZU PRUEFEN: die sensor-Domain kennt keine turn_on/turn_off-
-  # Services. homeassistant.turn_off auf einen Integrationssensor kann im
-  # Log "does not support this service" erzeugen und den Riemann-Zaehler
-  # gar nicht zuruecksetzen. Bitte einmal im Log gegenpruefen; falls es
-  # nicht wirkt, stattdessen den Offset in "Venus X Energy Wh" ueber ein
-  # input_number nachfuehren oder auf utility_meter mit Reset umstellen.
-  - alias: "Energy Integration: Venus 1 Reset"
-    id: energy_reset_venus_1
-    trigger:
-      - platform: numeric_state
-        entity_id: sensor.venus_1_custom_soc
-        above: 99.9
-    action:
-      - action: homeassistant.turn_off
-        target:
-          entity_id: sensor.venus_1_riemann
-      - delay: "00:00:05"
-      - action: homeassistant.turn_on
-        target:
-          entity_id: sensor.venus_1_riemann
-      - action: logbook.log
-        data:
-          name: "Energy Reset"
-          message: "Venus 1 Riemann-Counter auf 0 zurückgesetzt (Batterie voll)."
-
-  - alias: "Energy Integration: Venus 2 Reset"
-    id: energy_reset_venus_2
-    trigger:
-      - platform: numeric_state
-        entity_id: sensor.venus_2_custom_soc
-        above: 99.9
-    action:
-      - action: homeassistant.turn_off
-        target:
-          entity_id: sensor.venus_2_riemann
-      - delay: "00:00:05"
-      - action: homeassistant.turn_on
-        target:
-          entity_id: sensor.venus_2_riemann
-      - action: logbook.log
-        data:
-          name: "Energy Reset"
-          message: "Venus 2 Riemann-Counter auf 0 zurückgesetzt (Batterie voll)."
 
   # ==========================================================
   # WARTUNGSLADUNG VENUS

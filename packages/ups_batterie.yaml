@@ -453,29 +453,6 @@ automation:
         data:
           timestamp: "{{ now().timestamp() }}"
 
-  - alias: "UPS SOC Counter Reset"
-    id: ups_soc_counter_reset
-    trigger:
-      - platform: numeric_state
-        entity_id: sensor.ups_soc
-        above: 99.8
-      - platform: numeric_state
-        entity_id: sensor.ups_highest_cell
-        above: 3.58
-
-    action:
-      - action: homeassistant.turn_off
-        target:
-          entity_id: sensor.ups_riemann_energy
-      - delay: "00:00:01"
-      - action: homeassistant.turn_on
-        target:
-          entity_id: sensor.ups_riemann_energy
-      - action: logbook.log
-        data:
-          name: "UPS Reset"
-          message: "Riemann-Sensor wurde durch Turn-Off/On zurückgesetzt."
-
   # ==========================================================
   # USV: Wartungsladung (eigener Zyklus, unabhaengig von den Venus)
   #

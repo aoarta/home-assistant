@@ -69,8 +69,8 @@ template:
           {% set anchor = states('input_number.zero_sr_soc_anchor') | float(0) %}
           {% set a_kwh  = states('input_number.zero_sr_anchor_meter_kwh') | float(-1) %}
           {% set meter  = states('sensor.warp3_2ita_energyabs') | float(-1) %}
-          {% set cap    = state_attr('sensor.global_parameter', 'zero_capacity') | float(0) %}
-          {% set eff    = state_attr('sensor.global_parameter', 'zero_charge_efficiency') | float(0.88) %}
+          {% set cap    = state_attr('sensor.global_parameter', 'zero_sr_capacity') | float(0) %}
+          {% set eff    = state_attr('sensor.global_parameter', 'zero_sr_charge_efficiency') | float(0.88) %}
           {% set active = is_state('input_select.ev_vehicle_mode', 'zero') %}
           {% if active and a_kwh >= 0 and meter > a_kwh and cap > 0 %}
             {{ [ anchor + (meter - a_kwh) * eff / cap * 100, 100 ] | min | round(1) }}
@@ -213,8 +213,8 @@ automation:
               - variables:
                   a_soc: "{{ states('input_number.zero_sr_soc_anchor') | float(0) }}"
                   a_kwh: "{{ states('input_number.zero_sr_anchor_meter_kwh') | float(-1) }}"
-                  cap: "{{ state_attr('sensor.global_parameter', 'zero_capacity') | float(0) }}"
-                  eff: "{{ state_attr('sensor.global_parameter', 'zero_charge_efficiency') | float(0.88) }}"
+                  cap: "{{ state_attr('sensor.global_parameter', 'zero_sr_capacity') | float(0) }}"
+                  eff: "{{ state_attr('sensor.global_parameter', 'zero_sr_charge_efficiency') | float(0.88) }}"
               - service: input_number.set_value
                 target:
                   entity_id: input_number.zero_sr_soc_anchor

@@ -1,5 +1,13 @@
 # ============================================================
 # PV surplus wallbox charging (WARP3) - Trigger Sensors
+#
+# Die Ueberschussrechnung liegt seit dem Zusammenlegen direkt in
+# "EV Target Charging Current". Die frueheren Zwischensensoren
+# sensor.pv_dynamic_charging_current und
+# sensor.pv_dynamic_charging_current_battery_first entfallen -
+# der zugehoerige Block in ev_sensors.yaml muss geloescht werden,
+# die beiden verwaisten Entities danach in der Entitaeten-Liste
+# entfernen.
 # ============================================================
 
 template:
@@ -12,6 +20,9 @@ template:
           - sensor.expected_daily_consumption
           - sensor.house_consumption_energy_today
           - sensor.estimated_remaining_consumption
+          # neu: die Restprognose hat den groessten Hebel in der Formel,
+          # ohne diesen Trigger hinkt der Floor der PV-Prognose hinterher
+          - sensor.pv_forecast_weighted
     sensor:
       - name: "Battery Floor SOC for EV"
         unique_id: battery_floor_soc_for_ev
@@ -41,13 +52,23 @@ template:
           {% endif %}
 
   # ----------------------------------------------------------
-  # TARGET CHARGING CURRENT -- die neue Logik-Zentrale
+  # TARGET CHARGING CURRENT -- die Logik-Zentrale.
+  # Rechnet den PV-Ueberschuss selbst, damit beide Varianten
+  # (EV first / Battery first) garantiert aus derselben
+  # Momentaufnahme stammen.
   # ----------------------------------------------------------
-  - trigger:
-      - platform: state
+  - triggers:
+      - trigger: time_pattern
+        seconds: "/30"
+      - trigger: state
         entity_id:
-          - sensor.pv_dynamic_charging_current
-          - sensor.pv_dynamic_charging_current_battery_first
+          # Rohwerte fuer die Ueberschussrechnung
+          - sensor.warp3_2ita_powernow
+          - sensor.leistung_vom_netz
+          - sensor.marstek_venus_1_ac_power_glatt
+          - sensor.marstek_venus_2_ac_power_glatt
+          - binary_sensor.warp3_2ita_cable
+          # Entscheidungsgroessen
           - sensor.battery_soc_total
           - sensor.battery_floor_soc_for_ev
           - sensor.ev_session_energy
@@ -57,6 +78,28 @@ template:
           - input_select.ev_charge_mode
           - input_select.ev_vehicle_mode
           - input_number.ev_manual_charging_current
+    variables:
+      charger_power: "{{ states('sensor.warp3_2ita_powernow') | float(0) }}"
+      power_from_net: "{{ states('sensor.leistung_vom_netz') | float(0) }}"
+      venus1: "{{ states('sensor.marstek_venus_1_ac_power_glatt') | float(0) }}"
+      venus2: "{{ states('sensor.marstek_venus_2_ac_power_glatt') | float(0) }}"
+      volt: "{{ states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) }}"
+      max_amps: "{{ state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) }}"
+
+      # EV FIRST: Ladeleistung der Hausbatterie (negativ) wird freigegeben
+      surplus_ev_first_w: "{{ charger_power - power_from_net - venus1 - venus2 }}"
+      # BATTERY FIRST: nur Entladeleistung (positiv) abziehen,
+      # der Ladeanteil bleibt bei der Hausbatterie
+      surplus_bat_first_w: >-
+        {{ charger_power - power_from_net
+           - ([venus1, 0] | max) - ([venus2, 0] | max) }}
+
+      amps_ev_first: >-
+        {% set a = (surplus_ev_first_w / volt + 0.2) | int %}
+        {{ [a, max_amps] | min | int if a >= 6 else 0 }}
+      amps_bat_first: >-
+        {% set a = (surplus_bat_first_w / volt + 0.2) | int %}
+        {{ [a, max_amps] | min | int if a >= 6 else 0 }}
 
     sensor:
       - name: "EV Target Charging Current"
@@ -75,25 +118,25 @@ template:
               {{ manual }}
             {% else %}
               {% set mode = states('input_select.ev_charge_mode') %}
-              {% set surplus_ev_first_amps = states('sensor.pv_dynamic_charging_current') | int(0) %}
-              {% set surplus_bat_first_amps = states('sensor.pv_dynamic_charging_current_battery_first') | int(0) %}
+              {% set surplus_ev_first_amps = amps_ev_first | int(0) %}
+              {% set surplus_bat_first_amps = amps_bat_first | int(0) %}
               {% set soc = states('sensor.battery_soc_total') | float(0) %}
               {% set floor = states('sensor.battery_floor_soc_for_ev') | float(100) %}
 
-              {# --- MODUS 1: PV-Überschuss Fahrzeug priorisiert --- #}
+              {# --- MODUS 1: PV-Ueberschuss Fahrzeug priorisiert --- #}
               {% if mode == 'pv_ev_first' %}
                 {{ surplus_ev_first_amps }}
 
-              {# --- MODUS 2: PV-Überschuss Batterien priorisiert --- #}
+              {# --- MODUS 2: PV-Ueberschuss Batterien priorisiert --- #}
               {% elif mode == 'pv_battery_first' %}
-                {# Batterie nimmt alles, was sie kann. Der Rest (Gesamtüberschuss minus Batterie-Limit) geht ins Auto #}
+                {# Batterie nimmt alles, was sie kann. Der Rest geht ins Auto. #}
                 {{ surplus_bat_first_amps }}
 
-              {# --- MODUS 3: PV-Überschuss 50/50 geteilt (Dynamisch nach Füllstand) --- #}
+              {# --- MODUS 3: PV-Ueberschuss 50/50 (dynamisch nach Fuellstand) --- #}
               {% elif mode == 'pv_shared_50_50' %}
                 {% set ev_energy = states('sensor.ev_session_energy') | float(0) %}
                 {% set ev_limit = states('sensor.ev_max_charge_energy') | float(0) %}
-                
+
                 {# Fahrzeugspezifischen SOC abfragen #}
                 {% set ev_soc = 0 %}
                 {% if vehicle == 'zero' %}
@@ -101,36 +144,35 @@ template:
                 {% elif vehicle == 'honda_e' %}
                   {% set ev_soc = states('sensor.honda_e_soc') | float(0) %}
                 {% endif %}
-                
-                {# Vehicle gilt als voll, wenn das berechnete Energielimit erreicht ist ODER der Fahrzeug-SOC > 95.5% ist #}
+
+                {# Voll, wenn das Energielimit erreicht ist ODER der Fahrzeug-SOC > 95.5 % #}
                 {% set ev_full = (ev_limit > 0 and ev_energy >= ev_limit) or (ev_soc > 95.5) %}
 
                 {% if ev_full %}
-                  {# Vehicle voll: Ladung stoppen (0A), gesamter Überschuss geht in die Hausbatterie #}
+                  {# Fahrzeug voll: Ladung stoppen, gesamter Ueberschuss in die Hausbatterie #}
                   0
                 {% elif soc >= 99 %}
-                  {# Hausbatterie voll: Gesamter Überschuss ins Auto (wie ev_first) #}
+                  {# Hausbatterie voll: gesamter Ueberschuss ins Auto (wie ev_first) #}
                   {{ surplus_ev_first_amps }}
                 {% else %}
-                  {# Weder noch voll: 50/50 Aufteilung, aber Deckelung beachten! #}
-                  {# Wenn die reguläre 50%-Aufteilung der Batterie MEHR zuteilen würde, als sie aufnehmen kann, #}
-                  {# bekommt das Auto den restlichen Überschuss, den die Batterie nicht schafft. #}
-                  {# Rechnerische 50%-Aufteilung wird durch den verbleibenden Überschuss nach Batterie gedeckelt #}
+                  {# ACHTUNG: max() ist eine UNTERgrenze, keine Deckelung -             #}
+                  {# das Auto bekommt mindestens die Haelfte, mindestens aber das,     #}
+                  {# was nach der Hausbatterie uebrig bleibt. Falls du wirklich        #}
+                  {# deckeln wolltest, gehoert hier min() statt max() hin.             #}
                   {% set half_amps = [ (surplus_ev_first_amps / 2) | int, surplus_bat_first_amps ] | max %}
                   {{ half_amps if half_amps >= 6 else 0 }}
                 {% endif %}
-                
-              {# --- MODUS 4: Mind. 1.3kW (6A) / Max PV-Überschuss (Batterieschutz aktiv) --- #}
+
+              {# --- MODUS 4: Mind. 1.3 kW (6 A) / Max PV-Ueberschuss, Batterieschutz aktiv --- #}
               {% elif mode == 'min_6a_floor_battery' %}
-                {# Wenn genug Überschuss da ist, lade voll dynamisch mit Überschuss #}
                 {% if surplus_ev_first_amps >= 6 %}
                   {{ surplus_ev_first_amps }}
                 {% else %}
-                  {# Ist zu wenig Sonne da, lade mit 6A (1.3kW) sofern SOC > Min-SOC #}
+                  {# Zu wenig Sonne: 6 A, sofern SOC ueber dem berechneten Floor #}
                   {{ 6 if soc > floor else 0 }}
                 {% endif %}
 
-              {# --- MODUS 5: Mind. 1.3kW (6A) / Max PV-Überschuss (ohne Batterieschutz) --- #}
+              {# --- MODUS 5: Mind. 1.3 kW (6 A) / Max PV-Ueberschuss, ohne Batterieschutz --- #}
               {% elif mode == 'min_6a_floor_grid' %}
                 {{ [surplus_ev_first_amps, 6] | max }}
               {% else %}
@@ -140,3 +182,8 @@ template:
           {% endif %}
         attributes:
           charge_mode: "{{ states('input_select.ev_charge_mode') }}"
+          amps_ev_first: "{{ amps_ev_first }}"
+          amps_battery_first: "{{ amps_bat_first }}"
+          # bewusst auf 100-W-Schritte gerundet: ein Attribut, das sich bei
+          # jedem Render aendert, erzwingt jedes Mal einen State-Write
+          surplus_w: "{{ ((surplus_ev_first_w / 100) | round(0) * 100) | int }}"

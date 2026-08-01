@@ -212,11 +212,11 @@ template:
             {# === Today (remaining) === #}
             {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}
             {% set pv_remaining_today = pv_forecast_today %}
-            {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
-            {% set consumption_today = states('sensor.house_consumption_energy_today') | float(0) %}
+            {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(5) %}
+            {% set consumption_today = states('sensor.house_consumption_energy_today') | float(5) %}
 
-            {% set estimated_consumption = states('sensor.estimated_remaining_consumption') | float(consumption_static) %}
-            {% set expected_consumption = states('sensor.expected_remaining_consumption_today') | float(consumption_static) %}
+            {% set estimated_consumption = states('sensor.estimated_remaining_consumption') | float(consumption_today) %}
+            {% set expected_consumption = states('sensor.expected_remaining_consumption_today') | float(consumption_today) %}
             {% set consumption_blended = (estimated_consumption + expected_consumption) / 2 %}
             {% set consumption_remaining_today = consumption_blended %}
 

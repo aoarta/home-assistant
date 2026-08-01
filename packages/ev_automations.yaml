@@ -414,119 +414,40 @@ automation:
             {# und nicht über 100 % steigen. Abgerundet auf ganze Zahlen. #}
             {{ [0, [delta, 100] | min] | max | round(1) }}
 
-  - alias: "Wallbox: WARP3 LED Fahrzeug & SoC Steuerung"
+  - alias: "Wallbox: WARP3 LED Fahrzeug & SoC"
     id: wallbox_LED
-    description: "Steuert die LED nach Fahrzeugfarbe, Ladestand (1Hz / 2Hz) und Regenbogen bei voll."
+    description: "Zero rot, Honda weiss, frei gruen. <50 % 1 Hz, 50-98 % 2 Hz, voll Regenbogen."
     mode: restart
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.warp3_2ita_charging
-      - platform: state
-        entity_id: sensor.zero_sr_soc
-      - platform: state
-        entity_id: sensor.honda_e_soc
-      - platform: state
-        entity_id: sensor.honda_e_soc
-      - platform: state
-        entity_id: binary_sensor.zero_sr_connected
-      - platform: state
-        entity_id: binary_sensor.honda_e_connected
-    action:
-      - choose:
-          # =========================================================
-          # 1. BEREITSCHAFT: Grün, dauerhaft an
-          # =========================================================
-          - conditions:
-              - condition: state
-                entity_id: binary_sensor.warp3_2ita_charging
-                state: "ready"
-            sequence:
-              - action: mqtt.publish
-                data:
-                  topic: warp/2itA/evse/indicator_led_set
-                  payload: '{"state": 255, "color_h": 120, "color_s": 255, "color_v": 255}'
-
-          # =========================================================
-          # 2. HONDA E (Farbe: Weiß)
-          # =========================================================
-          - conditions:
-              - condition: state
-                entity_id: binary_sensor.honda_e_connected
-                state: "on"
-            sequence:
-              - choose:
-                  # VOLL: Regenbogen-Effekt (state: 4)
-                  - conditions:
-                      - condition: numeric_state
-                        entity_id: sensor.honda_e_soc
-                        above: 98
-                    sequence:
-                      - action: mqtt.publish
-                        data:
-                          topic: warp/2itA/evse/indicator_led_set
-                          payload: '{"state": 4, "color_h": 360, "color_s": 0, "color_v": 0}'
-
-                  # MITTE (50% bis 98%): Weiß schnelles Blinken (2 Hz -> state: 3)
-                  - conditions:
-                      - condition: numeric_state
-                        entity_id: sensor.honda_e_soc
-                        above: 49
-                        below: 99
-                    sequence:
-                      - action: mqtt.publish
-                        data:
-                          topic: warp/2itA/evse/indicator_led_set
-                          payload: '{"state": 3, "color_h": 360, "color_s": 255, "color_v": 255}'
-                  # ANFANG (< 50%): Weiß langsames Blinken (1 Hz -> state: 2)
-                  - conditions:
-                      - condition: numeric_state
-                        entity_id: sensor.honda_e_soc
-                        below: 50
-                    sequence:
-                      - action: mqtt.publish
-                        data:
-                          topic: warp/2itA/evse/indicator_led_set
-                          payload: '{"state": 2, "color_h": 360, "color_s": 0, "color_v": 255}'
-
-          # =========================================================
-          # 3. ZERO (Farbe: Rot)
-          # =========================================================
-          - conditions:
-              - condition: state
-                entity_id: binary_sensor.zero_sr_connected
-                state: "on"
-            sequence:
-              - choose:
-                  # VOLL: Regenbogen-Effekt (state: 4)
-                  - conditions:
-                      - condition: numeric_state
-                        entity_id: sensor.zero_sr_soc
-                        above: 98
-                    sequence:
-                      - action: mqtt.publish
-                        data:
-                          topic: warp/2itA/evse/indicator_led_set
-                          payload: '{"state": 4, "color_h": 360, "color_s": 0, "color_v": 0}'
-
-                  # MITTE (50% bis 98%): Rot schnelles Blinken (2 Hz -> state: 3)
-                  - conditions:
-                      - condition: numeric_state
-                        entity_id: sensor.zero_sr_soc
-                        above: 49
-                        below: 99
-                    sequence:
-                      - action: mqtt.publish
-                        data:
-                          topic: warp/2itA/evse/indicator_led_set
-                          payload: '{"state": 3, "color_h": 360, "color_s": 255, "color_v": 255}'
-
-                  # ANFANG (< 50%): Rot langsames Blinken (1 Hz -> state: 2)
-                  - conditions:
-                      - condition: numeric_state
-                        entity_id: sensor.zero_sr_soc
-                        below: 50
-                    sequence:
-                      - action: mqtt.publish
-                        data:
-                          topic: warp/2itA/evse/indicator_led_set
-                          payload: '{"state": 2, "color_h": 360, "color_s": 255, "color_v": 255}'
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.warp3_2ita_cable
+          - binary_sensor.warp3_2ita_charging
+          - binary_sensor.zero_sr_connected
+          - binary_sensor.honda_e_connected
+          - sensor.zero_sr_soc
+          - sensor.honda_e_soc
+    variables:
+      # Zero zuerst - nur der wird per BLE positiv erkannt.
+      vehicle: >-
+        {% if is_state('binary_sensor.zero_sr_connected', 'on') %}zero
+        {% elif is_state('binary_sensor.honda_e_connected', 'on') %}honda
+        {% else %}none{% endif %}
+      soc: >-
+        {% if vehicle == 'zero' %}{{ states('sensor.zero_sr_soc') | float(0) }}
+        {% elif vehicle == 'honda' %}{{ states('sensor.honda_e_soc') | float(0) }}
+        {% else %}0{% endif %}
+      hue: "{{ 120 if vehicle == 'none' else 0 }}"
+      sat: "{{ 0 if vehicle == 'honda' else 255 }}"
+      led_state: >-
+        {% if vehicle == 'none' %}255
+        {% elif soc | float(0) > 98 %}4
+        {% elif soc | float(0) >= 50 %}3
+        {% else %}2{% endif %}
+    actions:
+      - action: mqtt.publish
+        data:
+          topic: warp/2itA/evse/indicator_led_set
+          payload: >-
+            {{ {'state': led_state | int, 'color_h': hue | int,
+                'color_s': sat | int, 'color_v': 255} | to_json }}
