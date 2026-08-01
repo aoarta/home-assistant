@@ -199,10 +199,10 @@ template:
         {% set default = {'v1': 2500, 'v2': 2500} %}
         {% set ts = state_attr('sensor.solar_soc_logic', 'now_ts') | float(0) %}
         {% set sun_set_minus_3h = state_attr('sensor.solar_soc_logic', 'sun_set_minus_3h') | float(0) %}
-        {% set t1130 = state_attr('sensor.solar_soc_logic', 't1130') | float(0) %}
+        {% set t1115 = state_attr('sensor.solar_soc_logic', 't1115') | float(0) %}
         {% set ziel_soc = states('sensor.target_soc') | float(80) %}
 
-        {% if ts >= t1130 and ts < sun_set_minus_3h and ziel_soc < 100 %}
+        {% if ts >= t1115 and ts < sun_set_minus_3h and ziel_soc < 100 %}
           {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
           {% set dauer = [(sun_set_minus_3h - ts) / 3600, 0.01] | max %}
           {% set fak = capacity / 100 / dauer * 2.5 %}
@@ -218,7 +218,18 @@ template:
       charge_map: >-
         {% set manual = states('input_number.manual_charge_power') | float(0) %}
         {% if manual > 0 %}
-          {{ {'v1': manual, 'v2': manual} }}
+          {# Voll gemeldete Batterie nicht weiter anfordern.
+             Ohne diese Pruefung entstand ein Ping-Pong: sobald ein Venus > 99
+             war, setzte "Marstek: Zeitstempel Batterie voll aktualisieren"
+             number.marstek_venus_X_charge_power auf 0, und sende_batterie_targets_v3
+             schrieb beim naechsten Trigger wieder den vollen manual-Wert hinein.
+             Der Steuermodus-Switch wird ebenfalls beruecksichtigt - ohne
+             Modbus-Steuerung nimmt der Speicher den Wert ohnehin nicht an. #}
+          {% set m1 = states('sensor.venus_1_custom_soc') | float(0) < 99.5
+                      and is_state('switch.marstek_venus1_modbus_rs485_steuermodus', 'on') %}
+          {% set m2 = states('sensor.venus_2_custom_soc') | float(0) < 99.5
+                      and is_state('switch.marstek_venus2_modbus_rs485_steuermodus', 'on') %}
+          {{ {'v1': manual if m1 else 0, 'v2': manual if m2 else 0} }}
         {% else %}
           {% set total = [0, -(states('sensor.charge_power') | float(0))] | max | round(0) | int(0) %}
           {% set dyn_soc = states('sensor.target_soc') | float(60) %}
@@ -720,48 +731,6 @@ automation:
                     continue_on_error: true
       - delay: { milliseconds: 1200 }
 
-  - alias: "Battery Maintenance: Set Venus 1 lastfull timestamp"
-    id: battery_maintenance_set_venus_1_lastfull_timestamp
-    triggers:
-      - trigger: time_pattern
-        minutes: "/10"
-      - trigger: numeric_state
-        entity_id:
-          - sensor.marstek_venus_1_soc
-        above: 99.5
-    conditions:
-      - condition: numeric_state
-        entity_id: sensor.marstek_venus_1_soc
-        above: 99.5
-    actions:
-      - action: input_datetime.set_datetime
-        target:
-          entity_id:
-            - input_datetime.venus_1_last_full
-        data:
-          timestamp: "{{ now().timestamp() }}"
-
-  - alias: "Battery Maintenance: Set Venus 2 lastfull timestamp"
-    id: battery_maintenance_set_venus_2_lastfull_timestamp
-    triggers:
-      - trigger: time_pattern
-        minutes: "/10"
-      - trigger: numeric_state
-        entity_id:
-          - sensor.marstek_venus_2_soc
-        above: 99.5
-    conditions:
-      - condition: numeric_state
-        entity_id: sensor.marstek_venus_2_soc
-        above: 99.5
-    actions:
-      - action: input_datetime.set_datetime
-        target:
-          entity_id:
-            - input_datetime.venus_2_last_full
-        data:
-          timestamp: "{{ now().timestamp() }}"
-
   - alias: "Marstek: Zeitstempel Batterie voll aktualisieren"
     id: marstek_set_last_full_timestamp
     triggers:
@@ -809,7 +778,7 @@ automation:
                   sequence:
                     - if:
                         - condition: template
-                          value_template: "{{ states(repeat.item.ent) | float(0) > 99 }}"
+                          value_template: "{{ states(repeat.item.ent) | float(0) > 99.5 }}"
                       then:
                         - action: input_datetime.set_datetime
                           target:
@@ -872,6 +841,12 @@ automation:
                       value: 0
                     continue_on_error: true
 
+  # ACHTUNG / ZU PRUEFEN: die sensor-Domain kennt keine turn_on/turn_off-
+  # Services. homeassistant.turn_off auf einen Integrationssensor kann im
+  # Log "does not support this service" erzeugen und den Riemann-Zaehler
+  # gar nicht zuruecksetzen. Bitte einmal im Log gegenpruefen; falls es
+  # nicht wirkt, stattdessen den Offset in "Venus X Energy Wh" ueber ein
+  # input_number nachfuehren oder auf utility_meter mit Reset umstellen.
   - alias: "Energy Integration: Venus 1 Reset"
     id: energy_reset_venus_1
     trigger:
@@ -910,30 +885,62 @@ automation:
           name: "Energy Reset"
           message: "Venus 2 Riemann-Counter auf 0 zurückgesetzt (Batterie voll)."
 
-  - alias: "Battery Maintenance: Start Night Charge"
+  # ==========================================================
+  # WARTUNGSLADUNG VENUS
+  #
+  # Umgebaut: die Automation steuert jetzt NUR noch die beiden Venus.
+  # Die USV haengt an input_boolean.ups_maintenance und wird in
+  # ups_batterie.yaml gestartet/gestoppt. Grund: frueher stoppte
+  # "Stop When Full" die gemeinsame Ladung, sobald die Venus voll waren
+  # (~30 min) - die USV braucht 3-5 h und wurde nie fertig, wodurch
+  # ups_last_full nie gesetzt wurde und battery_maintenance_required
+  # dauerhaft "on" blieb.
+  #
+  # Zusaetzlich time_pattern /30 als Trigger: der reine
+  # "to: on"-Flankentrigger kam nicht wieder, weil der Binary Sensor
+  # "on" BLEIBT. Ein abgebrochener Zyklus konnte damit fruehestens am
+  # naechsten Abend erneut starten.
+  # ==========================================================
+  - alias: "Battery Maintenance: Start Venus Night Charge"
     id: battery_maintenance_night_charge
+    mode: single
     triggers:
       - trigger: sun
         event: sunset
         offset: "00:05:00"
-      - trigger: state
-        entity_id: binary_sensor.battery_maintenance_required
-        to: "on"
+      - trigger: time_pattern
+        minutes: "/30"
     conditions:
-      - condition: state
-        entity_id: binary_sensor.battery_maintenance_required
-        state: "on"
       - condition: sun
         after: sunset
+      # Nur starten, wenn wirklich ein VENUS ueberfaellig ist.
+      - condition: template
+        value_template: >-
+          {% set days = state_attr('sensor.global_parameter', 'battery_care_days') | float(8) %}
+          {% set now_ts = as_timestamp(now()) %}
+          {% set v1 = (now_ts - as_timestamp(states('input_datetime.venus_1_last_full'), now_ts))
+                      if has_value('input_datetime.venus_1_last_full') else 0 %}
+          {% set v2 = (now_ts - as_timestamp(states('input_datetime.venus_2_last_full'), now_ts))
+                      if has_value('input_datetime.venus_2_last_full') else 0 %}
+          {{ [v1, v2] | max > days * 86400 }}
+      # Nicht neu setzen, wenn schon eine Ladung laeuft.
+      - condition: numeric_state
+        entity_id: input_number.manual_charge_power
+        below: 1
     actions:
       - action: input_number.set_value
         target:
           entity_id: input_number.manual_charge_power
         data:
           value: 1000.0
+      - action: logbook.log
+        data:
+          name: "Battery Maintenance"
+          message: "Venus-Wartungsladung gestartet (1000 W je Speicher)."
 
   - alias: "Battery Maintenance: Stop When Full"
     id: battery_maintenance_stop_when_full
+    mode: single
     triggers:
       - trigger: time_pattern
         minutes: "/10"
@@ -946,6 +953,8 @@ automation:
       - condition: numeric_state
         entity_id: input_number.manual_charge_power
         above: 0
+      # Nur noch die Venus - die USV hat ihren eigenen Stopp in
+      # ups_batterie.yaml (battery_maintenance_ups_stop).
       - condition: numeric_state
         entity_id: sensor.marstek_venus_1_soc
         above: 99.5
@@ -958,6 +967,31 @@ automation:
           entity_id: input_number.manual_charge_power
         data:
           value: 0
+
+  # Harter Abbruch am Morgen. Ohne den haengt manual_charge_power bei
+  # einer defekten Zelle, einem haengenden SOC-Sensor oder einem
+  # Modbus-Aussetzer dauerhaft auf 1000 - die Venus wuerden dann rund um
+  # die Uhr aus dem Netz laden.
+  - alias: "Battery Maintenance: Hard stop at sunrise"
+    id: battery_maintenance_hard_stop
+    mode: single
+    triggers:
+      - trigger: sun
+        event: sunrise
+    conditions:
+      - condition: numeric_state
+        entity_id: input_number.manual_charge_power
+        above: 0
+    actions:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.manual_charge_power
+        data:
+          value: 0
+      - action: logbook.log
+        data:
+          name: "Battery Maintenance"
+          message: "Venus-Wartungsladung bei Sonnenaufgang hart beendet."
 
   - alias: "Battery Maintenance: Enable SOC Override When Overdue"
     description: >
@@ -1013,7 +1047,13 @@ automation:
                 (now_ts - as_timestamp(states('input_datetime.venus_2_last_full'), now_ts)) if has_value('input_datetime.venus_2_last_full') else now_ts,
                 (now_ts - as_timestamp(states('input_datetime.ups_last_full'), now_ts)) if has_value('input_datetime.ups_last_full') else now_ts
               ] %}
-              {{ ages | min < 30 }}
+              {# 900 statt 30 Sekunden: die Stempel-Automation und diese hier
+                 laufen BEIDE auf time_pattern /10, feuern also im selben Tick.
+                 Ob der Zeitstempel vorher oder nachher gesetzt wird, war
+                 Zufall - mit einem 30-s-Fenster ging override_soc deshalb
+                 haeufig gar nicht mehr aus und target_soc stand dauerhaft
+                 auf 101 (= Venus permanent auf 100 %, fuer LFP unnoetig). #}
+              {{ ages | min < 900 }}
           - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.override_soc

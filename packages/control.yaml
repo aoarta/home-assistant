@@ -9,6 +9,20 @@ input_boolean:
     name: "Manual SOC Override"
     icon: mdi:battery-lock
 
+  # Wartungsladung der USV. Frueher wurde das ueber
+  # "manual_charge_power >= 1000" mitgesteuert - das war ein Fehler:
+  # "Battery Maintenance: Stop When Full" prueft nur den SOC der beiden
+  # Venus und setzt manual_charge_power auf 0, sobald DIE voll sind.
+  # Damit fiel maintenance_activ in ups_coarse_control weg, lange bevor
+  # die USV geladen war (Venus: ~30 min, USV: 3-5 h).
+  # Jetzt getrennt: manual_charge_power = reine Venus-Ladeleistung,
+  # dieses Flag = USV-Wartung.
+  # Geschrieben von: battery_maintenance_ups_charge / _ups_stop (ups_batterie.yaml)
+  # Gelesen von:     ups_coarse_control -> maintenance_activ
+  ups_maintenance:
+    name: "USV Wartungsladung"
+    icon: mdi:battery-heart
+
 input_number:
   # Manuelle Ladevorgabe in W je Speicher.
   #   0      = aus, normale Regelung laeuft
@@ -71,7 +85,7 @@ template:
           sun_set: >-
             {% set ts = as_timestamp(state_attr('sun.sun', 'next_setting'), 0) %}
             {{ ts - 86400 if ts > as_timestamp(now().replace(hour=23, minute=59)) else ts }}
-          t1130: "{{ as_timestamp(now().replace(hour=11, minute=30, second=0, microsecond=0)) }}"
+          t1115: "{{ as_timestamp(now().replace(hour=11, minute=15, second=0, microsecond=0)) }}"
           sun_set_minus_3h: >-
             {% set ts = as_timestamp(state_attr('sun.sun', 'next_setting'), 0) %}
             {% set today_set = ts - 86400 if ts > as_timestamp(now().replace(hour=23, minute=59)) else ts %}
@@ -106,13 +120,13 @@ template:
         state: >-
           {% set ts = as_timestamp(now()) %}
           {% set s_rise = state_attr('sensor.solar_soc_logic', 'sun_rise') | float(0) %}
-          {% set t1130 = state_attr('sensor.solar_soc_logic', 't1130') | float(0) %}
+          {% set t1115 = state_attr('sensor.solar_soc_logic', 't1115') | float(0) %}
           {% set sun_set_minus_3h = state_attr('sensor.solar_soc_logic', 'sun_set_minus_3h') | float(0) %}
           {% set s_set = state_attr('sensor.solar_soc_logic', 'sun_set') | float(0) %}
 
           {% if ts < s_rise %}
             {{ state_attr('sensor.solar_soc_logic', 'min') | float(20) }}
-          {% elif ts < t1130 %}
+          {% elif ts < t1115  %}
             {{ state_attr('sensor.solar_soc_logic', 'low') | float(60) }}
           {% elif ts < sun_set_minus_3h %}
             {{ state_attr('sensor.solar_soc_logic', 'mid') | float(80) }}
@@ -177,12 +191,17 @@ template:
         unique_id: target_soc
         unit_of_measurement: "%"
         state: >-
+          {# Reihenfolge: Wartung VOR Manual. Beide liefern >100 (= voll laden),
+             aber waehrend der Wartungsladung steht manual_charge_power auf 1000,
+             wodurch frueher immer 110 ("Manual charge power set") angezeigt wurde
+             statt 120 ("Battery maintenance cycle"). Rein kosmetisch fuer
+             sensor.target_soc_status, aber beim Debuggen irrefuehrend. #}
           {% if is_state('input_boolean.override_soc', 'on') %}
             101
-          {% elif states('input_number.manual_charge_power') | float(0) > 0 %}
-            110
           {% elif is_state('binary_sensor.battery_maintenance_required', 'on') %}
             120
+          {% elif states('input_number.manual_charge_power') | float(0) > 0 %}
+            110
           {% else %}
             {# === Usable energy in battery (discharge capacity, incl. safety margin) === #}
             {% set usable_energy = states('sensor.marstek_usable_energy') | float(0) %}
@@ -196,10 +215,9 @@ template:
             {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
             {% set consumption_today = states('sensor.house_consumption_energy_today') | float(0) %}
 
-            {% set consumption_static = [0, expected_daily_consumption - consumption_today] | max %}
             {% set estimated_consumption = states('sensor.estimated_remaining_consumption') | float(consumption_static) %}
             {% set expected_consumption = states('sensor.expected_remaining_consumption_today') | float(consumption_static) %}
-            {% set consumption_blended = (consumption_static + estimated_consumption + expected_consumption) / 3 %}
+            {% set consumption_blended = (estimated_consumption + expected_consumption) / 2 %}
             {% set consumption_remaining_today = consumption_blended %}
 
             {# === Tomorrow === #}

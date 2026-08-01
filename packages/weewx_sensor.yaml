@@ -7,7 +7,8 @@ mqtt:
       unit_of_measurement: "°C"
       value_template: >-
         {% set v = value_json.outTemp_C | default(none) %}
-        {{ v | float | round(1) if v is not none else none }}      device_class: temperature
+        {{ v | float | round(1) if v is not none else none }}
+      device_class: temperature
       state_class: measurement
       device: &ws_device
         identifiers: "wetterstation_mqtt_01"
@@ -119,7 +120,7 @@ mqtt:
     - name: "UV Index"
       unique_id: ws_uv_index
       state_topic: "weather/loop"
-      value_template: "{{ value_json.UV | float(none) | round(1) }}"
+      expire_after: 600
       icon: "mdi:weather-sunny-alert"
       state_class: measurement
       device: *ws_device
@@ -183,4 +184,3 @@ mqtt:
       value_template: >-
         {% set v = value_json.inTemp_C | default(none) %}
         {{ v | float | round(1) if v is not none else none }}
-

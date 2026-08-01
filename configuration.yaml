@@ -30,19 +30,6 @@ recorder:
   purge_keep_days: 366
   commit_interval: 60
   db_url: mysql://homeassistant:homeassistant@core-mariadb/homeassistant?charset=utf8mb4
-  include:
-    entities:
-      # your daily PV production sensor:
-      - sensor.pv_forecast_weighted
-      - sensor.pv_forecast_weighted_tomorrow
-      - sensor.solar_forecast_ml_planungsprognose_p10_blend
-      - sensor.prognose_heute
-      - sensor.prognose_morgen
-      - sensor.prognose_ubermorgen
-      - sensor.pv_energy_yield_today_um
-      - sensor.pv_production_power
-      - sensor.leistung_vom_netz
-      - sensor.battery_ac_power_total
 
   exclude:
     # entities:

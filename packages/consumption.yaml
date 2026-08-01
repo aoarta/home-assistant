@@ -52,17 +52,6 @@ sensor:
         upper_bound: 60 # Everything above 60 kWh per day is ignored
 
   - platform: filter
-    name: "House Consumption 5 Min Average"
-    unique_id: house_consumption_power_5_min_avg
-    entity_id: sensor.house_consumption_power_brutto
-    filters:
-      - filter: time_simple_moving_average
-        window_size: "00:05:00"
-        precision: 0
-      - filter: throttle
-        window_size: 300
-
-  - platform: filter
     name: "PV Production 5 Min Average"
     unique_id: pv_produktion_5min_avg
     entity_id: sensor.leistung_von_pv_ac
@@ -74,29 +63,32 @@ sensor:
         window_size: 300
 
   - platform: filter
-    name: "Grid Power 5 Min Average"
-    unique_id: leistung_vom_netz_5min_avg
-    entity_id: sensor.leistung_vom_netz
+    name: "Average consumption last 5min"
+    unique_id: average_consumption_last_5min
+    entity_id: sensor.house_consumption_power_brutto
     filters:
       - filter: time_simple_moving_average
         window_size: "00:05:00"
         precision: 0
-      - filter: throttle
-        window_size: 300
+      - filter: time_throttle
+        window_size: "00:01:00"
 
   - platform: filter
-    name: "Average consumption last 1h fast"
-    unique_id: average_consumption_last_1h_fast
+    name: "Average consumption last 1h"
+    unique_id: average_consumption_last_1h
     entity_id: sensor.house_consumption_power_brutto
     filters:
       - filter: time_simple_moving_average
         window_size: "01:00:00"
-        precision: 1
-      - filter: throttle
-        window_size: 300
+        precision: 0
+      - filter: time_throttle
+        window_size: "00:01:00"
 
 template:
-  - sensor:
+  - triggers:
+      - trigger: state
+        entity_id: sensor.leistung_vom_netz
+    sensor:
       - name: "House Consumption Power brutto"
         # house without chargers
         unique_id: house_consumption_power_brutto
@@ -107,13 +99,15 @@ template:
           {{ has_value('sensor.leistung_vom_netz') and
              has_value('sensor.marstek_ac_power_total') and
              has_value('sensor.pv_production_power') and
-             has_value('sensor.ev_charging_power')
+             has_value('sensor.ev_charging_power') and
+             has_value('sensor.ups_ac_power')
              }}
         state: >-
           {{ ( states('sensor.leistung_vom_netz') | float(0)
                + states('sensor.marstek_ac_power_total') | float(0)
                + states('sensor.pv_production_power') | float(0) 
                + states('sensor.ev_charging_power') | float(0)
+               + states('sensor.ups_ac_power') | float(0)
               ) | round(0) }}
 
       #      - name: "Charge Power"
@@ -190,30 +184,9 @@ template:
 
   - triggers:
       - trigger: state
-        entity_id: sensor.average_consumption_last_1h_fast # ✓ Fix: updates continuously
-      - trigger: homeassistant
-        event: start
-    sensor:
-      - name: "Average consumption last 1h"
-        unique_id: average_consumption_last_1h
-        unit_of_measurement: "W"
-        device_class: power
-        state_class: measurement
-        state: >-
-          {% set fast = states('sensor.average_consumption_last_1h_fast') %}
-          {% if is_number(fast) %}
-            {{ fast | float(0) }}
-          {% elif this.state is defined and is_number(this.state) %}
-            {{ this.state }}
-          {% else %}
-            0
-          {% endif %}
-
-  - triggers:
-      - trigger: state
-        entity_id: sensor.average_consumption_last_1h
+        entity_id: sensor.average_consumption_last_5min
       - trigger: time_pattern
-        minutes: "51"
+        minutes: "/5"
       - trigger: homeassistant
         event: start
     sensor:
@@ -221,9 +194,8 @@ template:
         unique_id: estimated_remaining_consumption
         unit_of_measurement: "kWh"
         device_class: energy
-        state_class: total
         state: >-
-          {% set watt = states('sensor.average_consumption_last_1h') | float(none) %}
+          {% set watt = states('sensor.average_consumption_last_5min') | float(none) %}
           {% set sunrise = as_timestamp(state_attr('sun.sun', 'next_rising'), none) %}
           {% set now_ts = as_timestamp(now()) %}
           {% if watt is not none and sunrise is not none and sunrise > now_ts %}

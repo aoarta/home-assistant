@@ -250,7 +250,7 @@ automation:
           until:
             - condition: template
               value_template: "{{ states('sensor.ev_target_charging_current') | int(6) == states('number.warp3_2ita_globalcurrent') | int(0) }}"
-              
+
   # ============================================================
   # STOP (idle): target current dropped below 6 A for 2 minutes.
   # Covers pv_surplus losing the sun and pv_battery_floor hitting the SOC floor.
@@ -400,9 +400,9 @@ automation:
 
             {# Fahrzeugspezifischen aktuellen SOC ermitteln #}
             {% if vehicle == 'zero' %}
-              {% set current_soc = states('sensor.zero_soc') | float(0) %}
+              {% set current_soc = states('sensor.zero_sr_soc') | float(0) %}
             {% elif vehicle == 'honda_e' %}
-              {% set current_soc = states('sensor.hondae_soc') | float(0) %}
+              {% set current_soc = states('sensor.honda_e_soc') | float(0) %}
             {% else %}
               {% set current_soc = 0 %}
             {% endif %}
@@ -422,13 +422,15 @@ automation:
       - platform: state
         entity_id: binary_sensor.warp3_2ita_charging
       - platform: state
-        entity_id: sensor.zero_soc
+        entity_id: sensor.zero_sr_soc
       - platform: state
-        entity_id: sensor.hondae_soc
+        entity_id: sensor.honda_e_soc
       - platform: state
-        entity_id: binary_sensor.zero_sr_s_mbb_zero_angesteckt
+        entity_id: sensor.honda_e_soc
       - platform: state
-        entity_id: binary_sensor.hondae_connected
+        entity_id: binary_sensor.zero_sr_connected
+      - platform: state
+        entity_id: binary_sensor.honda_e_connected
     action:
       - choose:
           # =========================================================
@@ -449,14 +451,14 @@ automation:
           # =========================================================
           - conditions:
               - condition: state
-                entity_id: binary_sensor.hondae_connected
+                entity_id: binary_sensor.honda_e_connected
                 state: "on"
             sequence:
               - choose:
                   # VOLL: Regenbogen-Effekt (state: 4)
                   - conditions:
                       - condition: numeric_state
-                        entity_id: sensor.hondae_soc
+                        entity_id: sensor.honda_e_soc
                         above: 98
                     sequence:
                       - action: mqtt.publish
@@ -467,7 +469,7 @@ automation:
                   # MITTE (50% bis 98%): Weiß schnelles Blinken (2 Hz -> state: 3)
                   - conditions:
                       - condition: numeric_state
-                        entity_id: sensor.hondae_soc
+                        entity_id: sensor.honda_e_soc
                         above: 49
                         below: 99
                     sequence:
@@ -478,7 +480,7 @@ automation:
                   # ANFANG (< 50%): Weiß langsames Blinken (1 Hz -> state: 2)
                   - conditions:
                       - condition: numeric_state
-                        entity_id: sensor.hondae_soc
+                        entity_id: sensor.honda_e_soc
                         below: 50
                     sequence:
                       - action: mqtt.publish
@@ -491,14 +493,14 @@ automation:
           # =========================================================
           - conditions:
               - condition: state
-                entity_id: binary_sensor.zero_sr_s_mbb_zero_angesteckt
+                entity_id: binary_sensor.zero_sr_connected
                 state: "on"
             sequence:
               - choose:
                   # VOLL: Regenbogen-Effekt (state: 4)
                   - conditions:
                       - condition: numeric_state
-                        entity_id: sensor.zero_soc
+                        entity_id: sensor.zero_sr_soc
                         above: 98
                     sequence:
                       - action: mqtt.publish
@@ -509,7 +511,7 @@ automation:
                   # MITTE (50% bis 98%): Rot schnelles Blinken (2 Hz -> state: 3)
                   - conditions:
                       - condition: numeric_state
-                        entity_id: sensor.zero_soc
+                        entity_id: sensor.zero_sr_soc
                         above: 49
                         below: 99
                     sequence:
@@ -521,7 +523,7 @@ automation:
                   # ANFANG (< 50%): Rot langsames Blinken (1 Hz -> state: 2)
                   - conditions:
                       - condition: numeric_state
-                        entity_id: sensor.zero_soc
+                        entity_id: sensor.zero_sr_soc
                         below: 50
                     sequence:
                       - action: mqtt.publish

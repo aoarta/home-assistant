@@ -81,7 +81,7 @@ template:
         state: >
           {% set raw = states('sensor.fronius_inverter_energy_raw') | float(none) %}
           {% if raw is not none %}
-            {{ (raw / 1000) | round(1) }}
+            {{ (raw / 1000) | round(3) }}
           {% else %}
             unavailable
           {% endif %}

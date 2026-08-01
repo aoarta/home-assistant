@@ -45,10 +45,27 @@
 # gelernt werden (z.B. getrennt fuer 2h-Fenster) - bewusst nicht gemacht,
 # um die Komplexitaet ueberschaubar zu halten.
 #
+# Nachtabschaltung: beide Bloecke laufen nur zwischen Sonnenaufgang -30 min
+# und Sonnenuntergang +30 min. Nachts ist die gemessene Einstrahlung konstant
+# 0, der Gain-Faktor lernt wegen des irr>100-Guards ohnehin nicht, und der
+# Korrekturfaktor steht per Nacht-Guard (siehe unten) auf 1.0 - es gibt also
+# nichts zu rechnen. Der /1-Minuten-Takt allein waren rund 900 unnoetige
+# Renderings pro Winternacht.
+#
+# Der Wiederanlauf um Sonnenaufgang -30 min startet die EMA auf ihrem
+# eingefrorenen Abendwert. Das ist unkritisch: bis zur ersten nennenswerten
+# Einstrahlung ist sie laengst nachgezogen, und der Korrekturfaktor bleibt
+# solange neutral, weil modeled vor Sonnenaufgang unter dem 20er-Guard liegt.
 template:
   - trigger:
       - trigger: time_pattern
         minutes: "/1"
+    condition:
+      - condition: sun
+        after: sunrise
+        after_offset: "-00:30:00"
+        before: sunset
+        before_offset: "00:30:00"
     sensor:
       - name: "PV Solar Radiation EMA 30min"
         unique_id: pv_solar_radiation_ema_30min
@@ -84,10 +101,31 @@ template:
   - trigger:
       - trigger: time_pattern
         minutes: "/5"
+        id: periodic
       - trigger: state
         entity_id:
           - sensor.pv_roof_openmeteo_production_today
           - sensor.pv_fassade_openmeteo_production_today
+        id: periodic
+      # Ein letzter Lauf nach Sonnenuntergang, damit der Korrekturfaktor
+      # sauber auf 1.0 einfriert statt auf dem letzten Tageswert stehen zu
+      # bleiben. pv_forecast_calc.yaml multipliziert ihn um 00:02 noch einmal
+      # mit - ein eingefrorener Tageswert wuerde die Prognose fuer den neuen
+      # Tag verfaelschen.
+      - trigger: sun
+        event: sunset
+        offset: "00:30:00"
+        id: shutdown
+    condition:
+      - condition: or
+        conditions:
+          - condition: template
+            value_template: "{{ trigger.id is not defined or trigger.id != 'periodic' }}"
+          - condition: sun
+            after: sunrise
+            after_offset: "-00:30:00"
+            before: sunset
+            before_offset: "00:30:00"
     sensor:
       - name: "PV Forecast Current Hour Modeled"
         unique_id: pv_forecast_current_hour_modeled
@@ -124,7 +162,13 @@ template:
           {% set gain = states('sensor.pv_solar_gain_factor') | float(0) %}
           {% set modeled = states('sensor.pv_forecast_current_hour_modeled') | float(0) %}
           {% set measured = irr * gain %}
-          {% if modeled > 20 and measured > 20 %}
+          {# Nacht-Guard: garantiert 1.0, sobald die Sonne unter dem Horizont
+             steht - unabhaengig davon, was EMA und Modell gerade melden.
+             Damit friert der Faktor beim Abendlauf verlaesslich auf neutral
+             ein und bleibt es bis zum naechsten Morgen. #}
+          {% if is_state('sun.sun', 'below_horizon') %}
+            1.0
+          {% elif modeled > 20 and measured > 20 %}
             {{ (measured / modeled) | clamp(0.3, 2.5) | round(3) }}
           {% else %}
             1.0

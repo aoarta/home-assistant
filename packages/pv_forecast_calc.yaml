@@ -32,9 +32,53 @@ template:
           {{ ((states('sensor.pv_height_correction_factor') | float(1)) *
               (states('sensor.pv_albedo_correction_factor') | float(1))) | round(3) }}
 
+  # ==========================================================================
+  # Nachtabschaltung
+  #
+  # Der 5-Minuten-Takt laeuft nur noch tagsueber (Sonnenaufgang -45 min bis
+  # Sonnenuntergang +30 min). Nachts behalten alle Sensoren dieses Blocks
+  # ihren letzten Wert.
+  #
+  # ACHTUNG - warum es die 00:02-Ausnahme braucht:
+  # Die *_today-Werte sind nachts NICHT null. Ab Mitternacht ist "today" der
+  # neue Tag und der Stundenzeiger steht auf 00:xx, alle Tageslichtstunden
+  # liegen also noch vor dem Cursor -> om_today/dw_today/fs_today und Solcasts
+  # "verbleibende Leistung heute" liefern den KOMPLETTEN Tagesertrag des
+  # neuen Tages. Ohne den 00:02-Lauf bliebe pv_forecast_weighted auf 0.0
+  # stehen, control.yaml wuerde balance_today < 0 rechnen und target_soc auf
+  # 130 setzen -> die Venus wuerden die ganze Nacht aus dem Netz laden.
+  # Ausserdem waere pv_forecast_weighted_tomorrow um einen Tag verschoben.
+  #
+  # Der Sonnenaufgang-45min-Lauf stellt sicher, dass der Morgen-Snapshot in
+  # pv_forecast_automations.yaml (Sonnenaufgang -15 min) auf frischen Werten
+  # sitzt - der naechste regulaere /5-Tick koennte sonst zu spaet kommen.
+  # ==========================================================================
   - trigger:
       - trigger: time_pattern
         minutes: "/5"
+        id: periodic
+      - trigger: time
+        at: "00:02:00"
+        id: rollover
+      - trigger: sun
+        event: sunrise
+        offset: "-00:45:00"
+        id: predawn
+      - trigger: homeassistant
+        event: start
+        id: startup
+    condition:
+      - condition: or
+        conditions:
+          # alles ausser dem 5-Minuten-Takt kommt immer durch
+          - condition: template
+            value_template: "{{ trigger.id is not defined or trigger.id != 'periodic' }}"
+          # der 5-Minuten-Takt nur tagsueber
+          - condition: sun
+            after: sunrise
+            after_offset: "-00:45:00"
+            before: sunset
+            before_offset: "00:30:00"
     variables:
       r_reg: 0.1
       bias: "{{ states('input_number.pv_forecast_bias_korrekturfaktor') | float(1) }}"

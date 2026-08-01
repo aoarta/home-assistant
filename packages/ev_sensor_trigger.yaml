@@ -52,8 +52,8 @@ template:
           - sensor.battery_floor_soc_for_ev
           - sensor.ev_session_energy
           - sensor.ev_max_charge_energy
-          - sensor.zero_soc
-          - sensor.hondae_soc
+          - sensor.zero_sr_soc
+          - sensor.honda_e_soc
           - input_select.ev_charge_mode
           - input_select.ev_vehicle_mode
           - input_number.ev_manual_charging_current
@@ -97,9 +97,9 @@ template:
                 {# Fahrzeugspezifischen SOC abfragen #}
                 {% set ev_soc = 0 %}
                 {% if vehicle == 'zero' %}
-                  {% set ev_soc = states('sensor.zero_soc') | float(0) %}
+                  {% set ev_soc = states('sensor.zero_sr_soc') | float(0) %}
                 {% elif vehicle == 'honda_e' %}
-                  {% set ev_soc = states('sensor.hondae_soc') | float(0) %}
+                  {% set ev_soc = states('sensor.honda_e_soc') | float(0) %}
                 {% endif %}
                 
                 {# Vehicle gilt als voll, wenn das berechnete Energielimit erreicht ist ODER der Fahrzeug-SOC > 95.5% ist #}
