@@ -44,14 +44,6 @@ sensor:
     method: trapezoidal # Trapezoidal method = more accurate
 
   - platform: filter
-    name: "House Consumption Energy Today"
-    unique_id: house_consumption_energy_today
-    entity_id: sensor.house_consumption_energy_today_um
-    filters:
-      - filter: range
-        upper_bound: 60 # Everything above 60 kWh per day is ignored
-
-  - platform: filter
     name: "PV Production 5 Min Average"
     unique_id: pv_produktion_5min_avg
     entity_id: sensor.leistung_von_pv_ac
@@ -59,8 +51,8 @@ sensor:
       - filter: time_simple_moving_average
         window_size: "00:05:00"
         precision: 0
-      - filter: throttle
-        window_size: 300
+      - filter: time_throttle
+        window_size: "00:01:00"
 
   - platform: filter
     name: "Average consumption last 5min"
@@ -110,32 +102,30 @@ template:
                + states('sensor.ups_ac_power') | float(0)
               ) | round(0) }}
 
-      #      - name: "Charge Power"
-      #        unique_id: charge_power
-      #        unit_of_measurement: "W"
-      #        device_class: power
-      #        state_class: measurement
-      #        availability: >-
-      #          {{ has_value('sensor.leistung_vom_netz') and
-      #              has_value('sensor.marstek_ac_power_total') }}
-      #        state: >-
-      #          {{ ( states('sensor.leistung_vom_netz') | float(0) +
-      #                states('sensor.marstek_ac_power_total') | float(0)
-      #             ) | round(0) }}
-
-      - name: "Expected Remaining Consumption Today"
-        unique_id: expected_remaining_consumption_today
+  - triggers:
+      - trigger: state
+        entity_id: sensor.house_consumption_energy_today_um
+      - trigger: homeassistant
+        event: start
+    sensor:
+      - name: "House Consumption Energy Today"
+        unique_id: house_consumption_energy_today
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total
-        icon: mdi:home-lightning-bolt-outline
         state: >-
-          {% set expected = states('sensor.expected_daily_consumption') | float(0) %}
-          {% set consumed = states('sensor.house_consumption_energy_today_um') | float(0) %}
-          {{ [expected - consumed, 0] | max | round(2) }}
-        availability: >-
-          {{ states('sensor.expected_daily_consumption') | is_number
-            and states('sensor.house_consumption_energy_today_um') | is_number }}
+          {% set v = states('sensor.house_consumption_energy_today_um') | float(none) %}
+          {% set last = this.state | float(none) %}
+          {% if v is not none and 0 <= v <= 100 %} {# vehicles and house #}
+            {{ v | round(3) }}
+          {% else %}
+            {# Ausreisser oder unavailable: letzten guten Wert halten #}
+            {{ last | round(3) if last is not none else 0 }}
+          {% endif %}
+        attributes:
+          rejecting: >-
+            {% set v = states('sensor.house_consumption_energy_today_um') | float(none) %}
+            {{ not (v is not none and 0 <= v <= 60) }}
 
   - triggers:
       - trigger: state

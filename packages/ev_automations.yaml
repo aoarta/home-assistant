@@ -215,12 +215,10 @@ automation:
   - alias: "Wallbox: Track target while charging"
     id: wallbox_track_target
     mode: single
+    max_exceeded: silent
     triggers:
       - trigger: state
         entity_id: sensor.ev_target_charging_current
-      - trigger: state
-        entity_id: sensor.charge_power
-
     conditions:
       - condition: state
         entity_id: binary_sensor.warp3_2ita_charging

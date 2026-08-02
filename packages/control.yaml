@@ -179,9 +179,11 @@ template:
           - input_boolean.override_soc
           - binary_sensor.battery_maintenance_required
     sensor:
-      - name: "Remaining Consumption Today"
-        unique_id: remaining_consumption_today
+      - name: "Expected Remaining Consumption Today"
+        unique_id: expected_remaining_consumption_today
         unit_of_measurement: "kWh"
+        state_class: total
+        icon: mdi:home-lightning-bolt-outline
         state: >-
           {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
           {% set hausverbrauch_heute = states('sensor.house_consumption_energy_today') | float(0) %}

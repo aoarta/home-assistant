@@ -114,8 +114,8 @@ template:
             0
           {% else %}
             {% set manual = states('input_number.ev_manual_charging_current') | int(0) %}
-            {% if manual >= 6 %}
-              {{ manual }}
+            {% if manual >= 6 %}    
+              {{ [manual, max_amps] | min }}
             {% else %}
               {% set mode = states('input_select.ev_charge_mode') %}
               {% set surplus_ev_first_amps = amps_ev_first | int(0) %}
