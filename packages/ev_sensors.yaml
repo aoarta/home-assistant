@@ -122,7 +122,7 @@ template:
         device_class: power
         state: >-
           {% set power = states('sensor.warp3_2ita_powernow') | float(0) %}
-          {{ -power if power is not none else 0 }}
+          {{ (0 - power) | round(0) | int }}
 
       # ----------------------------------------------------------
       # Rohwert-Spiegel zum Gegenpruefen der Hochrechnung

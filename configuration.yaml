@@ -32,11 +32,12 @@ recorder:
   db_url: mysql://homeassistant:homeassistant@core-mariadb/homeassistant?charset=utf8mb4
 
   exclude:
-    # entities:
-    # - sensor.garage_inverter_energy_power
-    # - sensor.balkon_inverter2_energy_power
-    # - sensor.balkon_inverter_energy_power
-    # - sensor.solarnet_leistung_vom_netz
+    entities:
+      # - sensor.garage_inverter_energy_power
+      # - sensor.balkon_inverter2_energy_power
+      # - sensor.balkon_inverter_energy_power
+      # - sensor.solarnet_leistung_vom_netz
+      - sensor.remaining_pv_today
 
     entity_globs:
       - sensor.*defekt*

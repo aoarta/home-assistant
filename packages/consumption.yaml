@@ -43,16 +43,16 @@ sensor:
     round: 3
     method: trapezoidal # Trapezoidal method = more accurate
 
-  - platform: filter
-    name: "PV Production 5 Min Average"
-    unique_id: pv_produktion_5min_avg
-    entity_id: sensor.leistung_von_pv_ac
-    filters:
-      - filter: time_simple_moving_average
-        window_size: "00:05:00"
-        precision: 0
-      - filter: time_throttle
-        window_size: "00:01:00"
+  #  - platform: filter
+  #    name: "PV Production 5 Min Average"
+  #    unique_id: pv_produktion_5min_avg
+  #    entity_id: sensor.leistung_von_pv_ac
+  #    filters:
+  #      - filter: time_simple_moving_average
+  #        window_size: "00:05:00"
+  #        precision: 0
+  #      - filter: time_throttle
+  #        window_size: "00:01:00"
 
   - platform: filter
     name: "Average consumption last 5min"
@@ -65,16 +65,16 @@ sensor:
       - filter: time_throttle
         window_size: "00:01:00"
 
-  - platform: filter
-    name: "Average consumption last 1h"
-    unique_id: average_consumption_last_1h
-    entity_id: sensor.house_consumption_power_brutto
-    filters:
-      - filter: time_simple_moving_average
-        window_size: "01:00:00"
-        precision: 0
-      - filter: time_throttle
-        window_size: "00:01:00"
+  #  - platform: filter
+  #    name: "Average consumption last 1h"
+  #    unique_id: average_consumption_last_1h
+  #    entity_id: sensor.house_consumption_power_brutto
+  #    filters:
+  #      - filter: time_simple_moving_average
+  #        window_size: "01:00:00"
+  #        precision: 0
+  #      - filter: time_throttle
+  #        window_size: "00:01:00"
 
 template:
   - triggers:
@@ -116,11 +116,11 @@ template:
         state: >-
           {% set v = states('sensor.house_consumption_energy_today_um') | float(none) %}
           {% set last = this.state | float(none) %}
-          {% if v is not none and 0 <= v <= 100 %} {# vehicles and house #}
-            {{ v | round(3) }}
+          {% if v is not none and 0 <= v <= 60 %} {# (house without vehicles) times 4 #}
+            {{ v | round(2) }}
           {% else %}
             {# Ausreisser oder unavailable: letzten guten Wert halten #}
-            {{ last | round(3) if last is not none else 0 }}
+            {{ last | round(2) if last is not none else 0 }}
           {% endif %}
         attributes:
           rejecting: >-
@@ -192,34 +192,6 @@ template:
             {{ this.state }}
           {% else %}
             0.0
-          {% endif %}
-
-  - triggers:
-      - trigger: time
-        at: "23:45:00"
-      - trigger: homeassistant
-        event: start
-    sensor:
-      - name: "House Consumption Energy Until Sunrise"
-        unique_id: house_consumption_energy_until_sunrise
-        unit_of_measurement: "kWh"
-        device_class: energy
-        state_class: total
-        state: >-
-          {% if trigger.platform == 'time' %}
-            {% set aktuell = states('sensor.house_consumption_energy_today') | float(none) %}
-            {% set alt = this.state | float(none) %}
-            {% if aktuell is not none and alt is not none %}
-              {{ (0.9 * aktuell + 0.1 * alt) | round(2) }}
-            {% elif aktuell is not none %}
-              {{ aktuell | round(2) }}
-            {% else %}
-              {{ this.state | default(0.0) }}
-            {% endif %}
-          {% elif this.state is defined and is_number(this.state) %}
-            {{ this.state }}
-          {% else %}
-            {{ states('sensor.house_consumption_energy_today') | float(10.0) }}
           {% endif %}
 
   - triggers:

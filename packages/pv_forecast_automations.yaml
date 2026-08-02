@@ -1,35 +1,35 @@
 # packages/pv_forecast_automations.yaml
 automation:
-  - alias: "PV: API Daten gezielt holen"
-    id: pv_fetch_api_data_updates
-    trigger:
-      - platform: time
-        at: ["06:00:00", "11:30:00", "17:30:00"]
-    action:
-      - action: homeassistant.update_entity
-        target:
-          entity_id:
-            - sensor.forecastsolar_api_source_dach
-            - sensor.forecastsolar_api_source_fassade
-
-  - alias: "PV: Fix Daily Forecast Morning"
-    id: pv_fix_daily_forecast_morning
-    description: >
-      Snapshot 15 Min vor Sonnenaufgang statt fix 06:30. pv_forecast_weighted
-      ist eine Restprognose ("verbleibende Leistung heute"); vor Sonnenaufgang
-      ist Rest = Gesamttag, wodurch der Snapshot zum Ganztagesertrag passt, mit
-      dem er um 23:55 verglichen wird (pv_daily_kalman_update). Bei einem
-      fixen 06:30 stimmte das nur im Winter, im Sommer war die Sonne da
-      teils schon >1h oben.
-      Kleiner Nachteil: forecastsolar wird nur 3x/Tag (06:00/11:30/17:30)
-      neu geholt - liegt Sonnenaufgang-15min vor 06:00 (Hochsommer), wird
-      hier noch der Stand vom Vortag 17:30 verwendet. Meist unkritisch, da
-      die API "heute" bereits gestern Abend mitliefert.
-    trigger:
-      - platform: sun
+  - alias: "PV: Morgen-Fetch und Snapshot"
+    id: pv_morning_fetch_and_snapshot
+    mode: single
+    triggers:
+      - trigger: sun
         event: sunrise
-        offset: "-00:15:00"
-    action:
+    actions:
+      - repeat:
+          count: 3
+          sequence:
+            - action: homeassistant.update_entity
+              target:
+                entity_id: sensor.forecastsolar_api_source_dach
+            - delay: { seconds: 20 }
+            - action: homeassistant.update_entity
+              target:
+                entity_id: sensor.forecastsolar_api_source_fassade
+            - delay: { seconds: 20 }
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ has_value('sensor.forecastsolar_api_source_dach')
+                       and has_value('sensor.forecastsolar_api_source_fassade') }}
+              then:
+                - stop: "Beide Endpunkte haben geliefert"
+            - delay: { minutes: 3 }
+
+      # Warten, bis pv_forecast_calc nach dem Fetch mindestens einmal gelaufen ist
+      - delay: "00:06:00"
+
       - action: input_number.set_value
         target:
           entity_id: input_number.pv_prognose_this_morning

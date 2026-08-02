@@ -12,7 +12,7 @@ modbus:
         input_type: holding
         data_type: float32
         #        swap: word # kein swap
-        scan_interval: 2
+        scan_interval: 5
 
       - name: "Fronius Inverter Power Raw"
         unique_id: fronius_inverter_power_raw
@@ -21,7 +21,7 @@ modbus:
         input_type: holding
         data_type: float32
         #        swap: word # kein swap beim inverter
-        scan_interval: 2
+        scan_interval: 10
 
       - name: "Fronius Inverter Energy Raw"
         unique_id: fronius_inverter_energy_raw
@@ -46,7 +46,7 @@ template:
           {# Verwende den Wert direkt aus dem Trigger anstatt states() aufzurufen #}
           {% set raw = trigger.to_state.state | float(none) %}
           {% if raw is not none and raw | round(0) | abs < 20000 %}
-            {% set alpha = 0.4 %}  {# ca. 12s bis 90% #}
+            {% set alpha = 0.68 %}  {# ca. 10s bis 90%; bei 5s trigger #}
             {% set alt = this.state | float(raw) %}
             {{ (alt + alpha * (raw - alt)) | round(0) }}
           {% else %}
@@ -65,7 +65,7 @@ template:
         state: >
           {% set raw = trigger.to_state.state | float(none) %}
           {% if raw is not none and raw | round(0) | abs < 20000 %}
-            {% set alpha = 0.3 %}  {# ca. 18s bis 90% #}
+            {% set alpha = 0.78 %}  {# ca. 15s bis 90%; bei 10 sec trigger #}
             {% set alt = this.state | float(raw) %}
             {{ (alt + alpha * (raw - alt)) | round(0) }}
           {% else %}

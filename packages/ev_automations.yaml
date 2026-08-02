@@ -108,6 +108,7 @@ automation:
     variables:
       manual_amps: "{{ states('input_number.ev_manual_charging_current') | int(0) }}"
       current_amps: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
+      max_amps: "{{ state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) }}"
       is_charging: "{{ is_state('binary_sensor.warp3_2ita_charging', 'on') }}"
     actions:
       # Apply the manual current if it differs from the current target.
@@ -118,7 +119,7 @@ automation:
             target:
               entity_id: number.warp3_2ita_globalcurrent
             data:
-              value: "{{ manual_amps }}"
+              value: "{{ [manual_amps, max_amps] | min }}"
       # Start the wallbox if it is not already charging.
       - if:
           - "{{ not is_charging }}"
