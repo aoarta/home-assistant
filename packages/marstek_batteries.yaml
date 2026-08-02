@@ -221,7 +221,7 @@ template:
           {# Voll gemeldete Batterie nicht weiter anfordern.
              Ohne diese Pruefung entstand ein Ping-Pong: sobald ein Venus > 99
              war, setzte "Marstek: Zeitstempel Batterie voll aktualisieren"
-             number.marstek_venus_X_charge_power auf 0, und sende_batterie_targets_v3
+             number. marstek_venus_X_charge_power auf 0, und sende_batterie_targets_v3
              schrieb beim naechsten Trigger wieder den vollen manual-Wert hinein.
              Der Steuermodus-Switch wird ebenfalls beruecksichtigt - ohne
              Modbus-Steuerung nimmt der Speicher den Wert ohnehin nicht an. #}

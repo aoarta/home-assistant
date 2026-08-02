@@ -106,9 +106,13 @@ automation:
           {{ states('sensor.ev_session_energy') | float(0)
             < states('sensor.ev_max_charge_energy') | float(0) }}
     variables:
-      manual_amps: "{{ states('input_number.ev_manual_charging_current') | int(0) }}"
+      # Deckel auf wallbox_max_amps: der Slider laesst bis 32 A zu, die
+      # Absicherung gibt aktuell aber nur 22 A her. Ohne diese Begrenzung
+      # ging der Rohwert ungefiltert an number.warp3_2ita_globalcurrent.
+      manual_amps: >-
+        {{ [ states('input_number.ev_manual_charging_current') | int(0),
+             state_attr('sensor.global_parameter', 'wallbox_max_amps') | int(16) ] | min }}
       current_amps: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
-      max_amps: "{{ state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) }}"
       is_charging: "{{ is_state('binary_sensor.warp3_2ita_charging', 'on') }}"
     actions:
       # Apply the manual current if it differs from the current target.
@@ -119,7 +123,7 @@ automation:
             target:
               entity_id: number.warp3_2ita_globalcurrent
             data:
-              value: "{{ [manual_amps, max_amps] | min }}"
+              value: "{{ manual_amps }}"
       # Start the wallbox if it is not already charging.
       - if:
           - "{{ not is_charging }}"
@@ -313,10 +317,17 @@ automation:
         entity_id: binary_sensor.warp3_2ita_charging
         state: "on"
       # ONLY stop if vehicle is off OR (limit is reached AND limit is actually greater than 0)
+      #
+      # Ausnahme Zielzeit-Modus: dort ist der Live-SoC die Wahrheit, nicht die
+      # Session-Energie. ev_max_charge_energy haengt ueber ev_charge_by_percent
+      # am SoC beim Anstecken; sobald PV-Vorladung und Zwangsladung sich
+      # abwechseln, driften die beiden Grenzen auseinander und diese Automation
+      # wuerde kurz vor dem Ziel abschalten. Der Vehicle-off-Fall bleibt aktiv.
       - condition: template
         value_template: >-
           {{ is_state('input_select.ev_vehicle_mode', 'off')
-            or ( states('sensor.ev_max_charge_energy') | float(0) > 0
+            or ( not is_state('input_select.ev_charge_mode', 'target_time')
+                  and states('sensor.ev_max_charge_energy') | float(0) > 0
                   and states('sensor.ev_session_energy') | float(0)
                   >= states('sensor.ev_max_charge_energy') | float(0) ) }}
     actions:

@@ -1,13 +1,20 @@
 # ============================================================
 # PV surplus wallbox charging (WARP3) - Trigger Sensors
 #
-# Die Ueberschussrechnung liegt seit dem Zusammenlegen direkt in
-# "EV Target Charging Current". Die frueheren Zwischensensoren
-# sensor.pv_dynamic_charging_current und
-# sensor.pv_dynamic_charging_current_battery_first entfallen -
-# der zugehoerige Block in ev_sensors.yaml muss geloescht werden,
-# die beiden verwaisten Entities danach in der Entitaeten-Liste
-# entfernen.
+# Die Ueberschussrechnung liegt direkt in "EV Target Charging Current".
+# Die frueheren Zwischensensoren sensor.pv_dynamic_charging_current und
+# sensor.pv_dynamic_charging_current_battery_first entfallen - der
+# zugehoerige Block in ev_sensors.yaml muss geloescht werden, die beiden
+# verwaisten Entities danach in der Entitaeten-Liste entfernen.
+#
+# MODUS 6 "target_time": Fahrzeug soll bis input_datetime.ev_target_time
+# auf input_number.ev_charge_to_percent geladen sein.
+#   Phase "pv"    - nur PV-Ueberschuss, gedeckelt auf ev_pv_precharge_max_soc
+#   Phase "paced" - Batterietempo: so viel, wie die Hausspeicher tragen
+#   Phase "full"  - alles was geht, Netz inbegriffen (Notfallstufe)
+# Die beiden Startzeitpunkte laufen rechnerisch exakt bei Ladeende zusammen:
+# laeuft alles nach Plan, wird "full" nie erreicht; faellt die Ladung zurueck,
+# greift die Stufe von selbst. Kein Helper, kein Latch, keine Hysterese.
 # ============================================================
 
 template:
@@ -20,7 +27,7 @@ template:
           - sensor.expected_daily_consumption
           - sensor.house_consumption_energy_today
           - sensor.estimated_remaining_consumption
-          # neu: die Restprognose hat den groessten Hebel in der Formel,
+          # die Restprognose hat den groessten Hebel in der Formel,
           # ohne diesen Trigger hinkt der Floor der PV-Prognose hinterher
           - sensor.pv_forecast_weighted
     sensor:
@@ -53,9 +60,8 @@ template:
 
   # ----------------------------------------------------------
   # TARGET CHARGING CURRENT -- die Logik-Zentrale.
-  # Rechnet den PV-Ueberschuss selbst, damit beide Varianten
-  # (EV first / Battery first) garantiert aus derselben
-  # Momentaufnahme stammen.
+  # Rechnet den PV-Ueberschuss und die Zielzeit-Planung selbst, damit
+  # alle Teilwerte garantiert aus derselben Momentaufnahme stammen.
   # ----------------------------------------------------------
   - triggers:
       - trigger: time_pattern
@@ -78,7 +84,11 @@ template:
           - input_select.ev_charge_mode
           - input_select.ev_vehicle_mode
           - input_number.ev_manual_charging_current
+          # Zielzeit-Modus
+          - input_number.ev_charge_to_percent
+          - input_datetime.ev_target_time
     variables:
+      # ----- Rohwerte ------------------------------------------------
       charger_power: "{{ states('sensor.warp3_2ita_powernow') | float(0) }}"
       power_from_net: "{{ states('sensor.leistung_vom_netz') | float(0) }}"
       venus1: "{{ states('sensor.marstek_venus_1_ac_power_glatt') | float(0) }}"
@@ -86,6 +96,7 @@ template:
       volt: "{{ states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) }}"
       max_amps: "{{ state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) }}"
 
+      # ----- PV-Ueberschuss ------------------------------------------
       # EV FIRST: Ladeleistung der Hausbatterie (negativ) wird freigegeben
       surplus_ev_first_w: "{{ charger_power - power_from_net - venus1 - venus2 }}"
       # BATTERY FIRST: nur Entladeleistung (positiv) abziehen,
@@ -101,6 +112,77 @@ template:
         {% set a = (surplus_bat_first_w / volt + 0.2) | int %}
         {{ [a, max_amps] | min | int if a >= 6 else 0 }}
 
+      # ----- Fahrzeug-Kenndaten --------------------------------------
+      vehicle: "{{ states('input_select.ev_vehicle_mode') }}"
+      ev_soc: >-
+        {% if vehicle == 'zero' %}{{ states('sensor.zero_sr_soc') | float(0) }}
+        {% elif vehicle == 'honda_e' %}{{ states('sensor.honda_e_soc') | float(0) }}
+        {% else %}0{% endif %}
+      ev_capacity: >-
+        {% if vehicle == 'zero' %}{{ state_attr('sensor.global_parameter','zero_sr_capacity') | float(0) }}
+        {% elif vehicle == 'honda_e' %}{{ state_attr('sensor.global_parameter','honda_e_capacity') | float(0) }}
+        {% else %}0{% endif %}
+      ev_efficiency: >-
+        {% if vehicle == 'zero' %}{{ state_attr('sensor.global_parameter','zero_sr_charge_efficiency') | float(0.9) }}
+        {% elif vehicle == 'honda_e' %}{{ state_attr('sensor.global_parameter','honda_e_charge_efficiency') | float(0.88) }}
+        {% else %}1{% endif %}
+      ev_pmax_vehicle: >-
+        {% if vehicle == 'zero' %}{{ state_attr('sensor.global_parameter','zero_sr_max_charge_power') | float(0) }}
+        {% elif vehicle == 'honda_e' %}{{ state_attr('sensor.global_parameter','honda_e_max_charge_power') | float(0) }}
+        {% else %}0{% endif %}
+
+      # ----- Zielzeit: Leistungen ------------------------------------
+      # Sollwerte fuer die Wallbox (ungedrosselt), beide einphasig: W = A * V
+      ev_power_paced_w: >-
+        {{ [ev_pmax_vehicle,
+             max_amps * volt,
+             state_attr('sensor.global_parameter','battery_paced_power_w') | float(4500)] | min }}
+      ev_power_full_w: "{{ [ev_pmax_vehicle, max_amps * volt] | min }}"
+      ev_amps_paced: "{{ [(ev_power_paced_w / volt) | round(0) | int, max_amps | int] | min }}"
+      ev_amps_full: "{{ [(ev_power_full_w / volt) | round(0) | int, max_amps | int] | min }}"
+
+      # Planungsleistungen - bewusst pessimistischer als die Sollwerte,
+      # dadurch rastet die Startbedingung nach dem Ausloesen von selbst ein.
+      ev_derate: "{{ state_attr('sensor.global_parameter','target_time_power_derate') | float(0.9) }}"
+      ev_plan_paced_w: "{{ (ev_power_paced_w * ev_derate) | round(0) }}"
+      ev_plan_full_w: "{{ (ev_power_full_w * ev_derate) | round(0) }}"
+
+      # ----- Zielzeit: Bedarf und Zeitpunkte -------------------------
+      ev_soc_target: "{{ states('input_number.ev_charge_to_percent') | float(0) }}"
+      ev_needed_kwh: >-
+        {% if ev_capacity > 0 and ev_efficiency > 0 %}
+          {{ ((([0, ev_soc_target - ev_soc] | max) / 100 * ev_capacity) / ev_efficiency) | round(3) }}
+        {% else %}
+          0
+        {% endif %}
+      ev_deadline_ts: >-
+        {% set t = states('input_datetime.ev_target_time') %}
+        {% if t not in ['unknown', 'unavailable', ''] %}
+          {% set heute = today_at(t) %}
+          {{ ((heute if heute > now() else heute + timedelta(days=1)).timestamp()) | round(0) }}
+        {% else %}
+          0
+        {% endif %}
+      ev_buffer_s: "{{ (state_attr('sensor.global_parameter','target_time_buffer_min') | float(15)) * 60 }}"
+      ev_start_paced_ts: >-
+        {% if ev_deadline_ts > 0 and ev_plan_paced_w > 0 %}
+          {{ (ev_deadline_ts - ev_buffer_s - (ev_needed_kwh * 3600000 / ev_plan_paced_w)) | round(0) }}
+        {% else %}
+          0
+        {% endif %}
+      ev_start_full_ts: >-
+        {% if ev_deadline_ts > 0 and ev_plan_full_w > 0 %}
+          {{ (ev_deadline_ts - ev_buffer_s - (ev_needed_kwh * 3600000 / ev_plan_full_w)) | round(0) }}
+        {% else %}
+          0
+        {% endif %}
+      ev_phase: >-
+        {% set ts = as_timestamp(now()) %}
+        {% if ev_deadline_ts == 0 or ev_needed_kwh <= 0 %}idle
+        {% elif ts >= ev_start_full_ts %}full
+        {% elif ts >= ev_start_paced_ts %}paced
+        {% else %}pv{% endif %}
+
     sensor:
       - name: "EV Target Charging Current"
         unique_id: ev_target_charging_current
@@ -108,14 +190,13 @@ template:
         device_class: current
         state_class: measurement
         state: >-
-          {% set vehicle = states('input_select.ev_vehicle_mode') %}
           {% set cable = is_state('binary_sensor.warp3_2ita_cable', 'on') %}
           {% if vehicle == 'off' or not cable %}
             0
           {% else %}
             {% set manual = states('input_number.ev_manual_charging_current') | int(0) %}
             {% if manual >= 6 %}
-              {{ [manual, max_amps] | min }}
+              {{ [manual, max_amps | int] | min }}
             {% else %}
               {% set mode = states('input_select.ev_charge_mode') %}
               {% set surplus_ev_first_amps = amps_ev_first | int(0) %}
@@ -137,14 +218,6 @@ template:
                 {% set ev_energy = states('sensor.ev_session_energy') | float(0) %}
                 {% set ev_limit = states('sensor.ev_max_charge_energy') | float(0) %}
 
-                {# Fahrzeugspezifischen SOC abfragen #}
-                {% set ev_soc = 0 %}
-                {% if vehicle == 'zero' %}
-                  {% set ev_soc = states('sensor.zero_sr_soc') | float(0) %}
-                {% elif vehicle == 'honda_e' %}
-                  {% set ev_soc = states('sensor.honda_e_soc') | float(0) %}
-                {% endif %}
-
                 {# Voll, wenn das Energielimit erreicht ist ODER der Fahrzeug-SOC > 95.5 % #}
                 {% set ev_full = (ev_limit > 0 and ev_energy >= ev_limit) or (ev_soc > 95.5) %}
 
@@ -155,7 +228,7 @@ template:
                   {# Hausbatterie voll: gesamter Ueberschuss ins Auto (wie ev_first) #}
                   {{ surplus_ev_first_amps }}
                 {% else %}
-                  {# ACHTUNG: max() ist eine UNTERgrenze, keine Deckelung -             #}
+                  {# ACHTUNG: max() ist eine UNTERgrenze, keine Deckelung -            #}
                   {# das Auto bekommt mindestens die Haelfte, mindestens aber das,     #}
                   {# was nach der Hausbatterie uebrig bleibt. Falls du wirklich        #}
                   {# deckeln wolltest, gehoert hier min() statt max() hin.             #}
@@ -175,6 +248,26 @@ template:
               {# --- MODUS 5: Mind. 1.3 kW (6 A) / Max PV-Ueberschuss, ohne Batterieschutz --- #}
               {% elif mode == 'min_6a_floor_grid' %}
                 {{ [surplus_ev_first_amps, 6] | max }}
+
+              {# --- MODUS 6: Zielzeit --- #}
+              {% elif mode == 'target_time' %}
+                {% set pv_cap = state_attr('sensor.global_parameter','ev_pv_precharge_max_soc') | float(85) %}
+                {% if ev_soc >= ev_soc_target %}
+                  {# Ziel erreicht - wallbox_stop_on_idle beendet die Ladung #}
+                  0
+                {% elif ev_phase == 'full' %}
+                  {# zu knapp geworden: volle Leistung, Netz inbegriffen #}
+                  {{ ev_amps_full }}
+                {% elif ev_phase == 'paced' %}
+                  {# Batterietempo - oder mehr, falls die Sonne mehr hergibt #}
+                  {{ [[ev_amps_paced, surplus_ev_first_amps] | max, max_amps | int] | min }}
+                {% elif ev_soc < pv_cap %}
+                  {# davor: nur geschenkte Energie, gedeckelt auf 85 % #}
+                  {{ surplus_ev_first_amps }}
+                {% else %}
+                  0
+                {% endif %}
+
               {% else %}
                 0
               {% endif %}
@@ -187,3 +280,27 @@ template:
           # bewusst auf 100-W-Schritte gerundet: ein Attribut, das sich bei
           # jedem Render aendert, erzwingt jedes Mal einen State-Write
           surplus_w: "{{ ((surplus_ev_first_w / 100) | round(0) * 100) | int }}"
+
+      # ----------------------------------------------------------
+      # Zielzeit-Diagnose. Teilt sich die Variablen mit dem Sensor
+      # darueber, rechnet also nichts doppelt.
+      # ----------------------------------------------------------
+      - name: "EV Charge Start Time"
+        unique_id: ev_charge_start_time
+        device_class: timestamp
+        icon: mdi:clock-start
+        availability: >-
+          {{ is_state('input_select.ev_charge_mode', 'target_time')
+             and is_state('binary_sensor.warp3_2ita_cable', 'on')
+             and not is_state('input_select.ev_vehicle_mode', 'off')
+             and ev_deadline_ts > 0 and ev_needed_kwh > 0 }}
+        state: "{{ as_datetime(ev_start_paced_ts | int).isoformat() }}"
+        attributes:
+          deadline: "{{ as_datetime(ev_deadline_ts | int).isoformat() if ev_deadline_ts > 0 else '' }}"
+          fallback_full_power: "{{ as_datetime(ev_start_full_ts | int).isoformat() if ev_start_full_ts > 0 else '' }}"
+          phase: "{{ ev_phase }}"
+          needed_kwh: "{{ ev_needed_kwh }}"
+          needed_min_paced: "{{ (ev_needed_kwh * 60000 / ev_plan_paced_w) | round(0) | int if ev_plan_paced_w > 0 else 0 }}"
+          paced_amps: "{{ ev_amps_paced }}"
+          full_amps: "{{ ev_amps_full }}"
+          paced_power_w: "{{ ev_power_paced_w | round(0) | int }}"

@@ -1,15 +1,25 @@
 -== Watchman Report ==- 
 
--== Congratulations, all 15 actions from your config are available!
+-== Congratulations, all 17 actions from your config are available!
 
--== Missing 1 entity(ies) from 172 found in your config:
+-== Missing 4 entity(ies) from 206 found in your config:
 +--------------------------------+----------+---------------------------------------------------------------+
 | Entity ID                      | State    | Location                                                      |
 +--------------------------------+----------+---------------------------------------------------------------+
-| sensor.average_consumption_las | unknown  | 📄 packages/consumption.yaml:157,166                          |
-| t_1h_fast                      |          |                                                               |
+| sensor.zero_sr_batteriestand   | unavail  | 📄 .storage/lovelace.dashboard_stuerung:123                   |
+| ('Zero SR Zero SR              |          | 📄 packages/ev_sensors.yaml:101,126                           |
+| Batteriestand')                |          | 📄 packages/ev_soc.yaml:128                                   |
+| sensor.zero_sr_zero_sr_odb_spa | unavail  | 📄 .storage/lovelace.dashboard_stuerung:140                   |
+| nnung ('Zero SR Zero SR OBD    |          | 📄 .storage/lovelace.solar_dashboard:645                      |
+| Spannung')                     |          |                                                               |
+| sensor.honda_e_batteriestand   | unavail  | 📄 .storage/lovelace.dashboard_stuerung:155                   |
+| ('Honda e Honda e              |          | 📄 packages/ev_sensors.yaml:112                               |
+| Batteriestand')                |          | 📄 packages/ev_soc.yaml:162                                   |
+| sensor.honda_e_honda_e_odb_spa | unavail  | 📄 .storage/lovelace.dashboard_stuerung:172                   |
+| nnung ('Honda e Honda e OBD    |          | 📄 .storage/lovelace.solar_dashboard:649                      |
+| Spannung')                     |          |                                                               |
 +--------------------------------+----------+---------------------------------------------------------------+
 
--== Report created on 29 May 2026 14:35:40
--== Parsed 20 files in 0.01s., ignored 0 files 
--== Generated in: 0.06s. Validated in: 0.00s.
+-== Report created on 02 Aug 2026 11:42:27
+-== Parsed 33 files in 0.12s., ignored 0 files 
+-== Generated in: 0.02s. Validated in: 0.00s.

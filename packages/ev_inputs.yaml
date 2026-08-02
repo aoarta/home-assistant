@@ -9,7 +9,7 @@ input_select:
       - "off"
       - "zero"
       - "honda_e"
-    initial: "off"
+    #initial: "off"
     icon: mdi:car-electric
 
   ev_charge_mode:
@@ -20,8 +20,20 @@ input_select:
       - "pv_battery_first" # 2. PV-Überschuss Batterien priorisiert
       - "min_6a_floor_battery" # 4. Min. 1.3kW (6A), Max aus PV, Batterie-Schutz aktiv
       - "min_6a_floor_grid" # 5. Min. 1.3kW (6A), Max aus PV, ohne Batterie-Schutz
-    initial: "pv_ev_first"
+      - "target_time" # 6. Fertig bis input_datetime.ev_target_time
+    #initial: "pv_ev_first"
     icon: mdi:ev-station
+
+input_datetime:
+  # Zielzeit fuer charge_mode "target_time". Ohne Datum -> gemeint ist immer
+  # das naechste Auftreten dieser Uhrzeit. Anstecken um 20:00 bei Zielzeit
+  # 07:00 heisst also morgen frueh; Anstecken um 08:00 heisst uebermorgen
+  # 07:00, dazwischen laeuft die PV-Vorladung.
+  ev_target_time:
+    name: "EV Zielzeit"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-check
 
 input_number:
   ev_manual_charging_current:
@@ -35,7 +47,7 @@ input_number:
 
   ev_charge_by_percent:
     name: "EV charge BY Percent"
-    initial: 50
+    #initial: 50
     min: 0
     max: 100
     step: 5
@@ -44,7 +56,7 @@ input_number:
 
   ev_charge_to_percent:
     name: "EV charge TO Percent"
-    initial: 50
+    #initial: 50
     min: 0
     max: 100
     step: 5

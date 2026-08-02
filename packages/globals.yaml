@@ -19,10 +19,11 @@ template:
           lowest_soc: 12 # below that emergency start
           stop_soc: 15
           # batteries: own consumption
-          ups_own_consumption_w: 0 #22 too much
+          ups_own_consumption_w: 5 # 22 too much
           # battery care
           override_soc_days: 5
           battery_care_days: 8
+
           # Wallbox
           wallbox_max_amps: 22
 
@@ -30,10 +31,14 @@ template:
           # if charging goes to high, increase the efficienc
           zero_sr_capacity: 13.6 # 14.4 kWh brutto
           zero_sr_charge_efficiency: 0.915 # AC-DC efficiency; measured/calibrated on 2026-08-01
+          zero_sr_max_charge_power: 3400
+          zero_sr_phases: 1
 
           # Honda e
           honda_e_capacity: 28.5 # NEU — Honda e: 35,5 kWh brutto
           honda_e_charge_efficiency: 0.88 # NEU — anpassen wenn gemessen
+          honda_e_max_charge_power: 4500
+          honda_e_phases: 1
 
           # bei Änderung oben auch hier anpassen
           # calculated Attribut (2* Venus * 0.8 + UPS * 0.6)
@@ -43,3 +48,26 @@ template:
             {% set venus = 5120 %}
             {% set ups = 2200 %}
             {{ ((venus * 2 * 0.8) + (ups * 0.6)) / 1000 }}
+
+          # ------------------------------------------------------------------
+          # Zielzeit-Laden (charge_mode "target_time")
+          # ------------------------------------------------------------------
+          # Sicherheitsabstand zwischen geplantem Ladeende und Zielzeit.
+          target_time_buffer_min: 30
+          # Geht NUR in die Startzeitberechnung ein, nicht in den Sollwert der
+          # Wallbox. Dadurch wird tatsaechlich schneller geladen als geplant,
+          # der Restbedarf schrumpft schneller als die Uhr laeuft und die
+          # Startbedingung rastet nach dem Ausloesen von selbst ein.
+          # Deckt gleichzeitig die abflachende Ladekurve und die Rundung auf
+          # ganze Ampere ab. Immer < 1.0 lassen.
+          target_time_power_derate: 0.9
+          # Bis zu diesem SoC darf vor dem Startzeitpunkt mit PV-Ueberschuss
+          # geladen werden. Greift nur, wenn ev_charge_to_percent darueber liegt.
+          ev_pv_precharge_max_soc: 85
+          # Dauerentladeleistung der Hausspeicher, die fuer die Wallbox
+          # eingeplant wird: 2x Venus 2500 W abzueglich Reserve fuer den
+          # laufenden Hausverbrauch. Ausmessen: nachts bei vollen Speichern
+          # ev_manual_charging_current hochdrehen und sensor.leistung_vom_netz
+          # beobachten - der Strom, bei dem er dauerhaft ins Positive kippt,
+          # mal 235 V, minus 300-500 W Hausverbrauch.
+          battery_paced_power_w: 4500

@@ -1,74 +1,40 @@
 # ============================================================
+# PV surplus wallbox charging (WARP3) - Trigger Sensors
+#
+# Die Ueberschussrechnung liegt direkt in "EV Target Charging Current".
+# Die frueheren Zwischensensoren sensor.pv_dynamic_charging_current und
+# sensor.pv_dynamic_charging_current_battery_first entfallen - der
+# zugehoerige Block in ev_sensors.yaml muss geloescht werden, die beiden
+# verwaisten Entities danach in der Entitaeten-Liste entfernen.
+#
+# MODUS 6 "target_time": Fahrzeug soll bis input_datetime.ev_target_time
+# auf input_number.ev_charge_to_percent geladen sein.
+#   Phase "pv"    - nur PV-Ueberschuss, gedeckelt auf ev_pv_precharge_max_soc
+#   Phase "paced" - Batterietempo: so viel, wie die Hausspeicher tragen
+#   Phase "full"  - alles was geht, Netz inbegriffen (Notfallstufe)
+# Die beiden Startzeitpunkte laufen rechnerisch exakt bei Ladeende zusammen:
+# laeuft alles nach Plan, wird "full" nie erreicht; faellt die Ladung zurueck,
+# greift die Stufe von selbst. Kein Helper, kein Latch, keine Hysterese.
+# ============================================================
+
+# ============================================================
 # PV surplus wallbox charging (WARP3) - Sensors
-# SoC-Tracking liegt in ev_soc.yaml
+#
+# SoC-Tracking liegt in ev_soc.yaml.
+# Die Ueberschussrechnung (frueher "PV Dynamic Charging Current" und
+# "... Battery First") liegt jetzt in den variables von
+# sensor.ev_target_charging_current in ev_sensor_trigger.yaml.
 # ============================================================
 
 template:
-  - trigger:
-      - platform: time_pattern
-        seconds: "/30"
-      - platform: state
-        entity_id:
-          - sensor.warp3_2ita_powernow
-          - sensor.leistung_vom_netz
-          - sensor.marstek_venus_1_ac_power_glatt
-          - sensor.marstek_venus_2_ac_power_glatt
-    variables:
-      cable_connected: "{{ is_state('binary_sensor.warp3_2ita_cable', 'on') }}"
-      charger_power: "{{ states('sensor.warp3_2ita_powernow') | float(0) }}"
-      power_from_net: "{{ states('sensor.leistung_vom_netz') | float(0) }}"
-      venus1: "{{ states('sensor.marstek_venus_1_ac_power_glatt') | float(0) }}"
-      venus2: "{{ states('sensor.marstek_venus_2_ac_power_glatt') | float(0) }}"
-      charger_voltage: "{{ states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) }}"
-      max_amps: "{{ state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) }}"
-    sensor:
-      # ----------------------------------------------------------
-      # 1. PV Dynamic Current (EV FIRST)
-      # Hausbatterie-Ladestrom (negativer Wert) wird freigegeben.
-      # ----------------------------------------------------------
-      - name: "PV Dynamic Charging Current"
-        unique_id: pv_dynamic_charging_current
-        unit_of_measurement: "A"
-        device_class: current
-        state_class: measurement
-        state: >-
-          {% if not cable_connected %}
-            0
-          {% else %}
-            {% set surplus = charger_power - power_from_net - venus1 - venus2 %}
-            {% set amps = (surplus / charger_voltage + 0.2) | int %}
-            {{ [amps, max_amps] | min if amps >= 6 else 0 }}
-          {% endif %}
-
-      # ----------------------------------------------------------
-      # 2. PV Dynamic Current (BATTERY FIRST)
-      # Hausbatterie wird geschont. Ihr Ladestrom wird NICHT der Wallbox zugeschlagen.
-      # ----------------------------------------------------------
-      - name: "PV Dynamic Charging Current Battery First"
-        unique_id: pv_dynamic_charging_current_battery_first
-        unit_of_measurement: "A"
-        device_class: current
-        state_class: measurement
-        state: >-
-          {% if not cable_connected %}
-            0
-          {% else %}
-            {% set v1_clean = [venus1, 0] | max %}
-            {% set v2_clean = [venus2, 0] | max %}
-            {% set surplus = charger_power - power_from_net - v1_clean - v2_clean %}
-            {% set amps = (surplus / charger_voltage + 0.2) | int %}
-            {{ [amps, max_amps] | min if amps >= 6 else 0 }}
-          {% endif %}
-
   # ----------------------------------------------------------
   # Session-Energie
   # ----------------------------------------------------------
-  - trigger:
-      - platform: state
+  - triggers:
+      - trigger: state
         entity_id: sensor.warp3_2ita_energyabs
-      - platform: state
+      - trigger: state
         entity_id: input_number.ev_session_start_energy_kwh
-
     sensor:
       - name: "EV Session Energy"
         unique_id: ev_session_energy
@@ -120,12 +86,14 @@ template:
         unique_id: ev_charging_power
         unit_of_measurement: "W"
         device_class: power
+        state_class: measurement
         state: >-
-          {% set power = states('sensor.warp3_2ita_powernow') | float(0) %}
-          {{ (0 - power) | round(0) | int }}
+          {# (0 - power) statt -power: sonst rendert Jinja bei 0 ein "-0.0" #}
+          {{ (0 - (states('sensor.warp3_2ita_powernow') | float(0))) | round(0) | int }}
 
       # ----------------------------------------------------------
-      # Rohwert-Spiegel zum Gegenpruefen der Hochrechnung
+      # Rohwert-Spiegel zum Gegenpruefen der Hochrechnung.
+      # Werden von keinem Template gelesen - nur Dashboard/Diagnose.
       # ----------------------------------------------------------
       - name: "Zero SOC last seen"
         unique_id: zero_sr_soc_last_seen

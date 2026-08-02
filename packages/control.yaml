@@ -166,11 +166,6 @@ template:
               Unknown state ({{ t }})
             {% endif %}
           {% endif %}
-        attributes:
-          target_soc_raw: "{{ states('sensor.target_soc') | float(-1) }}"
-          dynamic_soc: "{{ states('sensor.dynamic_soc') | float(0) }}"
-          override_active: "{{ is_state('input_boolean.override_soc', 'on') }}"
-          maintenance_active: "{{ is_state('binary_sensor.battery_maintenance_required', 'on') }}"
 
   - trigger:
       - trigger: time_pattern
