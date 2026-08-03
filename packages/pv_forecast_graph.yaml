@@ -10,8 +10,12 @@ template:
           {% set roof = state_attr('sensor.pv_roof_openmeteo_production_today', 'wh_period') %}
           {% set facade = state_attr('sensor.pv_fassade_openmeteo_production_today', 'wh_period') %}
           {% if roof is mapping and facade is mapping %}
+            {# Tagesfilter wie im forecast-Attribut: ohne ihn lieferte der
+               State den Peak des besten Tages im gesamten Prognosefenster,
+               nicht den von heute. #}
+            {% set today = now().strftime('%Y-%m-%d') %}
             {% set ns = namespace(peak=0) %}
-            {% for ts, rv in roof.items() %}
+            {% for ts, rv in roof.items() if ts.startswith(today) %}
               {% set combined = (rv | float(0)) + (facade[ts] | float(0) if ts in facade else 0) %}
               {% if combined > ns.peak %}{% set ns.peak = combined %}{% endif %}
             {% endfor %}

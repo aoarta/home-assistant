@@ -42,16 +42,21 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
+        # Frueher stand das "unavailable" im state-Template. Funktional das
+        # gleiche Ergebnis, aber HA protokolliert jeden solchen Rueckgabewert
+        # als ERROR ("Received invalid sensor state ... expected a number").
+        # Als availability ausgedrueckt bleibt das Log sauber - und bei
+        # false wird das state-Template gar nicht erst gerendert.
+        availability: >-
+          {{ trigger.to_state is not none
+             and is_number(trigger.to_state.state)
+             and (trigger.to_state.state | float | round(0) | abs) < 20000 }}
         state: >
           {# Verwende den Wert direkt aus dem Trigger anstatt states() aufzurufen #}
-          {% set raw = trigger.to_state.state | float(none) %}
-          {% if raw is not none and raw | round(0) | abs < 20000 %}
-            {% set alpha = 0.68 %}  {# ca. 10s bis 90%; bei 5s trigger #}
-            {% set alt = this.state | float(raw) %}
-            {{ (alt + alpha * (raw - alt)) | round(0) }}
-          {% else %}
-            unavailable
-          {% endif %}
+          {% set raw = trigger.to_state.state | float %}
+          {% set alpha = 0.68 %}  {# ca. 10s bis 90%; bei 5s trigger #}
+          {% set alt = this.state | float(raw) %}
+          {{ (alt + alpha * (raw - alt)) | round(0) }}
 
   - trigger:
       - platform: state
@@ -62,15 +67,15 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
+        availability: >-
+          {{ trigger.to_state is not none
+             and is_number(trigger.to_state.state)
+             and (trigger.to_state.state | float | round(0) | abs) < 20000 }}
         state: >
-          {% set raw = trigger.to_state.state | float(none) %}
-          {% if raw is not none and raw | round(0) | abs < 20000 %}
-            {% set alpha = 0.78 %}  {# ca. 15s bis 90%; bei 10 sec trigger #}
-            {% set alt = this.state | float(raw) %}
-            {{ (alt + alpha * (raw - alt)) | round(0) }}
-          {% else %}
-            unavailable
-          {% endif %}
+          {% set raw = trigger.to_state.state | float %}
+          {% set alpha = 0.78 %}  {# ca. 15s bis 90%; bei 10 sec trigger #}
+          {% set alt = this.state | float(raw) %}
+          {{ (alt + alpha * (raw - alt)) | round(0) }}
 
   - sensor:
       - name: "Energie von PV AC"
@@ -78,10 +83,6 @@ template:
         unit_of_measurement: "kWh"
         device_class: energy
         state_class: total_increasing
+        availability: "{{ is_number(states('sensor.fronius_inverter_energy_raw')) }}"
         state: >
-          {% set raw = states('sensor.fronius_inverter_energy_raw') | float(none) %}
-          {% if raw is not none %}
-            {{ (raw / 1000) | round(3) }}
-          {% else %}
-            unavailable
-          {% endif %}
+          {{ (states('sensor.fronius_inverter_energy_raw') | float / 1000) | round(3) }}

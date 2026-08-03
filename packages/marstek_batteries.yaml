@@ -164,23 +164,37 @@ template:
         unique_id: marstek_usable_energy
         unit_of_measurement: "kWh"
         device_class: energy
+        # Kein availability-Template mehr. Frueher verlangte es zusaetzlich
+        # die beiden HARDWARE-SOCs - und genau die fallen beim Modbus-Timeout
+        # als erstes aus. Der Sensor ging dann auf "unavailable",
+        # control.yaml las ihn mit | float(0) als leeren Speicher und
+        # target_soc sprang auf 130 ("Tagesbilanz negativ"), obwohl die
+        # Speicher voll waren. Die HW-SOCs werden hier ohnehin nur als
+        # Notfallwert gebraucht; gerechnet wird mit den Custom-SOCs.
         state: >-
-          {% set min_soc = state_attr('sensor.solar_soc_logic', 'min') %}
+          {% set min_soc = state_attr('sensor.solar_soc_logic', 'min') | float(15) %}
           {% set cap1 = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) %}
           {% set cap2 = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) %}
 
-          {% set soc1 = states('sensor.venus_1_custom_soc') | float(states('sensor.marstek_venus_1_soc') | float(0)) %}
-          {% set soc2 = states('sensor.venus_2_custom_soc') | float(states('sensor.marstek_venus_2_soc') | float(0)) %}
+          {% set soc1 = states('sensor.venus_1_custom_soc') | float(none) %}
+          {% set soc2 = states('sensor.venus_2_custom_soc') | float(none) %}
 
-          {% set usable_soc1 = [0, soc1 - min_soc] | max %}
-          {% set usable_soc2 = [0, soc2 - min_soc] | max %}
-
-          {{ ((usable_soc1 / 100 * cap1) + (usable_soc2 / 100 * cap2)) | round(3) }}
-        availability: >-
-          {{ is_number(states('sensor.venus_1_custom_soc')) and
-             is_number(states('sensor.venus_2_custom_soc')) and
-             is_number(states('sensor.marstek_venus_1_soc')) and
-             is_number(states('sensor.marstek_venus_2_soc')) }}
+          {% if soc1 is none or soc2 is none %}
+            {# Kein SOC lesbar: letzten guten Wert halten. Ein eingefrorener
+               Wert ist beim Modbus-Aussetzer die deutlich harmlosere Luege
+               als eine gemeldete 0 - die Bilanzstufen in control.yaml haengen
+               direkt daran. Wie lange schon eingefroren wird, steht im
+               Attribut "stale" bzw. in binary_sensor.marstek_verfuegbar. #}
+            {{ this.state if is_number(this.state) else 0 }}
+          {% else %}
+            {% set usable_soc1 = [0, soc1 - min_soc] | max %}
+            {% set usable_soc2 = [0, soc2 - min_soc] | max %}
+            {{ ((usable_soc1 / 100 * cap1) + (usable_soc2 / 100 * cap2)) | round(3) }}
+          {% endif %}
+        attributes:
+          stale: >-
+            {{ not (is_number(states('sensor.venus_1_custom_soc'))
+                    and is_number(states('sensor.venus_2_custom_soc'))) }}
 
   - triggers:
       - trigger: homeassistant
@@ -563,6 +577,62 @@ template:
           {% set val = (states('sensor.venus_2_riemann') | float(0) * (-1000)) + 50000 %}
           {{ [[val, 0] | max, 100000] | min }}
 
+    # WATCHDOG: liefert die Marstek-Integration gerade gueltige Werte?
+    #
+    # Der Coordinator pausiert nach einem Lesefehler 180 s. In dieser Zeit
+    # stehen die Entitaeten je nach Fehlerbild auf "unavailable" ODER sie
+    # behalten einfach ihren letzten Wert. Beide Faelle werden hier erkannt:
+    #   has_value      -> deckt "unavailable"/"unknown" ab (sofort)
+    #   last_reported  -> deckt eingefrorene Werte ab (nach max_age)
+    #
+    # Gelesen von: ev_sensor_trigger.yaml (Ueberschussrechnung),
+    #              consumption.yaml (sensor.charge_power),
+    #              ups_batterie.yaml (ups_coarse_control).
+    # Alle drei rechneten fehlende Marstek-Leistung vorher als 0 W - beim
+    # Ausfall sah die Wallbox dadurch bis zu 5 kW Ueberschuss zu viel und
+    # lud aus dem Netz.
+    #
+    # delay_on: nach einer Stoerung erst wieder vertrauen, wenn die Daten
+    # 20 s stabil da sind. Ausschalten ohne Verzoegerung - im Zweifel lieber
+    # eine Regelung zu frueh einfrieren als zu spaet.
+
+  - binary_sensor:
+      - name: "Marstek verfuegbar"
+        unique_id: marstek_available
+        device_class: connectivity
+        icon: mdi:lan-connect
+        delay_on: "00:00:20"
+        state: >-
+          {% set ents = [
+               'sensor.marstek_venus_1_ac_power',
+               'sensor.marstek_venus_2_ac_power',
+               'sensor.marstek_venus_1_soc',
+               'sensor.marstek_venus_2_soc'
+             ] %}
+          {% set max_age = 300 %}
+          {% set ns = namespace(ok=true) %}
+          {% for e in ents %}
+            {% set s = states[e] %}
+            {% if s is none or not has_value(e) %}
+              {% set ns.ok = false %}
+            {% else %}
+              {% set ts = s.last_reported if s.last_reported is defined else s.last_updated %}
+              {% if (now() - ts).total_seconds() > max_age %}
+                {% set ns.ok = false %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.ok }}
+        attributes:
+          stale_entities: >-
+            {% set ents = [
+                 'sensor.marstek_venus_1_ac_power',
+                 'sensor.marstek_venus_2_ac_power',
+                 'sensor.marstek_venus_1_soc',
+                 'sensor.marstek_venus_2_soc'
+               ] %}
+            {{ ents | reject('has_value') | list | join(', ') }}
+
 automation:
   - alias: "Sende Lade und Entladebefehle an Hardware"
     id: "sende_batterie_targets_v3"
@@ -868,8 +938,13 @@ automation:
       - trigger: time_pattern
         minutes: "/30"
     conditions:
-      - condition: sun
-        after: sunset
+      # "condition: sun / after: sunset" ist nur von Sonnenuntergang bis
+      # Mitternacht wahr - danach lief der /30-Trigger ins Leere und ein
+      # abgebrochener Zyklus konnte fruehestens am naechsten Abend neu
+      # starten. below_horizon deckt die ganze Nacht ab; nach oben begrenzt
+      # weiterhin "Hard stop at sunrise".
+      - condition: template
+        value_template: "{{ is_state('sun.sun', 'below_horizon') }}"
       # Nur starten, wenn wirklich ein VENUS ueberfaellig ist.
       - condition: template
         value_template: >-

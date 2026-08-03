@@ -73,6 +73,9 @@ template:
           - sensor.leistung_vom_netz
           - sensor.marstek_venus_1_ac_power_glatt
           - sensor.marstek_venus_2_ac_power_glatt
+          # Ausfall der Marstek-Integration muss sofort durchschlagen,
+          # nicht erst beim naechsten 30-s-Tick
+          - binary_sensor.marstek_verfuegbar
           - binary_sensor.warp3_2ita_cable
           # Entscheidungsgroessen
           - sensor.battery_soc_total
@@ -96,14 +99,25 @@ template:
       volt: "{{ states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) }}"
       max_amps: "{{ state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) }}"
 
+      # Sind die Speicherleistungen gerade ueberhaupt gueltig?
+      # Ohne diesen Guard wurden fehlende Werte als 0 W gelesen: entladen
+      # beide Venus mit je 2500 W, erschien der Ueberschuss um 5 kW zu hoch
+      # und die Wallbox regelte auf ~21 A hoch - drei Minuten aus dem Netz,
+      # so lange pausiert der Coordinator nach einem Timeout.
+      marstek_ok: >-
+        {{ is_state('binary_sensor.marstek_verfuegbar', 'on')
+           and has_value('sensor.marstek_venus_1_ac_power_glatt')
+           and has_value('sensor.marstek_venus_2_ac_power_glatt') }}
+
       # ----- PV-Ueberschuss ------------------------------------------
       # EV FIRST: Ladeleistung der Hausbatterie (negativ) wird freigegeben
-      surplus_ev_first_w: "{{ charger_power - power_from_net - venus1 - venus2 }}"
+      surplus_ev_first_w: >-
+        {{ (charger_power - power_from_net - venus1 - venus2) if marstek_ok else 0 }}
       # BATTERY FIRST: nur Entladeleistung (positiv) abziehen,
       # der Ladeanteil bleibt bei der Hausbatterie
       surplus_bat_first_w: >-
-        {{ charger_power - power_from_net
-           - ([venus1, 0] | max) - ([venus2, 0] | max) }}
+        {{ (charger_power - power_from_net
+            - ([venus1, 0] | max) - ([venus2, 0] | max)) if marstek_ok else 0 }}
 
       amps_ev_first: >-
         {% set a = (surplus_ev_first_w / volt + 0.2) | int %}
@@ -275,6 +289,9 @@ template:
           {% endif %}
         attributes:
           charge_mode: "{{ states('input_select.ev_charge_mode') }}"
+          # Steht hier "false", ist der Ueberschuss absichtlich 0 -
+          # dann fehlen die Marstek-Daten, nicht die Sonne.
+          marstek_ok: "{{ marstek_ok }}"
           amps_ev_first: "{{ amps_ev_first }}"
           amps_battery_first: "{{ amps_bat_first }}"
           # bewusst auf 100-W-Schritte gerundet: ein Attribut, das sich bei

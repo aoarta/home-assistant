@@ -210,6 +210,7 @@ automation:
           - sensor.ups_lowest_cell
           - sensor.ups_highest_cell
           - input_number.manual_charge_power
+          - binary_sensor.marstek_verfuegbar
       - platform: time_pattern
         minutes: "/2" # Fallback
     condition:
@@ -227,6 +228,14 @@ automation:
           # Feedback-free balance: add UPS output back so the inverter's own
           # discharge no longer moves the decision variable (stops oscillation)
           true_balance: "{{ netz + bat_pwr + ups_pwr }}"
+          # Faellt die Marstek-Integration aus, ist bat_pwr = 0 und
+          # true_balance damit um bis zu 5 kW falsch. Regel dann:
+          # nichts NEU einschalten (Zweig 3 und 6), beim Abschalten
+          # entscheidet ersatzweise der reine Netzbezug (Zweig 5).
+          # Die Sicherheitszweige 0, 0.5 und 2 haengen nicht daran.
+          marstek_ok: >-
+            {{ is_state('binary_sensor.marstek_verfuegbar', 'on')
+               and has_value('sensor.marstek_ac_power_total') }}
 
           soc: "{{ states('sensor.ups_custom_soc') | float(0) }}"
           hw_soc: "{{ states('sensor.ups_soc') | float(0) }}"
@@ -319,7 +328,7 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ (true_balance > 180) and soc > 25 
+                  {{ (true_balance > 180) and marstek_ok and soc > 25 
                      and low_cell > min_v + hyst and not inverter_an }}
             sequence:
               - action: switch.turn_off
@@ -344,7 +353,13 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ ((true_balance < 50 and inverter_on_for > 30) or soc <= 20 or low_cell < min_v) 
+                  {# Ohne gueltige Marstek-Daten laeuft der Inverter einfach
+                     weiter - abschalten nur noch ueber SOC/Zellspannung.
+                     Ein Aussetzer soll keine unnoetigen Relaiszyklen
+                     ausloesen; wieder eingeschaltet wird in Zweig 3 ohnehin
+                     erst mit gueltigen Daten. #}
+                  {{ ((true_balance < 50 and inverter_on_for > 30 and marstek_ok)
+                      or soc <= 20 or low_cell < min_v) 
                      and inverter_an }}
             sequence:
               - action: switch.turn_off
@@ -357,8 +372,14 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {# stop on true grid pull, full pack, cell limit, trickle, OR marstek discharging #}
-                  {{ (true_balance > 50 or high_cell > max_v or bat_pwr > 50
+                  {# stop on true grid pull, full pack, cell limit, trickle, OR marstek discharging.
+                     Ohne gueltige Marstek-Daten ist true_balance nicht
+                     aussagekraeftig - dann entscheidet der reine Netzbezug.
+                     Das ist die konservative Richtung: lieber eine echte
+                     PV-Ladung zu frueh beenden als drei Minuten lang aus
+                     dem Netz laden. #}
+                  {{ ((true_balance > 50 if marstek_ok else netz > 50)
+                      or high_cell > max_v or bat_pwr > 50
                       or (ups_pwr > -15 and soc > 95))
                     and charger_on and soc >= stop_soc }}
 
@@ -383,7 +404,8 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ true_balance < -820 and soc < 100 and high_cell < max_v - hyst
+                  {{ true_balance < -820 and marstek_ok
+                    and soc < 100 and high_cell < max_v - hyst
                     and bat_pwr < 50
                     and not inverter_an and not charger_on }}
 
@@ -471,8 +493,12 @@ automation:
       - trigger: time_pattern
         minutes: "/30"
     conditions:
-      - condition: sun
-        after: sunset
+      # Ganze Nacht statt nur bis Mitternacht - siehe gleiche Aenderung in
+      # battery_maintenance_night_charge. Fuer die USV besonders relevant:
+      # sie braucht 3-5 h, ein Abbruch nach Mitternacht war bisher ein
+      # verlorener Tag.
+      - condition: template
+        value_template: "{{ is_state('sun.sun', 'below_horizon') }}"
       - condition: state
         entity_id: input_boolean.ups_maintenance
         state: "off"

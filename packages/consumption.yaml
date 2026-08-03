@@ -130,6 +130,10 @@ template:
   - triggers:
       - trigger: state
         entity_id: sensor.leistung_vom_netz
+      # Damit die availability-Bedingung sofort greift und nicht erst
+      # beim naechsten Netzleistungs-Update ausgewertet wird.
+      - trigger: state
+        entity_id: binary_sensor.marstek_verfuegbar
       #      - trigger: state
       #        entity_id: sensor.marstek_ac_power_total
     sensor:
@@ -140,7 +144,8 @@ template:
         state_class: measurement
         availability: >-
           {{ has_value('sensor.leistung_vom_netz') and
-             has_value('sensor.marstek_ac_power_total') }}
+             has_value('sensor.marstek_ac_power_total') and
+             is_state('binary_sensor.marstek_verfuegbar', 'on') }}
         state: >-
           {# 1. Den theoretischen 100%-Zielwert berechnen #}
           {% set netz = states('sensor.leistung_vom_netz') | float(0) %}
@@ -283,6 +288,62 @@ template:
             {% elif category == 'saturday_preholiday' %}Saturday/Pre-holiday
             {% else %}Weekday
             {% endif %}
+
+    # WATCHDOG: liefert die Marstek-Integration gerade gueltige Werte?
+    #
+    # Der Coordinator pausiert nach einem Lesefehler 180 s. In dieser Zeit
+    # stehen die Entitaeten je nach Fehlerbild auf "unavailable" ODER sie
+    # behalten einfach ihren letzten Wert. Beide Faelle werden hier erkannt:
+    #   has_value      -> deckt "unavailable"/"unknown" ab (sofort)
+    #   last_reported  -> deckt eingefrorene Werte ab (nach max_age)
+    #
+    # Gelesen von: ev_sensor_trigger.yaml (Ueberschussrechnung),
+    #              consumption.yaml (sensor.charge_power),
+    #              ups_batterie.yaml (ups_coarse_control).
+    # Alle drei rechneten fehlende Marstek-Leistung vorher als 0 W - beim
+    # Ausfall sah die Wallbox dadurch bis zu 5 kW Ueberschuss zu viel und
+    # lud aus dem Netz.
+    #
+    # delay_on: nach einer Stoerung erst wieder vertrauen, wenn die Daten
+    # 20 s stabil da sind. Ausschalten ohne Verzoegerung - im Zweifel lieber
+    # eine Regelung zu frueh einfrieren als zu spaet.
+
+  - binary_sensor:
+      - name: "Marstek verfuegbar"
+        unique_id: marstek_available
+        device_class: connectivity
+        icon: mdi:lan-connect
+        delay_on: "00:00:20"
+        state: >-
+          {% set ents = [
+               'sensor.marstek_venus_1_ac_power',
+               'sensor.marstek_venus_2_ac_power',
+               'sensor.marstek_venus_1_soc',
+               'sensor.marstek_venus_2_soc'
+             ] %}
+          {% set max_age = 300 %}
+          {% set ns = namespace(ok=true) %}
+          {% for e in ents %}
+            {% set s = states[e] %}
+            {% if s is none or not has_value(e) %}
+              {% set ns.ok = false %}
+            {% else %}
+              {% set ts = s.last_reported if s.last_reported is defined else s.last_updated %}
+              {% if (now() - ts).total_seconds() > max_age %}
+                {% set ns.ok = false %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.ok }}
+        attributes:
+          stale_entities: >-
+            {% set ents = [
+                 'sensor.marstek_venus_1_ac_power',
+                 'sensor.marstek_venus_2_ac_power',
+                 'sensor.marstek_venus_1_soc',
+                 'sensor.marstek_venus_2_soc'
+               ] %}
+            {{ ents | reject('has_value') | list | join(', ') }}
 
 automation:
   - alias: "Energy Management: Save & Reset at Sunrise"

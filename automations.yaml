@@ -4,13 +4,18 @@
   triggers:
     - trigger: sun
       event: sunrise
-      offset: "00:30:00"
+      offset: "00:00:00"
   actions:
     - action: switch.turn_on
       target:
         entity_id:
-          - switch.marstek_venus1_modbus_rs485_steuermodus
           - switch.marstek_venus2_modbus_rs485_steuermodus
+    - delay: "00:00:10"
+    - action: switch.turn_on
+      target:
+        entity_id:
+          - switch.marstek_venus2_modbus_rs485_steuermodus
+
   mode: single
 
 - alias: "System: Set CPU Governor Schedutil"
@@ -41,3 +46,22 @@
           {% set lat = state_attr('zone.home', 'latitude') | float(0) | round(6) %}
           {% set lon = state_attr('zone.home', 'longitude') | float(0) | round(6) %}
           Latitude {{ lat }}; Longitude {{ lon }}; PowerDelta 110; WattRes 1; TelePeriod 15; Sunrise 1
+
+- alias: "Marstek: Watchdog meldet Ausfall"
+  id: marstek_watchdog_alarm
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.marstek_verfuegbar
+      to: "off"
+      for: "00:15:00"
+  actions:
+    - action: notify.send_message
+      target:
+        entity_id: notify.gmail_benachrichtigung_martin_zwicknagl_kirchbichl_net
+      data:
+        title: "⚠️ Marstek nicht erreichbar"
+        message: >-
+          binary_sensor.marstek_verfuegbar steht seit 15 Minuten auf off.
+          Fehlend: {{ state_attr('binary_sensor.marstek_verfuegbar', 'stale_entities') or 'keine (Werte eingefroren)' }}
+          Überschussladung und Speicherregelung sind so lange stillgelegt.

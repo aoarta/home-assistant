@@ -66,26 +66,52 @@ template:
         after_offset: "-00:30:00"
         before: sunset
         before_offset: "00:30:00"
+    variables:
+      # Die Entity-ID der Einstrahlungsmessung haengt davon ab, wie die
+      # weewx-MQTT-Sensoren benannt bzw. umbenannt wurden. Statt eine ID
+      # hart zu verdrahten wird die erste genommen, die einen Wert liefert.
+      # Welche das ist, steht im Attribut "source" der EMA - dort einmal
+      # nachsehen und die Liste bei Bedarf kuerzen. Findet sich keine,
+      # bleibt irr_now = -1, die EMA friert ein und der Korrekturfaktor
+      # steht neutral auf 1.0 (also exakt wie ohne dieses Modul).
+      irr_entity: >-
+        {% set ns = namespace(e='') %}
+        {% for c in ['sensor.wetterstation_solarstrahlung',
+                     'sensor.weather_station_solar_radiation',
+                     'sensor.solar_radiation'] %}
+          {% if ns.e == '' and has_value(c) %}{% set ns.e = c %}{% endif %}
+        {% endfor %}
+        {{ ns.e }}
+      irr_now: >-
+        {% set ns = namespace(v=-1) %}
+        {% for c in ['sensor.wetterstation_solarstrahlung',
+                     'sensor.weather_station_solar_radiation',
+                     'sensor.solar_radiation'] %}
+          {% if ns.v < 0 and has_value(c) %}{% set ns.v = states(c) | float(-1) %}{% endif %}
+        {% endfor %}
+        {{ ns.v }}
     sensor:
       - name: "PV Solar Radiation EMA 30min"
         unique_id: pv_solar_radiation_ema_30min
         unit_of_measurement: "W/m²"
         state_class: measurement
         state: >-
-          {% set raw = states('sensor.wetterstation_solarstrahlung') | float(none) %}
-          {% if raw is none %}
+          {% if irr_now < 0 %}
             {{ this.state | float(0) }}
           {% else %}
             {% set alpha = 0.065 %}  {# Faustregel 2/(N+1) fuer N=30 Perioden bei 1-Min-Takt #}
-            {% set alt = this.state | float(raw) %}
-            {{ (alt + alpha * (raw - alt)) | round(1) }}
+            {% set alt = this.state | float(irr_now) %}
+            {{ (alt + alpha * (irr_now - alt)) | round(1) }}
           {% endif %}
+        attributes:
+          # Leer = keine der Kandidaten-Entities liefert Werte.
+          source: "{{ irr_entity }}"
 
       - name: "PV Solar Gain Factor"
         unique_id: pv_solar_gain_factor
         unit_of_measurement: "W/(W/m²)"
         state: >-
-          {% set irr = states('sensor.wetterstation_solarstrahlung') | float(0) %}
+          {% set irr = irr_now if irr_now >= 0 else 0 %}
           {% set pv = states('sensor.pv_production_power') | float(0) %}
           {% set alt = this.state | float(8) %}
           {# grober Startwert 8 - lernt sich an ein paar sonnigen Tagen ein #}

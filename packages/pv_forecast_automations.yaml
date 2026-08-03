@@ -6,9 +6,9 @@ automation:
     triggers:
       - trigger: sun
         event: sunrise
+
     actions:
       - repeat:
-          count: 3
           sequence:
             - action: homeassistant.update_entity
               target:
@@ -21,11 +21,19 @@ automation:
             - if:
                 - condition: template
                   value_template: >-
+                    {{ not (has_value('sensor.forecastsolar_api_source_dach')
+                            and has_value('sensor.forecastsolar_api_source_fassade')) }}
+              then:
+                - delay: { minutes: 3 }
+          until:
+            - condition: or
+              conditions:
+                - condition: template
+                  value_template: >-
                     {{ has_value('sensor.forecastsolar_api_source_dach')
                        and has_value('sensor.forecastsolar_api_source_fassade') }}
-              then:
-                - stop: "Beide Endpunkte haben geliefert"
-            - delay: { minutes: 3 }
+                - condition: template
+                  value_template: "{{ repeat.index >= 3 }}"
 
       # Warten, bis pv_forecast_calc nach dem Fetch mindestens einmal gelaufen ist
       - delay: "00:06:00"
@@ -43,6 +51,22 @@ automation:
                 entity_id: "input_number.pv_save_{{ repeat.item }}_morgens"
               data:
                 value: "{{ states('sensor.pv_forecast_' ~ repeat.item ~ '_all') | float(0) }}"
+
+  - alias: "PV: API Daten gezielt holen"
+    id: pv_fetch_api_data_updates
+    trigger:
+      - platform: time
+        at: ["11:30:00", "17:30:00"]
+    action:
+      - action: homeassistant.update_entity
+        target:
+          entity_id:
+            - sensor.forecastsolar_api_source_dach
+      - delay: { seconds: 20 }
+      - action: homeassistant.update_entity
+        target:
+          entity_id:
+            - sensor.forecastsolar_api_source_fassade
 
   - alias: "PV: Kalman-Update am Ende des Tages"
     id: pv_daily_kalman_update
