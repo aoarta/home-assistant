@@ -15,21 +15,32 @@ shell_command:
   optimize_cpu: 'bash -c "echo schedutil > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor && echo 10000 > /sys/devices/system/cpu/cpufreq/schedutil/rate_limit_us"'
 
 rest_command:
+  # AWEKAS-Upload. Stations-ID und Passwort standen frueher hier im
+  # Klartext - beides liegt jetzt in secrets.yaml unter "awekas_url".
+  #
+  # Warum die KOMPLETTE URL ins Secret wandert und nicht nur die
+  # Zugangsdaten: !secret ersetzt immer einen ganzen Wert, es laesst sich
+  # nicht in eine Zeichenkette hineinschreiben. Templates wiederum
+  # koennen keine Secrets lesen. Der Umweg funktioniert trotzdem, weil
+  # !secret schon beim LADEN aufgeloest wird und die Template-Auswertung
+  # erst beim AUFRUF passiert - die {% %}-Logik im Secret wird also ganz
+  # normal gerendert. Der Aufruf selbst bleibt unveraendert:
+  # rest_command.awekas_upload, ohne Parameter.
+  #
+  # Aufbau des Secrets (eine einzige Zeile, keine Umbrueche - ein
+  # gefalteter Block wuerde Leerzeichen mitten in die URL setzen):
+  #
+  #   awekas_url: "{% set temp = states('sensor.wetterstation_aussentemperatur') %}{% set hum = states('sensor.wetterstation_luftfeuchtigkeit') %}{% if is_number(temp) and is_number(hum) %}https://ws.awekas.at/weatherstation/updateweatherstation.php?ID=<ID>&PASSWORD=<PW>&tempf={{ (temp | float * 9/5 + 32) | round(1) }}&humidity={{ hum | int }}&softwaretype=HomeAssistant{% else %}https://ws.awekas.at/weatherstation/updateweatherstation.php?ID=<ID>&PASSWORD=<PW>&status=offline{% endif %}"
+  #
   awekas_upload:
-    url: >
-      {% set temp = states('sensor.wetterstation_aussentemperatur') %}
-      {% set hum = states('sensor.wetterstation_luftfeuchtigkeit') %}
-      {% if is_number(temp) and is_number(hum) %}
-        https://ws.awekas.at/weatherstation/updateweatherstation.php?ID=zwim&PASSWORD=Exodus666waa&tempf={{ (temp | float * 9/5 + 32) | round(1) }}&humidity={{ hum | int }}&softwaretype=HomeAssistant
-      {% else %}
-        https://ws.awekas.at/weatherstation/updateweatherstation.php?ID=zwim&PASSWORD=Exodus666waa&status=offline
-      {% endif %}
+    url: !secret awekas_url
     method: GET
 
 recorder:
   purge_keep_days: 366
   commit_interval: 60
-  db_url: mysql://homeassistant:homeassistant@core-mariadb/homeassistant?charset=utf8mb4
+  # Benutzer und Passwort der MariaDB liegen jetzt in secrets.yaml
+  db_url: !secret recorder_db_url
 
   exclude:
     entities:

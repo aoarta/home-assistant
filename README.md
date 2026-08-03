@@ -314,27 +314,10 @@ Der Timeout um 20:46 fällt zeitlich mit dem Sprung von `sensor.target_soc` auf 
 
 ### Priorität 1 — Verhalten bei Sensorausfall
 
-**1. Marstek-Ausfall wird als „0 W" interpretiert.** Der Coordinator pausiert nach einem Timeout 180 Sekunden. In dieser Zeit rechnet `sensor.ev_target_charging_current` mit
-
-```jinja
-venus1: "{{ states('sensor.marstek_venus_1_ac_power_glatt') | float(0) }}"
-```
-
-Entladen beide Speicher gerade mit je 2500 W, erscheint der Überschuss um bis zu 5 kW zu hoch → die Wallbox regelt auf ~21 A hoch und lädt drei Minuten lang aus dem Netz. Ein `has_value`-Guard, der den Überschuss bei fehlenden Werten auf 0 setzt, ist hier die konservative Wahl. Dasselbe Muster steckt in `sensor.charge_power` und in `ups_coarse_control` (`bat_pwr`).
-
-**2. `marstek_usable_energy` beim Ausfall halten statt auf 0 fallen.** Entweder den letzten gültigen Wert weiterführen oder `target_soc` bei fehlender Speicherinformation die Bilanzstufen (130/131/133) überspringen lassen. Sonst löst jeder Modbus-Aussetzer eine „Speicher leer"-Reaktion aus.
-
-**3. Kein Modbus-Watchdog.** Für das BMS gibt es eine persistente Meldung, für die Venus nichts. Ein Binärsensor „Marstek erreichbar" (z. B. `expire_after` oder Altersprüfung auf `last_updated`) hätte doppelten Nutzen: Meldung nach außen und sauberer Guard für die Punkte 1 und 2.
-
 **4. Steuermodus-Switches werden nur einmal täglich gesetzt.** Startet ein Venus nach einem Stromausfall oder Firmware-Reboot neu, bleibt der RS485-Steuermodus bis zum nächsten Sonnenaufgang aus — `charge_map` und `discharge_map` schließen den Speicher dann sauber aus, aber er steht eben ungenutzt herum. Ein `time_pattern: /30` als zusätzlicher Trigger auf dieselbe Automation genügt.
 
 ### Priorität 2 — Offene Punkte aus dem Code
 
-**5. Zielzeit-Ausnahme fehlt beim Ladestart.** `wallbox_universal_start` und `wallbox_manual_charge` prüfen unverändert `ev_session_energy < ev_max_charge_energy`. Beim Stopp ist der Zielzeitmodus davon ausgenommen, beim Start nicht — nach einer BLE-Nachkalibrierung kann die Ladung deshalb in der `paced`-Phase gar nicht erst anlaufen.
-
-**6. Wartungsladung nach Mitternacht.** `condition: sun / after: sunset` ist nur bis 00:00 wahr. Der als Reparatur gedachte `/30`-Trigger läuft danach ins Leere — relevant vor allem für die USV mit ihren 3–5 Stunden Ladezeit. Ersatz: `{{ is_state('sun.sun', 'below_horizon') }}`.
-
-**7. `pv_forecast_graph`: Peak über alle Tage.** Im `state` fehlt der `if ts.startswith(today)`-Filter, den das `forecast`-Attribut hat.
 
 **8. Nowcast-Entity prüfen.** Der Code liest `sensor.wetterstation_solarstrahlung`, der Kopfkommentar nennt `sensor.solar_radiation`, aus `weewx_sensor.yaml` entstünde von Haus aus `sensor.weather_station_solar_radiation`. Passt die ID nicht, bleibt der Korrekturfaktor unbemerkt auf dem Neutralwert 1,0.
 
@@ -342,15 +325,10 @@ Entladen beide Speicher gerade mit je 2500 W, erscheint der Überschuss um bis z
 
 ### Priorität 3 — Hygiene
 
-**10. Zugangsdaten aus `configuration.yaml` herauslösen.** ID und Passwort des AWEKAS-Uploads stehen im Klartext im `rest_command`. Nach `secrets.yaml` verschieben — und das Passwort einmal wechseln, weil die Datei bereits mehrfach zum Review weitergereicht wurde.
-
 **11. Recorder-Volumen.** 366 Tage Vollarchiv bei dieser Sensordichte ist die größte Einzelbelastung für die Datenbank. Für die Energiedashboards genügen die Langzeitstatistiken, die vom Purge unberührt bleiben; 30–90 Tage Detaildaten reichen in der Praxis. Zusätzlich lohnen `sensor.leistung_vom_netz`, `sensor.charge_power` und `sensor.house_consumption_power_brutto` als Kandidaten für eine gröbere Auflösung.
 
 **12. `watchman` einmal laufen lassen.** Nach dem Entfernen von `zero.yaml`, `pv_forecast.yaml` und den beiden `pv_dynamic_charging_current`-Sensoren dürften noch verwaiste Entitäten und tote Referenzen in der Registry stehen.
 
-**13. Ungenutzte Integrationen.** `solarprognose_de_community`, `ml_weather` und `grid_price_monitor` sind installiert, tauchen aber in keinem Package auf — entweder einbinden (siehe unten) oder deinstallieren, jede Integration kostet Startzeit und Speicher.
-
-**14. Kosmetik.** Doppelter Header-Kommentar in `ev_sensors.yaml`; veralteter Hinweis auf `manual_charge_power >= 1000` in `control.yaml`; `sensor.battery_ac_power_total` ist inhaltlich `marstek_ac_power_total + ups_ac_power`; `solar_soc_logic` meldet zwischen Mitternacht und Sonnenaufgang „Day" (folgenlos, den State liest niemand).
 
 ### Priorität 4 — Ausbau
 

@@ -1,9 +1,34 @@
 # packages/pv_forecast_fetch.yaml
+#
+# Die beiden Forecast.Solar-URLs enthielten die Hauskoordinaten mit vier
+# Nachkommastellen - das ist eine Punktgenauigkeit von rund zehn Metern.
+# Sie liegen jetzt vollstaendig in secrets.yaml.
+#
+# Warum die ganze URL und nicht nur Breite/Laenge: !secret ersetzt immer
+# einen kompletten Wert und laesst sich nicht in eine Zeichenkette
+# einsetzen. Die REST-Plattform kennt zwar resource_template, aber
+# Templates koennen ihrerseits keine Secrets lesen (Alternative ohne
+# Secret siehe unten).
+#
+# Aufbau der URL, damit die Anlagendaten hier dokumentiert bleiben:
+#   .../estimate/watthours/<Breite>/<Laenge>/<Neigung>/<Azimut>/<kWp>
+#   Dach:    Neigung 20 Grad, Azimut -45 (Suedost), 7.5 kWp
+#   Fassade: Neigung 85 Grad, Azimut  45 (Suedwest), 2.4 kWp
+#
+# Alternative ganz ohne Secret: statt "resource" ein
+#   resource_template: >-
+#     https://api.forecast.solar/estimate/watthours/{{
+#       state_attr('zone.home','latitude') | round(4) }}/{{
+#       state_attr('zone.home','longitude') | round(4) }}/20/-45/7.5
+# Dann kommen die Koordinaten aus der HA-Grundkonfiguration und stehen
+# in gar keiner YAML-Datei mehr. Haengt allerdings davon ab, dass
+# zone.home beim Rendern schon da ist - deshalb hier nicht als Standard.
+
 sensor:
   - platform: rest
     name: "Forecastsolar API Source Dach"
     unique_id: forecastsolar_api_source_dach
-    resource: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/20/-45/7.5"
+    resource: !secret pv_forecast_url_dach
     scan_interval: 31536000
     json_attributes: [result]
     value_template: "{{ value_json.message.info.place if value_json is defined else 'OK' }}"
@@ -11,7 +36,7 @@ sensor:
   - platform: rest
     name: "Forecastsolar API Source Fassade"
     unique_id: forecastsolar_api_source_fassade
-    resource: "https://api.forecast.solar/estimate/watthours/47.5151/12.0897/85/45/2.4"
+    resource: !secret pv_forecast_url_fassade
     scan_interval: 31536000
     json_attributes: [result]
     value_template: "{{ value_json.message.info.place if value_json is defined else 'OK' }}"

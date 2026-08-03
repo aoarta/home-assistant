@@ -50,7 +50,10 @@ input_number:
     #initial: 50
     min: 0
     max: 100
-    step: 5
+    # step 1 statt 5: der Wert wird von wallbox_calc_charge_delta gerechnet
+    # (z.B. 7.1) - mit step 5 zeigte der Slider stattdessen 5 an und der
+    # angezeigte Wert passte nicht zum Energieziel.
+    step: 1
     unit_of_measurement: "%"
     icon: mdi:battery-charging-50
 

@@ -30,7 +30,7 @@ template:
           # Zero
           # if charging goes to high, increase the efficienc
           zero_sr_capacity: 13.6 # 14.4 kWh brutto
-          zero_sr_charge_efficiency: 0.915 # AC-DC efficiency; measured/calibrated on 2026-08-01
+          zero_sr_charge_efficiency: 0.905 # AC-DC efficiency; measured/calibrated on 2026-08-01
           zero_sr_max_charge_power: 3400
           zero_sr_phases: 1
 

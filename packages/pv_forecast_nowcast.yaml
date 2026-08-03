@@ -1,7 +1,7 @@
 # packages/pv_forecast_nowcast.yaml
 #
 # Live-Korrektur der Tagesprognose aus gemessener Globalstrahlung
-# (sensor.solar_radiation aus weewx_sensor.yaml).
+# (sensor.wetterstation_solarstrahlung aus weewx_sensor.yaml).
 #
 # Warum ein eigenes Modul und kein 5. Kalman-Provider in pv_forecast_calc.yaml:
 # Der Morgen-Snapshot (pv_fix_daily_forecast_morning) liegt kurz vor
@@ -67,29 +67,11 @@ template:
         before: sunset
         before_offset: "00:30:00"
     variables:
-      # Die Entity-ID der Einstrahlungsmessung haengt davon ab, wie die
-      # weewx-MQTT-Sensoren benannt bzw. umbenannt wurden. Statt eine ID
-      # hart zu verdrahten wird die erste genommen, die einen Wert liefert.
-      # Welche das ist, steht im Attribut "source" der EMA - dort einmal
-      # nachsehen und die Liste bei Bedarf kuerzen. Findet sich keine,
-      # bleibt irr_now = -1, die EMA friert ein und der Korrekturfaktor
-      # steht neutral auf 1.0 (also exakt wie ohne dieses Modul).
-      irr_entity: >-
-        {% set ns = namespace(e='') %}
-        {% for c in ['sensor.wetterstation_solarstrahlung',
-                     'sensor.weather_station_solar_radiation',
-                     'sensor.solar_radiation'] %}
-          {% if ns.e == '' and has_value(c) %}{% set ns.e = c %}{% endif %}
-        {% endfor %}
-        {{ ns.e }}
-      irr_now: >-
-        {% set ns = namespace(v=-1) %}
-        {% for c in ['sensor.wetterstation_solarstrahlung',
-                     'sensor.weather_station_solar_radiation',
-                     'sensor.solar_radiation'] %}
-          {% if ns.v < 0 and has_value(c) %}{% set ns.v = states(c) | float(-1) %}{% endif %}
-        {% endfor %}
-        {{ ns.v }}
+      # Einzige Quelle der Einstrahlungsmessung (weewx ueber MQTT).
+      # -1 bedeutet "kein Wert": dann friert die EMA auf ihrem letzten
+      # Stand ein und der Korrekturfaktor bleibt neutral bei 1.0 - das
+      # Modul verhaelt sich also exakt so, als waere es nicht da.
+      irr_now: "{{ states('sensor.wetterstation_solarstrahlung') | float(-1) }}"
     sensor:
       - name: "PV Solar Radiation EMA 30min"
         unique_id: pv_solar_radiation_ema_30min
@@ -103,9 +85,6 @@ template:
             {% set alt = this.state | float(irr_now) %}
             {{ (alt + alpha * (irr_now - alt)) | round(1) }}
           {% endif %}
-        attributes:
-          # Leer = keine der Kandidaten-Entities liefert Werte.
-          source: "{{ irr_entity }}"
 
       - name: "PV Solar Gain Factor"
         unique_id: pv_solar_gain_factor

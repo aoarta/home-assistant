@@ -9,8 +9,6 @@ input_boolean:
     name: "Manual SOC Override"
     icon: mdi:battery-lock
 
-  # Wartungsladung der USV. Frueher wurde das ueber
-  # "manual_charge_power >= 1000" mitgesteuert - das war ein Fehler:
   # "Battery Maintenance: Stop When Full" prueft nur den SOC der beiden
   # Venus und setzt manual_charge_power auf 0, sobald DIE voll sind.
   # Damit fiel maintenance_activ in ups_coarse_control weg, lange bevor
@@ -71,12 +69,7 @@ template:
         unique_id: solar_soc_logic
         availability: "{{ state_attr('sun.sun', 'next_setting') is not none }}"
         state: >-
-          {% set now_ts = as_timestamp(now()) %}
-          {% set next_rising = as_timestamp(state_attr('sun.sun', 'next_rising'), 0) %}
-          {% set next_setting = as_timestamp(state_attr('sun.sun', 'next_setting'), 0) %}
-          {% set today_rising = next_rising - 86400 if next_rising > now_ts else next_rising %}
-          {% set today_setting = next_setting - 86400 if next_setting > as_timestamp(now().replace(hour=23, minute=59)) else next_setting %}
-          {{ 'Day' if today_rising <= now_ts <= today_setting else 'Night' }}
+          {{ 'Night' if is_state('sun.sun', 'below_horizon') else 'Day' }}
         attributes:
           now_ts: "{{ as_timestamp(now()) }}"
           sun_rise: >-

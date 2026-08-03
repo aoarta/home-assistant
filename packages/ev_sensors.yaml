@@ -15,10 +15,6 @@
 # Die beiden Startzeitpunkte laufen rechnerisch exakt bei Ladeende zusammen:
 # laeuft alles nach Plan, wird "full" nie erreicht; faellt die Ladung zurueck,
 # greift die Stufe von selbst. Kein Helper, kein Latch, keine Hysterese.
-# ============================================================
-
-# ============================================================
-# PV surplus wallbox charging (WARP3) - Sensors
 #
 # SoC-Tracking liegt in ev_soc.yaml.
 # Die Ueberschussrechnung (frueher "PV Dynamic Charging Current" und
