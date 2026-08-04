@@ -26,7 +26,7 @@ input_number:
   #   0      = aus, normale Regelung laeuft
   #   > 0    = charge_map setzt beide Venus fest auf diesen Wert (target_soc -> 110)
   #   >= 1000 = ups_coarse_control wertet das als Wartungsmodus
-  # Max 2500 W entspricht der Grenze in charge_map / sende_batterie_targets_v3.
+  # Max 2500 W entspricht der Grenze in charge_map / sende_batterie_targets_v4.
   # Kein "initial:" -> der Wert ueberlebt einen Neustart, damit eine laufende
   # Wartungsladung nicht stillschweigend abbricht. Beendet wird sie von
   # "Battery Maintenance: Stop When Full".
