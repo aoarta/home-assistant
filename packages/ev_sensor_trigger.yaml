@@ -1,12 +1,6 @@
 # ============================================================
 # PV surplus wallbox charging (WARP3) - Trigger Sensors
 #
-# Die Ueberschussrechnung liegt direkt in "EV Target Charging Current".
-# Die frueheren Zwischensensoren sensor.pv_dynamic_charging_current und
-# sensor.pv_dynamic_charging_current_battery_first entfallen - der
-# zugehoerige Block in ev_sensors.yaml muss geloescht werden, die beiden
-# verwaisten Entities danach in der Entitaeten-Liste entfernen.
-#
 # MODUS 6 "target_time": Fahrzeug soll bis input_datetime.ev_target_time
 # auf input_number.ev_charge_to_percent geladen sein.
 #   Phase "pv"    - nur PV-Ueberschuss, gedeckelt auf ev_pv_precharge_max_soc

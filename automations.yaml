@@ -1,6 +1,6 @@
 - alias: "Venus: Enable Control Mode After Sunrise"
   id: set_venus_control_mode
-  description: "Enables the Marstek Venus control mode switches 30 minutes after sunrise."
+  description: "Enables the Marstek Venus control mode switches on sunrise."
   triggers:
     - trigger: sun
       event: sunrise
@@ -9,7 +9,7 @@
     - action: switch.turn_on
       target:
         entity_id:
-          - switch.marstek_venus2_modbus_rs485_steuermodus
+          - switch.marstek_venus1_modbus_rs485_steuermodus
     - delay: "00:00:10"
     - action: switch.turn_on
       target:
