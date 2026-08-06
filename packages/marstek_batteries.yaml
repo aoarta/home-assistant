@@ -203,6 +203,8 @@ template:
         entity_id:
           - input_number.manual_charge_power
           - input_boolean.override_soc
+          - binary_sensor.einspeisen_besser_als_speichern # tarife
+          - binary_sensor.entladen_sperren # tarife
         for:
           milliseconds: 2000
       - trigger: state
@@ -245,7 +247,11 @@ template:
                       and is_state('switch.marstek_venus2_modbus_rs485_steuermodus', 'on') %}
           {{ {'v1': manual if m1 else 0, 'v2': manual if m2 else 0} }}
         {% else %}
-          {% set total = [0, -(states('sensor.charge_power') | float(0))] | max | round(0) | int(0) %}
+          {# Preissteuerung: bei hoher Einspeiseverguetung PV-Ueberschuss
+             lieber einspeisen als speichern -> Ladeanforderung auf 0. #}
+          {% set kein_laden = is_state('binary_sensor.einspeisen_besser_als_speichern', 'on') %}
+          {% set total = 0 if kein_laden else [0, -(states('sensor.charge_power') | float(0))] | max | round(0) | int(0) %}
+
           {% set dyn_soc = states('sensor.target_soc') | float(60) %}
 
           {% set s1 = states('sensor.venus_1_custom_soc') | float(100) if is_state('switch.marstek_venus1_modbus_rs485_steuermodus', 'on') else 100 %}
@@ -304,8 +310,11 @@ template:
 
       discharge_map: >-
         {% set raw = states('sensor.charge_power') | float(0) %}
-        {% set total = [raw, 0] | max | round(0) | int(0) %}
         {% set zero = {'v1': 0, 'v2': 0} %}
+        {# Preissteuerung: Entladen lohnt nicht, wenn die Verguetung ueber
+           dem vermiedenen Bezugspreis liegt. #}
+        {% set kein_entladen = is_state('binary_sensor.entladen_sperren', 'on') %}
+        {% set total = 0 if kein_entladen else [raw, 0] | max | round(0) | int(0) %}
 
         {% if total > 0 %}
           {% set min_soc = state_attr('sensor.solar_soc_logic', 'min') %}

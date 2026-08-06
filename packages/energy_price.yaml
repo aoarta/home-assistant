@@ -1,0 +1,504 @@
+###############################################################################
+# packages/energy_price.yaml
+# Fester Stundentarif: 24 Bezugspreise + 24 Einspeiseverguetungen
+#
+# Beide Listen: Index 0 = 00:00-01:00 ... Index 23 = 23:00-24:00
+# Werte in ct/kWh, fertig gerechnet (Bezug inkl. Netz, Abgaben, USt).
+# Tarifwechsel = nur die zwei Listen in sensor.tarif_tabelle anfassen.
+#
+# Eingriff in die bestehende Regelung:
+#   Netzladen  -> ueber input_number.manual_charge_power (bestehender Pfad,
+#                 target_soc springt dabei wie gewohnt auf 110)
+#   PV-Ueberschuss einspeisen statt speichern -> charge_map    (1 Zeile Patch)
+#   Entladen sperren                          -> discharge_map (1 Zeile Patch)
+###############################################################################
+
+input_boolean:
+  price_control_enabled:
+    name: "Preissteuerung aktiv"
+    icon: mdi:cash-clock
+
+  # Besitzflag: nur wenn DIESE Automation manual_charge_power gesetzt hat,
+  # darf sie ihn auch wieder auf 0 stellen. Sonst wuerde das Preis-Netzladen
+  # eine laufende Wartungsladung abbrechen.
+  price_grid_charge_active:
+    name: "Preis-Netzladen laeuft"
+    icon: mdi:transmission-tower-import
+
+input_number:
+  battery_eta_charge:
+    name: Speicher - Wirkungsgrad Laden
+    min: 50
+    max: 100
+    step: 0.5
+    unit_of_measurement: "%"
+    mode: box
+    icon: mdi:battery-plus
+
+  battery_eta_discharge:
+    name: Speicher - Wirkungsgrad Entladen
+    min: 50
+    max: 100
+    step: 0.5
+    unit_of_measurement: "%"
+    mode: box
+    icon: mdi:battery-minus
+
+  battery_cycle_cost:
+    name: Speicher - Zykluskosten
+    min: 0
+    max: 20
+    step: 0.1
+    unit_of_measurement: "ct/kWh"
+    mode: box
+    icon: mdi:battery-alert
+
+  price_cheap_hours:
+    name: Preis - Anzahl guenstiger Stunden
+    min: 1
+    max: 12
+    step: 1
+    mode: box
+    icon: mdi:clock-fast
+
+  price_horizon_hours:
+    name: Preis - Betrachtungshorizont
+    min: 1
+    max: 24
+    step: 1
+    unit_of_measurement: "h"
+    mode: box
+    icon: mdi:clock-outline
+
+  price_charge_target_soc:
+    name: Preis - Ziel-SOC beim Netzladen
+    min: 20
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    mode: box
+    icon: mdi:battery-charging-80
+
+  price_charge_power_max:
+    name: Preis - max. Ladeleistung je Speicher
+    min: 200
+    max: 2500
+    step: 50
+    unit_of_measurement: "W"
+    mode: box
+    icon: mdi:speedometer
+
+  # Obergrenze fuer den gesamten Netzbezug waehrend des Preis-Netzladens.
+  # Hauptsicherung 25 A einphasig ~ 5750 W - Hausverbrauch und eine laufende
+  # EV-Ladung werden unten abgezogen, hier steht das Gesamtbudget.
+  price_grid_limit_w:
+    name: Preis - max. Netzbezug beim Laden
+    min: 500
+    max: 5500
+    step: 100
+    unit_of_measurement: "W"
+    mode: box
+    icon: mdi:fuse-alert
+
+###############################################################################
+
+template:
+  - sensor:
+      # ----------------------------------------------------------------- #
+      # 1. Die Tarif-Tabelle - hier stehen die 2 x 24 Werte                #
+      # ----------------------------------------------------------------- #
+      - name: "Tarif Tabelle"
+        unique_id: tariff_table
+        icon: mdi:table-clock
+        state: "OK"
+        attributes:
+          bezug: >
+            {{ [
+              21.15, 21.15, 21.15, 21.15, 21.15, 21.15,
+              21.15, 21.15, 21.15, 21.15, 13.56, 13.56,
+              13.65, 13.65, 13.65, 13.65, 21.15, 21.15,
+              21.15, 21.15, 21.15, 21.15, 21.15, 21.15,
+            ] }}
+          einspeisung: >
+            {{ [
+               9.90,  9.90,  9.90,  9.90,  9.90,  9.90,
+               9.90,  9.90,  9.90,  9.90,  9.90,  9.90,
+               9.90,  9.90,  9.90,  9.90,  9.90,  9.90,
+               9.90,  9.90,  9.90,  9.90,  9.90,  9.90,
+            ] }}
+
+      # ----------------------------------------------------------------- #
+      # 2. Aktuelle Werte                                                  #
+      # ----------------------------------------------------------------- #
+      - name: "Strompreis Bezug"
+        unique_id: grid_price_now
+        unit_of_measurement: "ct/kWh"
+        state_class: measurement
+        icon: mdi:currency-eur
+        availability: "{{ (state_attr('sensor.tarif_tabelle','bezug') or []) | count == 24 }}"
+        state: >
+          {{ (state_attr('sensor.tarif_tabelle','bezug'))[now().hour] | float(0) | round(2) }}
+
+      - name: "Einspeiseverguetung aktuell"
+        unique_id: feedin_price_now
+        unit_of_measurement: "ct/kWh"
+        state_class: measurement
+        icon: mdi:transmission-tower-export
+        availability: "{{ (state_attr('sensor.tarif_tabelle','einspeisung') or []) | count == 24 }}"
+        state: >
+          {{ (state_attr('sensor.tarif_tabelle','einspeisung'))[now().hour] | float(0) | round(2) }}
+
+      # EUR/kWh fuer das Energie-Dashboard
+      - name: "Strompreis Bezug EUR"
+        unique_id: grid_price_now_eur
+        unit_of_measurement: "EUR/kWh"
+        state_class: measurement
+        icon: mdi:currency-eur
+        state: "{{ (states('sensor.strompreis_bezug') | float(0) / 100) | round(5) }}"
+
+      - name: "Einspeiseverguetung EUR"
+        unique_id: feedin_price_now_eur
+        unit_of_measurement: "EUR/kWh"
+        state_class: measurement
+        icon: mdi:transmission-tower-export
+        state: "{{ (states('sensor.einspeiseverguetung_aktuell') | float(0) / 100) | round(5) }}"
+
+      # ----------------------------------------------------------------- #
+      # 3. Wirkungsgrade                                                   #
+      # ----------------------------------------------------------------- #
+      - name: "Speicher Wirkungsgrad Roundtrip"
+        unique_id: battery_eta_roundtrip
+        unit_of_measurement: "%"
+        state_class: measurement
+        icon: mdi:battery-sync
+        state: >
+          {{ (states('input_number.battery_eta_charge') | float(95)
+              * states('input_number.battery_eta_discharge') | float(95) / 100) | round(1) }}
+
+      # ----------------------------------------------------------------- #
+      # 4. Kennzahlen ueber den Horizont (rollierend ab aktueller Stunde)  #
+      # ----------------------------------------------------------------- #
+      - name: "Strompreis Horizont"
+        unique_id: price_horizon
+        icon: mdi:chart-timeline-variant
+        state: "{{ states('input_number.price_horizon_hours') | int(24) }}"
+        attributes:
+          stunden: >
+            {% set b = state_attr('sensor.tarif_tabelle','bezug') or [] %}
+            {% set e = state_attr('sensor.tarif_tabelle','einspeisung') or [] %}
+            {% set n = states('input_number.price_horizon_hours') | int(24) %}
+            {% set h = now().hour %}
+            {% set ns = namespace(out=[]) %}
+            {% if b | count == 24 and e | count == 24 %}
+              {% for i in range(n) %}
+                {% set k = (h + i) % 24 %}
+                {% set ns.out = ns.out + [ {
+                     'stunde': k,
+                     'bezug': b[k] | float(0),
+                     'einspeisung': e[k] | float(0) } ] %}
+              {% endfor %}
+            {% endif %}
+            {{ ns.out }}
+
+      - name: "Strompreis Minimum Rest"
+        unique_id: price_min_rest
+        unit_of_measurement: "ct/kWh"
+        icon: mdi:arrow-down-bold
+        state: >
+          {% set s = state_attr('sensor.strompreis_horizont','stunden') or [] %}
+          {{ (s | map(attribute='bezug') | list | min) | round(2) if s | count > 0 else 'unknown' }}
+        attributes:
+          stunde: >
+            {% set s = state_attr('sensor.strompreis_horizont','stunden') or [] %}
+            {% if s | count > 0 %}
+              {% set m = s | map(attribute='bezug') | list | min %}
+              {{ (s | selectattr('bezug','eq', m) | list | first).stunde }}
+            {% endif %}
+
+      - name: "Strompreis Maximum Rest"
+        unique_id: price_max_rest
+        unit_of_measurement: "ct/kWh"
+        icon: mdi:arrow-up-bold
+        state: >
+          {% set s = state_attr('sensor.strompreis_horizont','stunden') or [] %}
+          {{ (s | map(attribute='bezug') | list | max) | round(2) if s | count > 0 else 'unknown' }}
+        attributes:
+          stunde: >
+            {% set s = state_attr('sensor.strompreis_horizont','stunden') or [] %}
+            {% if s | count > 0 %}
+              {% set m = s | map(attribute='bezug') | list | max %}
+              {{ (s | selectattr('bezug','eq', m) | list | first).stunde }}
+            {% endif %}
+
+      # Schwelle = Preis der n-guenstigsten Stunde im Horizont
+      - name: "Strompreis Schwelle guenstig"
+        unique_id: price_cheap_threshold
+        unit_of_measurement: "ct/kWh"
+        icon: mdi:tag-check
+        state: >
+          {% set s = state_attr('sensor.strompreis_horizont','stunden') or [] %}
+          {% set n = states('input_number.price_cheap_hours') | int(4) %}
+          {% set p = s | map(attribute='bezug') | list | sort %}
+          {{ p[[n, p | count] | min - 1] | round(2) if p | count > 0 else 'unknown' }}
+        attributes:
+          # die n guenstigsten Stunden im Horizont, aufsteigend nach Preis
+          stunden: >
+            {% set s = state_attr('sensor.strompreis_horizont','stunden') or [] %}
+            {% set n = states('input_number.price_cheap_hours') | int(4) %}
+            {{ (s | sort(attribute='bezug'))[:n] | map(attribute='stunde') | list }}
+
+      - name: "Strompreis Rang"
+        unique_id: price_rank_now
+        icon: mdi:sort-numeric-ascending
+        state: >
+          {% set s = state_attr('sensor.strompreis_horizont','stunden') or [] %}
+          {% set cur = states('sensor.strompreis_bezug') | float(0) %}
+          {{ (s | map(attribute='bezug') | select('lt', cur) | list | count) + 1
+             if s | count > 0 else 'unknown' }}
+
+      - name: "Arbitrage Spanne"
+        unique_id: price_arbitrage_spread
+        unit_of_measurement: "ct/kWh"
+        icon: mdi:swap-vertical-bold
+        state: >
+          {% set eta = states('sensor.speicher_wirkungsgrad_roundtrip') | float(90) / 100 %}
+          {% set cyc = states('input_number.battery_cycle_cost') | float(0) %}
+          {% set lo  = states('sensor.strompreis_minimum_rest') | float(0) %}
+          {% set hi  = states('sensor.strompreis_maximum_rest') | float(0) %}
+          {{ (hi - lo / eta - cyc) | round(2) }}
+
+      # ----------------------------------------------------------------- #
+      # 5. Ladeleistung je Speicher unter Beachtung der Hauptsicherung     #
+      #    Hausverbrauch und laufende EV-Ladung werden abgezogen, der Rest #
+      #    haelftig auf die beiden Venus verteilt, auf 50 W gerastert.     #
+      # ----------------------------------------------------------------- #
+      - name: "Preis Ladeleistung je Speicher"
+        unique_id: price_charge_power_each
+        unit_of_measurement: "W"
+        device_class: power
+        icon: mdi:transmission-tower-import
+        state: >
+          {% set budget = states('input_number.price_grid_limit_w') | float(4000) %}
+          {% set haus = states('sensor.house_consumption_power_brutto') | float(500) %}
+          {% set ev = states('sensor.ev_charging_power') | float(0) %}
+          {% set frei = [budget - haus - ev, 0] | max %}
+          {% set cap = states('input_number.price_charge_power_max') | float(2500) %}
+          {% set je = [frei / 2, cap] | min %}
+          {{ ((je / 50) | int(0) * 50) if je >= 200 else 0 }}
+
+  - binary_sensor:
+      # ----------------------------------------------------------------- #
+      # 6. Entscheidungen                                                  #
+      # ----------------------------------------------------------------- #
+      - name: "Guenstige Stunde"
+        unique_id: price_cheap_hour
+        icon: mdi:tag-check
+        state: >
+          {{ has_value('sensor.strompreis_schwelle_guenstig')
+             and states('sensor.strompreis_bezug') | float(99)
+                 <= states('sensor.strompreis_schwelle_guenstig') | float(0) + 0.01 }}
+
+      # Netzladen lohnt, wenn ALLES zutrifft:
+      #   - Preissteuerung eingeschaltet
+      #   - aktuelle Stunde gehoert zu den guenstigsten im Horizont
+      #   - jetzt kaufen + Verluste + Verschleiss ist billiger als der teuerste
+      #     Preis im Horizont
+      #   - die bestehende Bilanzrechnung meldet Unterdeckung: target_soc
+      #     130/131/133 oder Speicher + Rest-PV decken den Restbedarf nicht
+      #   - SOC noch unter dem Preis-Ziel-SOC
+      - name: "Netzladen sinnvoll"
+        unique_id: grid_charge_worth_it
+        icon: mdi:transmission-tower-import
+        delay_off: "00:05:00"
+        state: >
+          {% set eta = states('sensor.speicher_wirkungsgrad_roundtrip') | float(90) / 100 %}
+          {% set cyc = states('input_number.battery_cycle_cost') | float(0) %}
+          {% set now_p = states('sensor.strompreis_bezug') | float(99) %}
+          {% set hi = states('sensor.strompreis_maximum_rest') | float(0) %}
+          {% set t = states('sensor.target_soc') | int(0) %}
+          {% set stored = states('sensor.marstek_usable_energy') | float(0) %}
+          {% set need_est = states('sensor.estimated_remaining_consumption') | float(0) %}
+          {% set need_exp = states('sensor.expected_remaining_consumption_today') | float(0) %}
+          {% set need = (need_est + need_exp) / 2 %}
+          {% set pv = states('sensor.pv_forecast_weighted') | float(0) %}
+          {% set unterdeckung = t in [130, 131, 133] or (stored + pv) < need %}
+          {{ is_state('input_boolean.price_control_enabled', 'on')
+             and is_state('binary_sensor.guenstige_stunde', 'on')
+             and (now_p / eta + cyc) < hi
+             and unterdeckung
+             and states('sensor.battery_soc_total') | float(100)
+                 < states('input_number.price_charge_target_soc') | float(100) }}
+
+      # PV-Ueberschuss lieber einspeisen als speichern:
+      # 1 kWh PV bringt eingespeist die Verguetung jetzt, gespeichert erst
+      # spaeter eta_rt * Bezugspreis - Zykluskosten.
+      # Greift nur, solange keine Unterdeckung gemeldet ist - bei target_soc
+      # 130/131/133 hat Versorgungssicherheit Vorrang vor dem Cent.
+      - name: "Einspeisen besser als Speichern"
+        unique_id: feedin_beats_storage
+        icon: mdi:transmission-tower-export
+        state: >
+          {% set eta = states('sensor.speicher_wirkungsgrad_roundtrip') | float(90) / 100 %}
+          {% set cyc = states('input_number.battery_cycle_cost') | float(0) %}
+          {% set fee = states('sensor.einspeiseverguetung_aktuell') | float(0) %}
+          {% set hi  = states('sensor.strompreis_maximum_rest') | float(0) %}
+          {% set t = states('sensor.target_soc') | int(0) %}
+          {{ is_state('input_boolean.price_control_enabled', 'on')
+             and t not in [101, 110, 120, 130, 131, 133]
+             and fee > (hi * eta - cyc) }}
+
+      # Entladen ins Haus lohnt nicht, solange die Verguetung hoeher ist als
+      # der vermiedene Bezug. Nie sperren, wenn der Speicher ohnehin voll ist -
+      # sonst wird ankommende PV abgeregelt.
+      - name: "Entladen sperren"
+        unique_id: discharge_block
+        icon: mdi:battery-lock
+        state: >
+          {% set eta_d = states('input_number.battery_eta_discharge') | float(95) / 100 %}
+          {% set cyc = states('input_number.battery_cycle_cost') | float(0) %}
+          {{ is_state('input_boolean.price_control_enabled', 'on')
+             and states('sensor.battery_soc_total') | float(0) < 99
+             and states('sensor.strompreis_bezug') | float(0) * eta_d
+                 < states('sensor.einspeiseverguetung_aktuell') | float(0) + cyc }}
+
+###############################################################################
+# 7. Automationen
+#    Das Netzladen laeuft ueber den bestehenden manual_charge_power-Pfad.
+#    Wichtig: Wartungsladung hat Vorrang, und zurueckgesetzt wird nur, was
+#    diese Automationen selbst gesetzt haben (input_boolean.price_grid_charge_active).
+###############################################################################
+
+automation:
+  - alias: "Preis: Netzladen starten"
+    id: price_grid_charge_start
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.netzladen_sinnvoll
+        to: "on"
+        for: "00:01:00"
+    conditions:
+      # nichts anderes benutzt gerade den manual-Pfad
+      - condition: numeric_state
+        entity_id: input_number.manual_charge_power
+        below: 1
+      - condition: state
+        entity_id: binary_sensor.battery_maintenance_required
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.ups_maintenance
+        state: "off"
+      - condition: numeric_state
+        entity_id: sensor.preis_ladeleistung_je_speicher
+        above: 199
+    actions:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.price_grid_charge_active
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.manual_charge_power
+        data:
+          value: "{{ states('sensor.preis_ladeleistung_je_speicher') | int(0) }}"
+      - action: logbook.log
+        data:
+          name: "Preissteuerung"
+          message: >-
+            Netzladen gestartet mit
+            {{ states('sensor.preis_ladeleistung_je_speicher') }} W je Speicher bei
+            {{ states('sensor.strompreis_bezug') }} ct/kWh
+            (Rang {{ states('sensor.strompreis_rang') }}).
+
+  # Leistung nachfuehren: steigt der Hausverbrauch oder faengt die Wallbox an
+  # zu laden, wird die Ladeleistung reduziert statt die Sicherung zu belasten.
+  - alias: "Preis: Ladeleistung nachfuehren"
+    id: price_grid_charge_track
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        minutes: "/5"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.price_grid_charge_active
+        state: "on"
+      - condition: template
+        value_template: >-
+          {{ (states('sensor.preis_ladeleistung_je_speicher') | float(0)
+              - states('input_number.manual_charge_power') | float(0)) | abs >= 100 }}
+    actions:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.manual_charge_power
+        data:
+          value: "{{ states('sensor.preis_ladeleistung_je_speicher') | int(0) }}"
+
+  - alias: "Preis: Netzladen beenden"
+    id: price_grid_charge_stop
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.netzladen_sinnvoll
+        to: "off"
+      - trigger: state
+        entity_id: input_boolean.price_control_enabled
+        to: "off"
+      - trigger: numeric_state
+        entity_id: sensor.battery_soc_total
+        above: input_number.price_charge_target_soc
+      - trigger: state
+        entity_id: binary_sensor.battery_maintenance_required
+        to: "on"
+      - trigger: numeric_state
+        entity_id: sensor.preis_ladeleistung_je_speicher
+        below: 200
+    conditions:
+      - condition: state
+        entity_id: input_boolean.price_grid_charge_active
+        state: "on"
+    actions:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.manual_charge_power
+        data:
+          value: 0
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.price_grid_charge_active
+      - action: logbook.log
+        data:
+          name: "Preissteuerung"
+          message: "Netzladen beendet."
+
+  # Watchdog: hat jemand anderes manual_charge_power auf 0 gesetzt
+  # (z.B. "Battery Maintenance: Stop When Full" oder der Hard stop am
+  # Morgen), gibt die Preissteuerung den Pfad frei, statt ihn zu blockieren.
+  - alias: "Preis: Besitzflag freigeben"
+    id: price_grid_charge_release
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: input_number.manual_charge_power
+        below: 1
+        for: "00:00:30"
+      - trigger: homeassistant
+        event: start
+    conditions:
+      - condition: state
+        entity_id: input_boolean.price_grid_charge_active
+        state: "on"
+      - condition: numeric_state
+        entity_id: input_number.manual_charge_power
+        below: 1
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.price_grid_charge_active
+###############################################################################
+# 8. Danach noch erledigen
+#   - Helferwerte setzen: eta Laden/Entladen, Zykluskosten, guenstige Stunden,
+#     Horizont, Ziel-SOC, max. Ladeleistung, max. Netzbezug
+#   - Energie-Dashboard: Netzbezug -> sensor.strompreis_bezug_eur,
+#     Einspeisung -> sensor.einspeiseverguetung_eur
+#   - recorder: sensor.tarif_tabelle und sensor.strompreis_horizont ausschliessen
+#   - die zwei Einzeiler in marstek_batteries.yaml einbauen (siehe Patch)
+###############################################################################

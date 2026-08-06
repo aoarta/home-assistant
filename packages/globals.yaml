@@ -27,6 +27,10 @@ template:
           # Wallbox
           wallbox_max_amps: 22
 
+          # MAIN FUSE
+          main_fuse_limit_a: 25 # Hauptsicherung pro Phase
+          main_fuse_release_a: 22 # Freigabe erst wieder darunter
+
           # Zero
           # if charging goes to high, increase the efficienc
           zero_sr_capacity: 13.6 # 14.4 kWh brutto
@@ -36,8 +40,8 @@ template:
 
           # Honda e
           honda_e_capacity: 28.5 # NEU — Honda e: 35,5 kWh brutto
-          honda_e_charge_efficiency: 0.88 # NEU — anpassen wenn gemessen
-          honda_e_max_charge_power: 4500
+          honda_e_charge_efficiency: 0.885 # NEU — anpassen wenn gemessen
+          honda_e_max_charge_power: 4750
           honda_e_phases: 1
 
           # bei Änderung oben auch hier anpassen
@@ -60,7 +64,7 @@ template:
           # Startbedingung rastet nach dem Ausloesen von selbst ein.
           # Deckt gleichzeitig die abflachende Ladekurve und die Rundung auf
           # ganze Ampere ab. Immer < 1.0 lassen.
-          target_time_power_derate: 0.9
+          target_time_power_derate: 0.85
           # Bis zu diesem SoC darf vor dem Startzeitpunkt mit PV-Ueberschuss
           # geladen werden. Greift nur, wenn ev_charge_to_percent darueber liegt.
           ev_pv_precharge_max_soc: 85
@@ -70,4 +74,4 @@ template:
           # ev_manual_charging_current hochdrehen und sensor.leistung_vom_netz
           # beobachten - der Strom, bei dem er dauerhaft ins Positive kippt,
           # mal 235 V, minus 300-500 W Hausverbrauch.
-          battery_paced_power_w: 4500
+          battery_paced_power_w: 4700
