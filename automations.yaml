@@ -52,7 +52,7 @@
   mode: single
   triggers:
     - trigger: state
-      entity_id: binary_sensor.marstek_verfuegbar
+      entity_id: binary_sensor.marstek_available
       to: "off"
       for: "00:15:00"
   actions:
@@ -62,6 +62,6 @@
       data:
         title: "⚠️ Marstek nicht erreichbar"
         message: >-
-          binary_sensor.marstek_verfuegbar steht seit 15 Minuten auf off.
-          Fehlend: {{ state_attr('binary_sensor.marstek_verfuegbar', 'stale_entities') or 'keine (Werte eingefroren)' }}
+          binary_sensor.marstek_available steht seit 15 Minuten auf off.
+          Fehlend: {{ state_attr('binary_sensor.marstek_available', 'stale_entities') or 'keine (Werte eingefroren)' }}
           Überschussladung und Speicherregelung sind so lange stillgelegt.

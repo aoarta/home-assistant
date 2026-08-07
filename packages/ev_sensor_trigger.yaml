@@ -69,7 +69,7 @@ template:
           - sensor.marstek_venus_2_ac_power_glatt
           # Ausfall der Marstek-Integration muss sofort durchschlagen,
           # nicht erst beim naechsten 30-s-Tick
-          - binary_sensor.marstek_verfuegbar
+          - binary_sensor.marstek_available
           - binary_sensor.warp3_2ita_cable
           # Entscheidungsgroessen
           - sensor.battery_soc_total
@@ -99,7 +99,7 @@ template:
       # und die Wallbox regelte auf ~21 A hoch - drei Minuten aus dem Netz,
       # so lange pausiert der Coordinator nach einem Timeout.
       marstek_ok: >-
-        {{ is_state('binary_sensor.marstek_verfuegbar', 'on')
+        {{ is_state('binary_sensor.marstek_available', 'on')
            and has_value('sensor.marstek_venus_1_ac_power_glatt')
            and has_value('sensor.marstek_venus_2_ac_power_glatt') }}
 

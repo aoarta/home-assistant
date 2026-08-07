@@ -6,13 +6,36 @@
 #      name: "UPS Raw Data"
 #      unique_id: ups_raw_data
 #      #command: "curl -s http://battery-bms.lan/show | grep -E 'Power:|SOC:|highest Cell|lowest Cell'"
-
-#      #command: "curl --max_time 2 -s http://192.168.0.13/show 2>/dev/null | grep -E 'Power:|SOC:|highest Cell|lowest Cell'"
 #      command: "curl --max_time 2 -s http://192.168.0.134/show | grep -E 'Power:|SOC:|highest Cell|lowest Cell'"
-
 #      scan_interval: 30
 #      value_template: "{{ value }}"
 
+################################################################################
+# 2. HELFER (Entladesperre)
+#
+# Die Sperre ist ein Latch: einmal gesetzt, geht sie NICHT ueber die
+# Zellspannung wieder auf (die erholt sich lastfrei binnen Sekunden und war
+# genau deshalb die Ursache des Pulsens), sondern erst, wenn wirklich
+# nachgeladen wurde - gemessen am SOC-Zuwachs gegenueber dem gemerkten Wert.
+################################################################################
+input_boolean:
+  ups_entladesperre:
+    name: "USV Entladesperre"
+    icon: mdi:battery-alert-variant-outline
+
+input_number:
+  ups_lockout_soc:
+    name: "USV SOC beim Sperren"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    mode: box
+    icon: mdi:battery-low
+
+################################################################################
+# 3. SENSOREN
+################################################################################
 sensor:
   - platform: integration
     # Achtung ups_dc_power ist bei Entladung positiv, anders als die AC-Power
@@ -88,6 +111,18 @@ template:
         state_class: measurement
         state: "{{ states('sensor.ant_bms_v2_ant_bms_lowest_cell') | float(0) }}"
 
+      # Zellspreizung - Diagnose fuer die schwaechste Zelle. 10 mV im
+      # mittleren SOC-Bereich, >150 mV am Entladeende = Balancing faellig.
+      - name: "UPS Cell Delta"
+        unique_id: ups_cell_delta
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+        state: >-
+          {% set hi = states('sensor.ups_highest_cell') | float(0) %}
+          {% set lo = states('sensor.ups_lowest_cell') | float(0) %}
+          {{ (hi - lo) | round(3) if hi > 2 and lo > 2 else 0 }}
+
   - trigger:
       - platform: state
         entity_id: sensor.ups_soc_raw
@@ -159,7 +194,7 @@ template:
               {% set custom_soc = this.state | float(none) %}
               {% set high_cell = states('sensor.ups_highest_cell') | float(0) %}
               {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
-              {% set lfp_max_voltage = state_attr('sensor.global_parameter', 'lfp_max_voltage') | float(3.60) %}
+              {% set lfp_max_voltage = state_attr('sensor.global_parameter', 'lfp_max_voltage') | float(3.565) %}
               {% set capacity = state_attr('sensor.global_parameter', 'ups_capacity_wh') | float(2200) %}
               {% set drift_too_high = custom_soc is not none and (hw_soc - custom_soc) | abs > 25 %}
 
@@ -210,7 +245,8 @@ automation:
           - sensor.ups_lowest_cell
           - sensor.ups_highest_cell
           - input_number.manual_charge_power
-          - binary_sensor.marstek_verfuegbar
+          - binary_sensor.marstek_available
+          - input_boolean.ups_entladesperre
       - platform: time_pattern
         minutes: "/2" # Fallback
     condition:
@@ -219,7 +255,6 @@ automation:
           {% set lt = state_attr(this.entity_id, 'last_triggered') %}          
           {{ lt is none or (now() - lt).total_seconds() >= 12 }}
     action:
-      #      - delay: "00:00:12"
       # --- VARIABLEN VORZIEHEN ---
       - variables:
           netz: "{{ states('sensor.leistung_vom_netz') | float(0) }}" # <0 wenn einspeisung
@@ -234,7 +269,7 @@ automation:
           # entscheidet ersatzweise der reine Netzbezug (Zweig 5).
           # Die Sicherheitszweige 0, 0.5 und 2 haengen nicht daran.
           marstek_ok: >-
-            {{ is_state('binary_sensor.marstek_verfuegbar', 'on')
+            {{ is_state('binary_sensor.marstek_available', 'on')
                and has_value('sensor.marstek_ac_power_total') }}
 
           soc: "{{ states('sensor.ups_custom_soc') | float(0) }}"
@@ -243,10 +278,15 @@ automation:
           high_cell: "{{ states('sensor.ups_highest_cell') | float(0) }}"
           lowest_soc: "{{ state_attr('sensor.global_parameter', 'lowest_soc') | float(12) }}"
           stop_soc: "{{ state_attr('sensor.global_parameter', 'stop_soc') | float(15) }}"
-          # Parameter
-          max_v: "{{ state_attr('sensor.global_parameter', 'lfp_max_voltage') | float(3.60) }}"
-          min_v: "{{ state_attr('sensor.global_parameter', 'lfp_min_voltage') | float(2.90) }}"
-          hyst: "{{ state_attr('sensor.global_parameter', 'lfp_hysteresis') | float(0.2) }}"
+          # Parameter (Defaults = die Werte aus globals)
+          max_v: "{{ state_attr('sensor.global_parameter', 'lfp_max_voltage') | float(3.565) }}"
+          min_v: "{{ state_attr('sensor.global_parameter', 'lfp_min_voltage') | float(3.000) }}"
+          hyst: "{{ state_attr('sensor.global_parameter', 'lfp_hysteresis') | float(0.040) }}"
+          # Entladesperre: gesetzt von "UPS: Entladesperre setzen", aufgehoben
+          # erst nach echtem Nachladen. Blockiert Zweig 3 (Entladen starten)
+          # und - genauso wichtig - Zweig 5 (Laden stoppen), damit die
+          # Not-Ladung nicht nach 20 Sekunden wieder abgewuergt wird.
+          lockout: "{{ is_state('input_boolean.ups_entladesperre', 'on') }}"
           # Frueher: manual_charge_power >= 1000. Das war an die Venus-Ladung
           # gekoppelt und wurde von "Battery Maintenance: Stop When Full"
           # abgeschaltet, sobald die VENUS voll waren - lange bevor die USV
@@ -254,7 +294,8 @@ automation:
           maintenance_activ: "{{ is_state('input_boolean.ups_maintenance', 'on') }}"
           # Schalter Zustände
           inverter_an: "{{ is_state('switch.battery_inverter_tasmota', 'on') }}"
-          charger_on: "{{ is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on') }}"
+          charger1_on: "{{ is_state('switch.battery_charger', 'on') }}"
+          charger2_on: "{{ is_state('switch.battery_charger2', 'on') }}"
           # Guard: fehlt das Entity (Tasmota offline, Integration neu geladen),
           # warf der direkte Zugriff auf .last_changed einen UndefinedError und
           # die ganze Automation brach ab. 0 = "gerade erst geschaltet" und
@@ -289,7 +330,7 @@ automation:
           # 0.5 --- CELL OVERVOLTAGE: stop charging unconditionally
           - conditions:
               - condition: template
-                value_template: "{{ high_cell > max_v and charger_on }}"
+                value_template: "{{ high_cell > max_v and (charger1_on or charger2_on) }}"
             sequence:
               - action: switch.turn_off
                 target:
@@ -311,10 +352,18 @@ automation:
                 data:
                   notification_id: "bms_no_connection"
 
-          # 2 --- NOT-LADUNG
+          # 2 --- NOT-LADUNG / Entladesperre aktiv
+          #
+          # Ausloeser ist jetzt das Latch, nicht mehr die Momentanspannung.
+          # Vorher: low_cell < min_v -> laden, Spannung erholt sich sofort ->
+          # Bedingung weg -> Zweig 5 schaltet ab -> Spannung faellt zurueck ->
+          # von vorne. Das war das Pulsen. Solange die Sperre steht, laeuft
+          # charger2 durch, bis "UPS: Entladesperre freigeben" sie aufhebt.
           - conditions:
               - condition: template
-                value_template: "{{ (soc <= lowest_soc or low_cell < min_v) and not is_state('switch.battery_charger2', 'on') }}"
+                value_template: >-
+                  {{ (lockout or soc <= lowest_soc or low_cell < min_v)
+                     and not is_state('switch.battery_charger2', 'on') }}
             sequence:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
@@ -329,7 +378,7 @@ automation:
               - condition: template
                 value_template: >-
                   {{ (true_balance > 180) and marstek_ok and soc > 25 
-                     and low_cell > min_v + hyst and not inverter_an }}
+                     and low_cell > min_v + hyst and not lockout and not inverter_an }}
             sequence:
               - action: switch.turn_off
                 target:
@@ -359,7 +408,7 @@ automation:
                      ausloesen; wieder eingeschaltet wird in Zweig 3 ohnehin
                      erst mit gueltigen Daten. #}
                   {{ ((true_balance < 50 and inverter_on_for > 30 and marstek_ok)
-                      or soc <= 20 or low_cell < min_v) 
+                      or soc <= 20 or low_cell < min_v or lockout) 
                      and inverter_an }}
             sequence:
               - action: switch.turn_off
@@ -377,11 +426,17 @@ automation:
                      aussagekraeftig - dann entscheidet der reine Netzbezug.
                      Das ist die konservative Richtung: lieber eine echte
                      PV-Ladung zu frueh beenden als drei Minuten lang aus
-                     dem Netz laden. #}
-                  {{ ((true_balance > 50 if marstek_ok else netz > 50)
+                     dem Netz laden.
+                     NEU: bei aktiver Entladesperre greift dieser Zweig nicht.
+                     Die Not-Ladung darf Netzbezug verursachen - sie ist der
+                     einzige Weg aus der Sperre heraus. Begrenzt wird sie
+                     durch die Freigabe (SOC + Delta), nicht durch die
+                     Bilanz. #}
+                  {{ not lockout
+                    and ((true_balance > 50 if marstek_ok else netz > 50)
                       or high_cell > max_v or bat_pwr > 50
                       or (ups_pwr > -15 and soc > 95))
-                    and charger_on and soc >= stop_soc }}
+                    and (charger1_on or charger2_on) and soc >= stop_soc }}
 
             sequence:
               - action: switch.turn_off
@@ -407,7 +462,7 @@ automation:
                   {{ true_balance < -820 and marstek_ok
                     and soc < 100 and high_cell < max_v - hyst
                     and bat_pwr < 50
-                    and not inverter_an and not charger_on }}
+                    and not inverter_an and not (charger1_on and charger2_on) }}
 
             sequence:
               - action: switch.turn_on
@@ -422,6 +477,115 @@ automation:
               - action: persistent_notification.dismiss
                 data:
                   notification_id: "bms_no_connection"
+
+  # ==========================================================
+  # USV: Entladesperre setzen
+  #
+  # Das "for: 15s" ist wichtig - ohne das setzt jeder Wasserkocher die
+  # Sperre. Der SOC-Schnappschuss ist der Referenzpunkt fuer die Freigabe.
+  # ==========================================================
+  - alias: "UPS: Entladesperre setzen"
+    id: ups_lockout_set
+    mode: single
+    triggers:
+      - trigger: template
+        value_template: >-
+          {% set min_v = state_attr('sensor.global_parameter', 'lfp_min_voltage') | float(3.000) %}
+          {{ states('sensor.ups_lowest_cell') | float(9) < min_v }}
+        for: "00:00:15"
+      - trigger: template
+        value_template: >-
+          {% set lowest = state_attr('sensor.global_parameter', 'lowest_soc') | float(12) %}
+          {{ states('sensor.ups_custom_soc') | float(100) <= lowest }}
+        for: "00:01:00"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.ups_entladesperre
+        state: "off"
+      # Plausibilitaet: bei 0 V liefert das BMS nichts, dafuer ist Zweig 0 da.
+      - condition: numeric_state
+        entity_id: sensor.ups_lowest_cell
+        above: 2.0
+    actions:
+      - action: input_number.set_value
+        target: { entity_id: input_number.ups_lockout_soc }
+        data:
+          value: "{{ states('sensor.ups_custom_soc') | float(0) | round(1) }}"
+      - action: input_boolean.turn_on
+        target: { entity_id: input_boolean.ups_entladesperre }
+      - action: logbook.log
+        data:
+          name: "USV Entladesperre"
+          message: >-
+            Gesetzt bei SOC {{ states('sensor.ups_custom_soc') }} %,
+            niedrigste Zelle {{ states('sensor.ups_lowest_cell') }} V,
+            Spreizung {{ states('sensor.ups_cell_delta') }} V.
+
+  # ==========================================================
+  # USV: Entladesperre freigeben
+  #
+  # Zwei Bedingungen gleichzeitig: SOC muss um das Delta gestiegen sein UND
+  # die niedrigste Zelle muss ueber min_v + hyst liegen. Die Zellbedingung
+  # allein wuerde sofort erfuellt sein (Erholung ohne Last) - deshalb ist
+  # der SOC-Zuwachs das fuehrende Kriterium, genau wie vorgeschlagen.
+  # ==========================================================
+  - alias: "UPS: Entladesperre freigeben"
+    id: ups_lockout_release
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: sensor.ups_custom_soc
+      - trigger: time_pattern
+        minutes: "/5"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.ups_entladesperre
+        state: "on"
+      - condition: template
+        value_template: >-
+          {% set min_v = state_attr('sensor.global_parameter', 'lfp_min_voltage') | float(3.000) %}
+          {% set hyst  = state_attr('sensor.global_parameter', 'lfp_hysteresis') | float(0.040) %}
+          {% set delta = state_attr('sensor.global_parameter', 'ups_lockout_soc_delta') | float(10) %}
+          {% set soc  = states('sensor.ups_custom_soc') | float(0) %}
+          {% set lock = states('input_number.ups_lockout_soc') | float(0) %}
+          {% set low  = states('sensor.ups_lowest_cell') | float(0) %}
+          {{ soc >= lock + delta and low > min_v + hyst }}
+    actions:
+      - action: input_boolean.turn_off
+        target: { entity_id: input_boolean.ups_entladesperre }
+      - action: logbook.log
+        data:
+          name: "USV Entladesperre"
+          message: >-
+            Freigegeben bei SOC {{ states('sensor.ups_custom_soc') }} %
+            (gesperrt bei {{ states('input_number.ups_lockout_soc') }} %).
+
+  # ==========================================================
+  # USV: Entladesperre haengt
+  #
+  # Bewusst NUR Meldung, keine automatische Freigabe. Wenn der SOC nach
+  # Stunden Ladung nicht steigt, ist entweder der reset_point verdriftet
+  # oder eine Zelle defekt - in beiden Faellen ist "weiter gesperrt" die
+  # richtige Antwort, nicht "trotzdem entladen".
+  # ==========================================================
+  - alias: "UPS: Entladesperre haengt"
+    id: ups_lockout_stuck
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: input_boolean.ups_entladesperre
+        to: "on"
+        for: "06:00:00"
+    actions:
+      - action: persistent_notification.create
+        data:
+          title: "⚠️ USV Entladesperre seit 6 h aktiv"
+          message: >-
+            SOC {{ states('sensor.ups_custom_soc') }} % (gesperrt bei
+            {{ states('input_number.ups_lockout_soc') }} %), niedrigste Zelle
+            {{ states('sensor.ups_lowest_cell') }} V, Spreizung
+            {{ states('sensor.ups_cell_delta') }} V. Laedt charger2 wirklich?
+          notification_id: "ups_lockout_stuck"
 
   - alias: "Sicherheitsabschaltung: Charger und Inverter gleichzeitig"
     id: safety_simultaneous_power

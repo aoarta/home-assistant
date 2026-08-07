@@ -184,7 +184,7 @@ template:
                Wert ist beim Modbus-Aussetzer die deutlich harmlosere Luege
                als eine gemeldete 0 - die Bilanzstufen in control.yaml haengen
                direkt daran. Wie lange schon eingefroren wird, steht im
-               Attribut "stale" bzw. in binary_sensor.marstek_verfuegbar. #}
+               Attribut "stale" bzw. in binary_sensor.marstek_available. #}
             {{ this.state if is_number(this.state) else 0 }}
           {% else %}
             {% set usable_soc1 = [0, soc1 - min_soc] | max %}
@@ -606,7 +606,7 @@ template:
     # eine Regelung zu frueh einfrieren als zu spaet.
 
   - binary_sensor:
-      - name: "Marstek verfuegbar"
+      - name: "Marstek available"
         unique_id: marstek_available
         device_class: connectivity
         icon: mdi:lan-connect

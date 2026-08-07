@@ -133,7 +133,7 @@ template:
       # Damit die availability-Bedingung sofort greift und nicht erst
       # beim naechsten Netzleistungs-Update ausgewertet wird.
       - trigger: state
-        entity_id: binary_sensor.marstek_verfuegbar
+        entity_id: binary_sensor.marstek_available
       #      - trigger: state
       #        entity_id: sensor.marstek_ac_power_total
     sensor:
@@ -145,7 +145,7 @@ template:
         availability: >-
           {{ has_value('sensor.leistung_vom_netz') and
              has_value('sensor.marstek_ac_power_total') and
-             is_state('binary_sensor.marstek_verfuegbar', 'on') }}
+             is_state('binary_sensor.marstek_available', 'on') }}
         state: >-
           {# 1. Den theoretischen 100%-Zielwert berechnen #}
           {% set netz = states('sensor.leistung_vom_netz') | float(0) %}
