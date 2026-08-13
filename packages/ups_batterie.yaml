@@ -362,12 +362,28 @@ automation:
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ (lockout or soc <= lowest_soc or low_cell < min_v)
+                  {{ (lockout or soc <= lowest_soc or low_cell < min_v)  
+                     and not bat_pwr > 0
                      and not is_state('switch.battery_charger2', 'on') }}
             sequence:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
               - action: switch.turn_on
+                target: { entity_id: switch.battery_charger2 }
+              - action: persistent_notification.dismiss
+                data:
+                  notification_id: "bms_no_connection"
+
+          # 2.5 --- ENDE: NOT-LADUNG
+          #
+          # Auch während der Entladesperre, das Laden der ups beenden
+          # damit nicht die marstek die ups ringladen.
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ lockout and bat_pwr > 0 and is_state('switch.battery_charger2', 'on') }}
+            sequence:
+              - action: switch.turn_off
                 target: { entity_id: switch.battery_charger2 }
               - action: persistent_notification.dismiss
                 data:

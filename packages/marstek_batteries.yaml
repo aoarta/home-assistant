@@ -270,25 +270,34 @@ template:
             {% set t1 = (w1 / sum_w * total) | round(0) | int(0) %}
             {% set t2 = (total - t1) | int(0) %}
 
-            {% if total > 1000 and (t1 < 500 or t2 < 500) %}
-              {# Fall: Charge > 1000, mindestens ein Wert muss 500 erreichen #}
-              {% set t1 = 500 if t1 < 500 else t1 %}
-              {% set t2 = 500 if t2 < 500 else t2 %}
-            {% elif total > 400 and (t1 < 200 or t2 < 200) %}
-              {# Fall: Charge > 400, mindestens ein Wert muss 200 erreichen #}
-              {% set t1 = 200 if t1 < 200 else t1 %}
-              {% set t2 = 200 if t2 < 200 else t2 %}
-            {% else %}
-              {# Fall: Abwechselnd laden, falls die Werte zu klein sind #}
-              {% if t1 < 200 and t2 < 200 %}
-                {% if (w1 - w2) | abs > 10 %}
-                  {% set t1 = total if w1 > w2 else 0 %}
-                  {% set t2 = total if w2 > w1 else 0 %}
-                {% else %}
-                  {% set odd = (now().weekday() + now().hour) % 2 %}
-                  {% set t1 = total if odd == 1 else 0 %}
-                  {% set t2 = total if odd == 0 else 0 %}
-                {% endif %}
+            {# Mindest-Sollwert je Speicher. Zwei Regeln, die frueher fehlten:
+               1. Wird der kleinere Wert angehoben, MUSS der groessere um denselben
+                  Betrag sinken. Sonst fordert charge_map mehr an als Ueberschuss
+                  da ist und die Differenz kommt aus dem Netz.
+               2. Der Mindestwert gilt nur, wenn BEIDE Speicher Ladebedarf haben.
+                  Ein Speicher am Ziel-SOC (w == 0) bekam vorher trotzdem 500 W.
+               total ist in beiden Stufen garantiert >= 2 * floor, die Differenz
+               kann den groesseren also nie unter den floor druecken. #}
+            {% set floor = 500 if total > 1000 else (200 if total > 400 else 0) %}
+
+            {% if floor > 0 and w1 > 0 and w2 > 0 %}
+              {% if t1 < floor %}
+                {% set t1 = floor %}
+                {% set t2 = total - floor %}
+              {% elif t2 < floor %}
+                {% set t2 = floor %}
+                {% set t1 = total - floor %}
+              {% endif %}
+            {% elif t1 < 200 and t2 < 200 %}
+              {# Zu wenig Leistung fuer zwei sinnvolle Sollwerte: abwechselnd laden,
+                 bzw. dem mit dem groesseren Bedarf alles geben. #}
+              {% if (w1 - w2) | abs > 10 %}
+                {% set t1 = total if w1 > w2 else 0 %}
+                {% set t2 = total if w2 > w1 else 0 %}
+              {% else %}
+                {% set odd = (now().weekday() + now().hour) % 2 %}
+                {% set t1 = total if odd == 1 else 0 %}
+                {% set t2 = total if odd == 0 else 0 %}
               {% endif %}
             {% endif %}
 

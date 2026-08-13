@@ -26,11 +26,11 @@ template:
           battery_care_days: 8
 
           # Wallbox
-          wallbox_max_amps: 22
+          wallbox_max_amps: 32
 
           # MAIN FUSE
-          main_fuse_limit_a: 25 # Hauptsicherung pro Phase
-          main_fuse_release_a: 22 # Freigabe erst wieder darunter
+          main_fuse_limit_a: 32 # Hauptsicherung pro Phase
+          main_fuse_release_a: 30 # Freigabe erst wieder darunter
 
           # Zero
           # if charging goes to high, increase the efficienc
@@ -42,7 +42,7 @@ template:
           # Honda e
           honda_e_capacity: 28.5 # NEU — Honda e: 35,5 kWh brutto
           honda_e_charge_efficiency: 0.885 # NEU — anpassen wenn gemessen
-          honda_e_max_charge_power: 4750
+          honda_e_max_charge_power: 8000
           honda_e_phases: 1
 
           # bei Änderung oben auch hier anpassen

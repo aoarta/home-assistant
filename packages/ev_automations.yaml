@@ -110,15 +110,20 @@ automation:
       # ev_charge_by_percent am SoC beim Anstecken - nach einer
       # BLE-Nachkalibrierung driftet es weg und die Ladung liesse sich
       # nicht mehr starten, obwohl der Ziel-SoC noch fehlt.
+      #
+      # Ausnahme Ladeziel 100 %: dann gibt es keine berechnete Obergrenze
+      # mehr, die Ladung laeuft bis Fahrzeug/Wallbox selbst abschalten.
+      # Ohne diese Ausnahme koennte nach einer PV-Pause nicht mehr
+      # gestartet werden, sobald die (ungenaue) Energiegrenze einmal
+      # erreicht wurde.
       - condition: template
         value_template: >-
           {{ is_state('input_select.ev_charge_mode', 'target_time')
+             or states('input_number.ev_charge_to_percent') | float(0) >= 100
              or states('sensor.ev_session_energy') | float(0)
                 < states('sensor.ev_max_charge_energy') | float(0) }}
     variables:
-      # Deckel auf wallbox_max_amps: der Slider laesst bis 32 A zu, die
-      # Absicherung gibt aktuell aber nur 22 A her. Ohne diese Begrenzung
-      # ging der Rohwert ungefiltert an number.warp3_2ita_globalcurrent.
+      # Deckel auf wallbox_max_amps: der Slider laesst bis 32 A zu.
       manual_amps: >-
         {{ [ states('input_number.ev_manual_charging_current') | int(0),
              state_attr('sensor.global_parameter', 'wallbox_max_amps') | int(16) ] | min }}
@@ -203,9 +208,12 @@ automation:
         above: 5
       # Target energy limit has not been reached yet.
       # Zielzeit-Modus ausgenommen - siehe wallbox_manual_charge.
+      # Ladeziel 100 % ebenfalls ausgenommen: dort gibt es keine
+      # Energiegrenze, die Ladung laeuft bis Fahrzeug/Wallbox abschalten.
       - condition: template
         value_template: >-
           {{ is_state('input_select.ev_charge_mode', 'target_time')
+             or states('input_number.ev_charge_to_percent') | float(0) >= 100
              or states('sensor.ev_session_energy') | float(0) < states('sensor.ev_max_charge_energy') | float(0) }}
     actions:
       # 1. Wait a moment to let the target sensor calculate the correct current after triggers
@@ -343,10 +351,15 @@ automation:
       # am SoC beim Anstecken; sobald PV-Vorladung und Zwangsladung sich
       # abwechseln, driften die beiden Grenzen auseinander und diese Automation
       # wuerde kurz vor dem Ziel abschalten. Der Vehicle-off-Fall bleibt aktiv.
+      #
+      # Ausnahme Ladeziel 100 %: dann wird ueberhaupt nicht ueber die
+      # Energiegrenze gestoppt - das Ende bestimmen Fahrzeug bzw. Wallbox.
+      # Vehicle-off, wallbox_stop_on_idle und der Killswitch bleiben aktiv.
       - condition: template
         value_template: >-
           {{ is_state('input_select.ev_vehicle_mode', 'off')
             or ( not is_state('input_select.ev_charge_mode', 'target_time')
+                  and states('input_number.ev_charge_to_percent') | float(0) < 100
                   and states('sensor.ev_max_charge_energy') | float(0) > 0
                   and states('sensor.ev_session_energy') | float(0)
                   >= states('sensor.ev_max_charge_energy') | float(0) ) }}
@@ -418,6 +431,9 @@ automation:
     # wallbox_stop_on_limit_or_off haette die Ladung dann weit vor dem
     # Ziel beendet. Mit dem Session-Anteil drin bedeutet
     # "session >= max" exakt "Ziel-SoC erreicht".
+    #
+    # Bei Ziel 100 % ist der Wert ohne Bedeutung - dort wird nicht mehr
+    # ueber die Energiegrenze gestoppt.
     # ===================================================================
   - alias: "Wallbox: Lademenge (Delta) aus Ziel-SOC berechnen"
     id: wallbox_calc_charge_delta
