@@ -2,7 +2,7 @@ input_number:
   consumption_storage_weekday:
     name: "Storage Weekday"
     min: 0
-    max: 10000
+    max: 150
     step: 0.01
     mode: box
     unit_of_measurement: "kWh"
@@ -11,7 +11,7 @@ input_number:
   consumption_storage_saturday:
     name: "Storage Saturday"
     min: 0
-    max: 10000
+    max: 150
     step: 0.01
     mode: box
     unit_of_measurement: "kWh"
@@ -20,7 +20,7 @@ input_number:
   consumption_storage_sunday:
     name: "Storage Sunday/Holiday"
     min: 0
-    max: 10000
+    max: 150
     step: 0.01
     mode: box
     unit_of_measurement: "kWh"
@@ -42,17 +42,6 @@ sensor:
     unit_time: h # per hour
     round: 3
     method: trapezoidal # Trapezoidal method = more accurate
-
-  #  - platform: filter
-  #    name: "PV Production 5 Min Average"
-  #    unique_id: pv_produktion_5min_avg
-  #    entity_id: sensor.leistung_von_pv_ac
-  #    filters:
-  #      - filter: time_simple_moving_average
-  #        window_size: "00:05:00"
-  #        precision: 0
-  #      - filter: time_throttle
-  #        window_size: "00:01:00"
 
   - platform: filter
     name: "Average consumption last 5min"

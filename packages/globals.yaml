@@ -9,10 +9,11 @@ template:
         state: "OK"
         attributes:
           # chemistry
-          lfp_min_voltage: 3.000
+          lfp_min_voltage: 3.050
           lfp_max_voltage: 3.565
           lfp_hysteresis: 0.040
           ups_lockout_soc_delta: 5
+          ups_restart_hyst: 0.25
           # batteries: capacity
           venus_capacity_wh: 5120
           ups_capacity_wh: 2200
