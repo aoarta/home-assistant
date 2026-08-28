@@ -16,6 +16,7 @@ template:
           ups_restart_hyst: 0.25
           # batteries: capacity
           venus_capacity_wh: 5120
+          venus_count: 3 # NEU - Zahl der Venus-Speicher, siehe Hinweis unten
           ups_capacity_wh: 2200
           # batteries: safety
           lowest_soc: 12 # below that emergency start
@@ -47,13 +48,20 @@ template:
           honda_e_phases: 1
 
           # bei Änderung oben auch hier anpassen
-          # calculated Attribut (2* Venus * 0.8 + UPS * 0.6)
+          # calculated Attribut (3 * Venus * 0.8 + UPS * 0.6)
+          #
+          # venus_count / venus_capacity_wh oben sind die Doku, die Zahlen hier
+          # sind die Rechnung - "this.attributes" ist beim ersten Durchlauf
+          # nach dem Start noch leer und wurde deshalb seinerzeit auskommentiert.
+          # Bei einem vierten Speicher also BEIDE Stellen anfassen.
+          #
+          # 5120 * 3 * 0.8 = 12288 Wh + 2200 * 0.6 = 1320 Wh  ->  13.608 kWh
           calculated_combined_capacity_kwh: >-
             {#{% set venus = this.attributes.get('venus_capacity_wh', 0) | float(0) %}#}
             {#{% set ups = this.attributes.get('ups_capacity_wh', 0) | float(0) %}#}
             {% set venus = 5120 %}
             {% set ups = 2200 %}
-            {{ ((venus * 2 * 0.8) + (ups * 0.6)) / 1000 }}
+            {{ ((venus * 3 * 0.8) + (ups * 0.6)) / 1000 }}
 
           # ------------------------------------------------------------------
           # Zielzeit-Laden (charge_mode "target_time")
@@ -71,9 +79,15 @@ template:
           # geladen werden. Greift nur, wenn ev_charge_to_percent darueber liegt.
           ev_pv_precharge_max_soc: 85
           # Dauerentladeleistung der Hausspeicher, die fuer die Wallbox
-          # eingeplant wird: 2x Venus 2500 W abzueglich Reserve fuer den
+          # eingeplant wird: 3x Venus 2500 W abzueglich Reserve fuer den
           # laufenden Hausverbrauch. Ausmessen: nachts bei vollen Speichern
           # ev_manual_charging_current hochdrehen und sensor.leistung_vom_netz
           # beobachten - der Strom, bei dem er dauerhaft ins Positive kippt,
           # mal 235 V, minus 300-500 W Hausverbrauch.
-          battery_paced_power_w: 4700
+          #
+          # ACHTUNG: 7200 ist HOCHGERECHNET, nicht gemessen. Der alte Wert 4700
+          # war ein Messwert (2x2500 = 5000 minus 300 Reserve). Bis zum
+          # Nachmessen lieber konservativ bleiben - ist der Wert zu hoch,
+          # stellt die Wallbox mehr Strom ein, als die Speicher liefern
+          # koennen, und die Differenz kommt aus dem Netz.
+          battery_paced_power_w: 7200

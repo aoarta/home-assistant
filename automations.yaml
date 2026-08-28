@@ -9,12 +9,12 @@
     - action: switch.turn_on
       target:
         entity_id:
-          - switch.marstek_venus1_modbus_rs485_steuermodus
+          - switch.marstek_venus_1_modbus_rs485_steuermodus
     - delay: "00:00:10"
     - action: switch.turn_on
       target:
         entity_id:
-          - switch.marstek_venus2_modbus_rs485_steuermodus
+          - switch.marstek_venus_2_modbus_rs485_steuermodus
 
   mode: single
 

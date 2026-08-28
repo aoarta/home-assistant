@@ -31,7 +31,10 @@ template:
         state_class: measurement
         state: >-
           {% set consumption_buffer = 1.10 %}
-          {% set max_storage = state_attr('sensor.global_parameter', 'calculated_combined_capacity_kwh') | float(10) %}
+          {# Fallback 13.6 = 3 x 5120 x 0.8 + 2200 x 0.6, muss zu
+             calculated_combined_capacity_kwh passen. Ein zu kleiner Wert
+             treibt den Floor nach oben und sperrt die EV-Ladung. #}
+          {% set max_storage = state_attr('sensor.global_parameter', 'calculated_combined_capacity_kwh') | float(13.6) %}
           {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
           {% set consumption_today = states('sensor.house_consumption_energy_today') | float(0) %}
           {% set consumption_static = [0, expected_daily_consumption - consumption_today] | max %}
@@ -67,6 +70,7 @@ template:
           - sensor.leistung_vom_netz
           - sensor.marstek_venus_1_ac_power_glatt
           - sensor.marstek_venus_2_ac_power_glatt
+          - sensor.marstek_venus_3_ac_power_glatt
           # Ausfall der Marstek-Integration muss sofort durchschlagen,
           # nicht erst beim naechsten 30-s-Tick
           - binary_sensor.marstek_available
@@ -90,28 +94,38 @@ template:
       power_from_net: "{{ states('sensor.leistung_vom_netz') | float(0) }}"
       venus1: "{{ states('sensor.marstek_venus_1_ac_power_glatt') | float(0) }}"
       venus2: "{{ states('sensor.marstek_venus_2_ac_power_glatt') | float(0) }}"
+      venus3: "{{ states('sensor.marstek_venus_3_ac_power_glatt') | float(0) }}"
       volt: "{{ states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) }}"
       max_amps: "{{ state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) }}"
 
       # Sind die Speicherleistungen gerade ueberhaupt gueltig?
       # Ohne diesen Guard wurden fehlende Werte als 0 W gelesen: entladen
-      # beide Venus mit je 2500 W, erschien der Ueberschuss um 5 kW zu hoch
-      # und die Wallbox regelte auf ~21 A hoch - drei Minuten aus dem Netz,
-      # so lange pausiert der Coordinator nach einem Timeout.
+      # alle Venus mit je 2500 W, erschien der Ueberschuss um 7,5 kW zu hoch
+      # und die Wallbox regelte bis ans Amperelimit hoch - drei Minuten aus
+      # dem Netz, so lange pausiert der Coordinator nach einem Timeout.
+      #
+      # JEDER Speicher muss hier stehen. Fehlt einer, wird seine
+      # Entladeleistung unten nicht abgezogen und zaehlt als Ueberschuss.
+      # Das ist keine harmlose Ungenauigkeit, sondern eine Mitkopplung:
+      # mehr Wallbox-Strom -> mehr Hausverbrauch -> der fehlende Speicher
+      # entlaedt staerker -> noch mehr scheinbarer Ueberschuss. Die Schleife
+      # laeuft bis ans Amperelimit bzw. bis zur Fahrzeuggrenze hoch, und die
+      # Differenz kommt aus dem Netz.
       marstek_ok: >-
         {{ is_state('binary_sensor.marstek_available', 'on')
            and has_value('sensor.marstek_venus_1_ac_power_glatt')
-           and has_value('sensor.marstek_venus_2_ac_power_glatt') }}
+           and has_value('sensor.marstek_venus_2_ac_power_glatt')
+           and has_value('sensor.marstek_venus_3_ac_power_glatt') }}
 
       # ----- PV-Ueberschuss ------------------------------------------
       # EV FIRST: Ladeleistung der Hausbatterie (negativ) wird freigegeben
       surplus_ev_first_w: >-
-        {{ (charger_power - power_from_net - venus1 - venus2) if marstek_ok else 0 }}
+        {{ (charger_power - power_from_net - venus1 - venus2 - venus3) if marstek_ok else 0 }}
       # BATTERY FIRST: nur Entladeleistung (positiv) abziehen,
       # der Ladeanteil bleibt bei der Hausbatterie
       surplus_bat_first_w: >-
         {{ (charger_power - power_from_net
-            - ([venus1, 0] | max) - ([venus2, 0] | max)) if marstek_ok else 0 }}
+            - ([venus1, 0] | max) - ([venus2, 0] | max) - ([venus3, 0] | max)) if marstek_ok else 0 }}
 
       amps_ev_first: >-
         {% set a = (surplus_ev_first_w / volt + 0.2) | int %}
@@ -192,6 +206,24 @@ template:
         {% else %}pv{% endif %}
 
     sensor:
+      - name: "Debug PV Surplus Calculation"
+        state: >-
+          marstek_ok: {{ marstek_ok }},
+          charger_power: {{ states('sensor.warp3_2ita_powernow') }} W,
+          power_from_net: {{ states('sensor.leistung_vom_netz') }} W,
+          venus1: {{ states('sensor.marstek_venus_1_ac_power_glatt') }} W,
+          venus2: {{ states('sensor.marstek_venus_2_ac_power_glatt') }} W,
+          venus3: {{ states('sensor.marstek_venus_3_ac_power_glatt') }} W,
+          surplus_ev_first_w: {{ (states('sensor.warp3_2ita_powernow') | float(0) - states('sensor.leistung_vom_netz') | float(0) - states('sensor.marstek_venus_1_ac_power_glatt') | float(0) - states('sensor.marstek_venus_2_ac_power_glatt') | float(0) - states('sensor.marstek_venus_3_ac_power_glatt') | float(0)) | round(2) }} W,
+          amps_ev_first: {{ amps_ev_first }}
+        attributes:
+          vehicle: "{{ states('input_select.ev_vehicle_mode') }}"
+          charge_mode: "{{ states('input_select.ev_charge_mode') }}"
+          cable: "{{ states('binary_sensor.warp3_2ita_cable') }}"
+          ev_soc: "{{ states('sensor.zero_sr_soc') if states('input_select.ev_vehicle_mode') == 'zero' else states('sensor.honda_e_soc') }}"
+          ev_soc_target: "{{ states('input_number.ev_charge_to_percent') }}"
+          ev_phase: "{{ ev_phase }}"
+
       - name: "EV Target Charging Current"
         unique_id: ev_target_charging_current
         unit_of_measurement: "A"
