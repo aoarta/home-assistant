@@ -66,9 +66,7 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state: >-
-          {% set p1 = states('sensor.battery_charger_energy_power') | float(0) %}
-          {% set p2 = states('sensor.battery_charger2_energy_power') | float(0) %}
-          {{ (p1 + p2) | round(-1) }}
+          {{ states('sensor.battery_charger_energy_power') | float(0) | round(-1) }}
 
       - name: "UPS AC Power"
         unique_id: ups_ac_power
@@ -291,8 +289,7 @@ automation:
           restart_hyst: "{{ state_attr('sensor.global_parameter', 'ups_restart_hyst') | float(0.25) }}"
           # Schalter Zustände
           inverter_an: "{{ is_state('switch.battery_inverter_tasmota', 'on') }}"
-          charger1_on: "{{ is_state('switch.battery_charger', 'on') }}"
-          charger2_on: "{{ is_state('switch.battery_charger2', 'on') }}"
+          charger_on: "{{ is_state('switch.battery_charger', 'on') }}"
           # Guard: fehlt das Entity (Tasmota offline, Integration neu geladen),
           # warf der direkte Zugriff auf .last_changed einen UndefinedError und
           # die ganze Automation brach ab. 0 = "gerade erst geschaltet" und
@@ -334,26 +331,21 @@ automation:
                   entity_id:
                     - switch.battery_inverter_tasmota
                     - switch.battery_charger
-                    - switch.battery_charger2
               - action: persistent_notification.create
                 data:
                   title: "⚠️ BMS Verbindung verloren"
                   message: "Keine Verbindung zum BMS – alle Schalter abgeschaltet! ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "bms_no_connection"
 
-          # 0.5 --- CELL OVERVOLTAGE: stop charging unconditionally
+          # 1 --- CELL OVERVOLTAGE: stop charging unconditionally
           - conditions:
               - condition: template
-                value_template: "{{ high_cell > max_v and (charger1_on or charger2_on) }}"
+                value_template: "{{ high_cell > max_v and charger_on }}"
             sequence:
               - action: switch.turn_off
-                target:
-                  {
-                    entity_id:
-                      [switch.battery_charger, switch.battery_charger2],
-                  }
+                target: { entity_id: [switch.battery_charger] }
 
-          # 1 --- Wartungsmodus ein
+          # 2 --- Wartungsmodus ein
           - conditions:
               - condition: template
                 value_template: "{{ maintenance_activ and high_cell < max_v }}"
@@ -361,49 +353,58 @@ automation:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
               - action: switch.turn_on
-                target: { entity_id: switch.battery_charger2 }
+                target: { entity_id: switch.battery_charger }
               - action: persistent_notification.dismiss
                 data:
                   notification_id: "bms_no_connection"
 
-          # 2 --- NOT-LADUNG / Entladesperre aktiv
+          # 3 --- NOT-LADUNG / Entladesperre aktiv
           #
           # Ausloeser ist jetzt das Latch, nicht mehr die Momentanspannung.
           # Vorher: low_cell < min_v -> laden, Spannung erholt sich sofort ->
           # Bedingung weg -> Zweig 5 schaltet ab -> Spannung faellt zurueck ->
           # von vorne. Das war das Pulsen. Solange die Sperre steht, laeuft
-          # charger2 durch, bis "UPS: Entladesperre freigeben" sie aufhebt.
+          # charger durch, bis "UPS: Entladesperre freigeben" sie aufhebt.
           - conditions:
               - condition: template
                 value_template: >-
                   {{ (lockout or soc <= lowest_soc or low_cell < min_v)  
-                     and not bat_pwr > 0
-                     and not is_state('switch.battery_charger2', 'on') }}
+                     and not bat_pwr > 0 }}
             sequence:
               - action: switch.turn_off
                 target: { entity_id: switch.battery_inverter_tasmota }
               - action: switch.turn_on
-                target: { entity_id: switch.battery_charger2 }
+                target: { entity_id: switch.battery_charger }
               - action: persistent_notification.dismiss
                 data:
                   notification_id: "bms_no_connection"
+              - action: persistent_notification.create
+                data:
+                  title: "Debug 1"
+                  message: "({{ now().strftime('%H:%M:%S') }})"
+                  notification_id: "debug1"
 
-          # 2.5 --- ENDE: NOT-LADUNG
+          # 4 --- ENDE: NOT-LADUNG
           #
           # Auch während der Entladesperre, das Laden der ups beenden
           # damit nicht die marstek die ups ringladen.
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ lockout and bat_pwr > 0 and is_state('switch.battery_charger2', 'on') }}
+                  {{ lockout and bat_pwr > 0 and is_state('switch.battery_charger', 'on') }}
             sequence:
               - action: switch.turn_off
-                target: { entity_id: switch.battery_charger2 }
+                target: { entity_id: switch.battery_charger }
               - action: persistent_notification.dismiss
                 data:
                   notification_id: "bms_no_connection"
+              - action: persistent_notification.create
+                data:
+                  title: "Debug 2"
+                  message: "({{ now().strftime('%H:%M:%S') }})"
+                  notification_id: "debug2"
 
-          # 3 --- ENTLADEN STARTEN
+          # 5 --- ENTLADEN STARTEN
           #
           # GEAENDERT: zwei zusaetzliche Bremsen gegen das Pulsen.
           # a) restart_hyst statt hyst - die Zelle muss sich wirklich
@@ -420,11 +421,7 @@ automation:
                      and not lockout and not inverter_an }}
             sequence:
               - action: switch.turn_off
-                target:
-                  {
-                    entity_id:
-                      [switch.battery_charger, switch.battery_charger2],
-                  }
+                target: { entity_id: [switch.battery_charger] }
               - action: switch.turn_on
                 target: { entity_id: switch.battery_inverter_tasmota }
               - action: persistent_notification.dismiss
@@ -437,7 +434,7 @@ automation:
           #true_balance >0: Restbedarf (Verbrauch > PV), unabhängig von Speicherzustand
           #true_balance <0: Überschuss
 
-          # 4 --- ENTLADEN STOPPEN
+          # 6 --- ENTLADEN STOPPEN
           - conditions:
               - condition: template
                 value_template: >-
@@ -479,7 +476,7 @@ automation:
                 data:
                   notification_id: "bms_no_connection"
 
-          # 5 --- LADEN STOPPEN (Inklusive < 30W Logik)
+          # 7 --- LADEN STOPPEN (Inklusive < 30W Logik)
           - conditions:
               - condition: template
                 value_template: >-
@@ -498,15 +495,11 @@ automation:
                     and ((true_balance > 50 if marstek_ok else netz > 50)
                       or high_cell > max_v or bat_pwr > 50
                       or (ups_pwr > -15 and soc > 95))
-                    and (charger1_on or charger2_on) and soc >= stop_soc }}
+                    and charger_on and soc >= stop_soc }}
 
             sequence:
               - action: switch.turn_off
-                target:
-                  {
-                    entity_id:
-                      [switch.battery_charger, switch.battery_charger2],
-                  }
+                target: { entity_id: [switch.battery_charger] }
               - action: persistent_notification.dismiss
                 data:
                   notification_id: "bms_no_connection"
@@ -517,14 +510,14 @@ automation:
           #true_balance >0: Restbedarf (Verbrauch > PV), unabhängig von Speicherzustand
           #true_balance <0: Überschuss
 
-          # 6 --- LADEN STARTEN
+          # 8 --- LADEN STARTEN
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ true_balance < -820 and marstek_ok
+                  {{ true_balance < -800 and marstek_ok
                     and soc < 100 and high_cell < max_v - hyst
                     and bat_pwr < 50
-                    and not inverter_an and not (charger1_on and charger2_on) }}
+                    and not inverter_an and not charger_on }}
 
             sequence:
               - action: switch.turn_on
@@ -535,7 +528,7 @@ automation:
                 then:
                   - delay: "00:00:01"
                   - action: switch.turn_on
-                    target: { entity_id: switch.battery_charger2 }
+                    target: { entity_id: switch.battery_charger }
               - action: persistent_notification.dismiss
                 data:
                   notification_id: "bms_no_connection"
@@ -653,7 +646,7 @@ automation:
             SOC {{ states('sensor.ups_custom_soc') }} % (gesperrt bei
             {{ states('input_number.ups_lockout_soc') }} %), niedrigste Zelle
             {{ states('sensor.ups_lowest_cell') }} V, Spreizung
-            {{ states('sensor.ups_cell_delta') }} V. Laedt charger2 wirklich?
+            {{ states('sensor.ups_cell_delta') }}
           notification_id: "ups_lockout_stuck"
 
   - alias: "Sicherheitsabschaltung: Charger und Inverter gleichzeitig"
@@ -664,21 +657,19 @@ automation:
         entity_id:
           - switch.battery_inverter_tasmota
           - switch.battery_charger
-          - switch.battery_charger2
         to: "on"
         for: "00:00:00.500"
     condition:
       - condition: template
         value_template: >-
           {{ is_state('switch.battery_inverter_tasmota', 'on') and 
-             (is_state('switch.battery_charger', 'on') or is_state('switch.battery_charger2', 'on')) }}
+             (is_state('switch.battery_charger', 'on') ) }}
     action:
       - action: switch.turn_off
         target:
           entity_id:
             - switch.battery_inverter_tasmota
             - switch.battery_charger
-            - switch.battery_charger2
 
   # ==========================================================
   # UPS: Last Full Zeitstempel
@@ -713,7 +704,7 @@ automation:
   #
   # Start/Stopp setzen nur input_boolean.ups_maintenance. Das eigentliche
   # Schalten macht ups_coarse_control Zweig 1 (Inverter aus,
-  # battery_charger2 an) - Zweig 0.5 (Zellueberspannung) steht davor und
+  # battery_charger an) - Zweig 0.5 (Zellueberspannung) steht davor und
   # bleibt damit weiterhin die harte Sicherheitsgrenze.
   # ==========================================================
   - alias: "Battery Maintenance: Start UPS Charge"

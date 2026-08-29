@@ -17,7 +17,7 @@ template:
           # batteries: capacity
           venus_capacity_wh: 5120
           venus_count: 3 # NEU - Zahl der Venus-Speicher, siehe Hinweis unten
-          ups_capacity_wh: 2200
+          ups_capacity_wh: 2000
           # batteries: safety
           lowest_soc: 12 # below that emergency start
           stop_soc: 15
