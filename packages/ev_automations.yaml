@@ -502,6 +502,27 @@ automation:
 
             {{ [rest + done, 100] | min | round(1) }}
 
+  - alias: "EV: Manuellen Ladestrom auf 0 zurücksetzen"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.warp3_2ita_cable
+        to: "off"
+        for: "00:00:05"
+      - trigger: state
+        entity_id: input_select.ev_vehicle_mode
+        to: "off"
+    conditions:
+      - condition: numeric_state
+        entity_id: input_number.ev_manual_charging_current
+        above: 0
+    actions:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.ev_manual_charging_current
+        data:
+          value: 0
+
   - alias: "Wallbox: WARP3 LED Fahrzeug & SoC"
     id: wallbox_LED
     description: "Zero rot, Honda weiss, frei gruen. <50 % 1 Hz, 50-98 % 2 Hz, voll Regenbogen."

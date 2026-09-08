@@ -378,11 +378,6 @@ automation:
               - action: persistent_notification.dismiss
                 data:
                   notification_id: "bms_no_connection"
-              - action: persistent_notification.create
-                data:
-                  title: "Debug 1"
-                  message: "({{ now().strftime('%H:%M:%S') }})"
-                  notification_id: "debug1"
 
           # 4 --- ENDE: NOT-LADUNG
           #
@@ -398,11 +393,6 @@ automation:
               - action: persistent_notification.dismiss
                 data:
                   notification_id: "bms_no_connection"
-              - action: persistent_notification.create
-                data:
-                  title: "Debug 2"
-                  message: "({{ now().strftime('%H:%M:%S') }})"
-                  notification_id: "debug2"
 
           # 5 --- ENTLADEN STARTEN
           #

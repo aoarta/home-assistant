@@ -13,7 +13,7 @@ template:
           lfp_max_voltage: 3.565
           lfp_hysteresis: 0.040
           ups_lockout_soc_delta: 5
-          ups_restart_hyst: 0.25
+          ups_restart_hyst: 0.050
           # batteries: capacity
           venus_capacity_wh: 5120
           venus_count: 3 # NEU - Zahl der Venus-Speicher, siehe Hinweis unten
