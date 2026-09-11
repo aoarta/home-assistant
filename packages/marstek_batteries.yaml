@@ -857,14 +857,14 @@ template:
           {% set venus1 = states('sensor.marstek_venus_1_ac_power') | float(0) %}
           {% set venus2 = states('sensor.marstek_venus_2_ac_power') | float(0) %}
           {% set venus3 = states('sensor.marstek_venus_3_ac_power') | float(0) %}
-          {{ (venus1 + venus2 + venus3) | round(0) | int(0) }}
+          {{ (venus1 + venus2 + venus3) | round(0) }}
         availability: >-
           {{ is_number(states('sensor.marstek_venus_1_ac_power')) and
              is_number(states('sensor.marstek_venus_2_ac_power')) and
              is_number(states('sensor.marstek_venus_3_ac_power')) }}
 
-      - name: "Marstek DC Leistung Gesamt"
-        unique_id: marstek_dc_leistung_gesamt
+      - name: "Marstek DC Power Total"
+        unique_id: marstek_dc_power_total
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
@@ -872,7 +872,7 @@ template:
           {% set venus1 = states('sensor.marstek_venus_1_batterieleistung') | float(0) %}
           {% set venus2 = states('sensor.marstek_venus_2_batterieleistung') | float(0) %}
           {% set venus3 = states('sensor.marstek_venus_3_batterieleistung') | float(0) %}
-          {{ (-(venus1 + venus2 + venus3)) | round(0) | int(0) }}
+          {{ (-(venus1 + venus2 + venus3)) | round(0) }}
         availability: >-
           {{ is_number(states('sensor.marstek_venus_1_batterieleistung')) and
              is_number(states('sensor.marstek_venus_2_batterieleistung')) and
@@ -916,7 +916,6 @@ template:
     #
     # Gelesen von: ev_sensor_trigger.yaml (Ueberschussrechnung),
     #              consumption.yaml (sensor.charge_power),
-    #              ups_batterie.yaml (ups_coarse_control).
     # Alle drei rechneten fehlende Marstek-Leistung vorher als 0 W - beim
     # Ausfall sah die Wallbox dadurch bis zu 7,5 kW Ueberschuss zu viel und
     # lud aus dem Netz.
@@ -1335,12 +1334,6 @@ automation:
   # WARTUNGSLADUNG VENUS
   #
   # Umgebaut: die Automation steuert jetzt NUR noch die Venus.
-  # Die USV haengt an input_boolean.ups_maintenance und wird in
-  # ups_batterie.yaml gestartet/gestoppt. Grund: frueher stoppte
-  # "Stop When Full" die gemeinsame Ladung, sobald die Venus voll waren
-  # (~30 min) - die USV braucht 3-5 h und wurde nie fertig, wodurch
-  # ups_last_full nie gesetzt wurde und battery_maintenance_required
-  # dauerhaft "on" blieb.
   #
   # Zusaetzlich time_pattern /30 als Trigger: der reine
   # "to: on"-Flankentrigger kam nicht wieder, weil der Binary Sensor
@@ -1409,8 +1402,6 @@ automation:
       - condition: numeric_state
         entity_id: input_number.manual_charge_power
         above: 0
-      # Nur noch die Venus - die USV hat ihren eigenen Stopp in
-      # ups_batterie.yaml (battery_maintenance_ups_stop).
       - condition: numeric_state
         entity_id: sensor.marstek_venus_1_soc
         above: 99.5
@@ -1474,8 +1465,7 @@ automation:
                   {% set now_ts = as_timestamp(now()) %}
                   {% set ents = ['input_datetime.venus_1_last_full',
                                  'input_datetime.venus_2_last_full',
-                                 'input_datetime.venus_3_last_full',
-                                 'input_datetime.ups_last_full'] %}
+                                 'input_datetime.venus_3_last_full'] %}
                   {% set ns = namespace(ages=[]) %}
                   {% for e in ents %}
                     {% set ns.ages = ns.ages + [(now_ts - as_timestamp(states(e), 0)) if has_value(e) else 0] %}
@@ -1495,9 +1485,7 @@ automation:
                     and states('sensor.marstek_venus_2_soc') | float(0) >= 100
                     and states('sensor.venus_2_custom_soc') | float(0) >= 100
                     and states('sensor.marstek_venus_3_soc') | float(0) >= 100
-                    and states('sensor.venus_3_custom_soc') | float(0) >= 100
-                    and states('sensor.ups_soc') | float(0) >= 100
-                    and states('sensor.ups_custom_soc') | float(0) >= 100 }}
+                    and states('sensor.venus_3_custom_soc') | float(0) >= 100 }}
             sequence:
               - action: input_boolean.turn_off
                 target:
@@ -1508,8 +1496,7 @@ automation:
               {% set now_ts = as_timestamp(now()) %}
               {% set ents = ['input_datetime.venus_1_last_full',
                              'input_datetime.venus_2_last_full',
-                             'input_datetime.venus_3_last_full',
-                             'input_datetime.ups_last_full'] %}
+                             'input_datetime.venus_3_last_full'] %}
               {% set ns = namespace(ages=[]) %}
               {% for e in ents %}
                 {% set ns.ages = ns.ages + [(now_ts - as_timestamp(states(e), now_ts)) if has_value(e) else now_ts] %}

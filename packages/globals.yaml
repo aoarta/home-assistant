@@ -8,21 +8,14 @@ template:
         unique_id: global_parameter
         state: "OK"
         attributes:
-          # chemistry
-          lfp_min_voltage: 3.050
-          lfp_max_voltage: 3.565
-          lfp_hysteresis: 0.040
-          ups_lockout_soc_delta: 5
-          ups_restart_hyst: 0.050
           # batteries: capacity
           venus_capacity_wh: 5120
           venus_count: 3 # NEU - Zahl der Venus-Speicher, siehe Hinweis unten
-          ups_capacity_wh: 2000
+
           # batteries: safety
           lowest_soc: 12 # below that emergency start
           stop_soc: 15
-          # batteries: own consumption
-          ups_own_consumption_w: 5 # 22 too much
+
           # battery care
           override_soc_days: 5
           battery_care_days: 8
@@ -48,7 +41,7 @@ template:
           honda_e_phases: 1
 
           # bei Änderung oben auch hier anpassen
-          # calculated Attribut (3 * Venus * 0.8 + UPS * 0.6)
+          # calculated Attribut (3 * Venus * 0.8)
           #
           # venus_count / venus_capacity_wh oben sind die Doku, die Zahlen hier
           # sind die Rechnung - "this.attributes" ist beim ersten Durchlauf
@@ -58,10 +51,8 @@ template:
           # 5120 * 3 * 0.8 = 12288 Wh + 2200 * 0.6 = 1320 Wh  ->  13.608 kWh
           calculated_combined_capacity_kwh: >-
             {#{% set venus = this.attributes.get('venus_capacity_wh', 0) | float(0) %}#}
-            {#{% set ups = this.attributes.get('ups_capacity_wh', 0) | float(0) %}#}
             {% set venus = 5120 %}
-            {% set ups = 2200 %}
-            {{ ((venus * 3 * 0.8) + (ups * 0.6)) / 1000 }}
+            {{ (venus * 3 * 0.8) / 1000 }}
 
           # ------------------------------------------------------------------
           # Zielzeit-Laden (charge_mode "target_time")

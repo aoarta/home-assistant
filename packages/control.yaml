@@ -9,23 +9,10 @@ input_boolean:
     name: "Manual SOC Override"
     icon: mdi:battery-lock
 
-  # "Battery Maintenance: Stop When Full" prueft nur den SOC der drei
-  # Venus und setzt manual_charge_power auf 0, sobald DIE voll sind.
-  # Damit fiel maintenance_activ in ups_coarse_control weg, lange bevor
-  # die USV geladen war (Venus: ~30 min, USV: 3-5 h).
-  # Jetzt getrennt: manual_charge_power = reine Venus-Ladeleistung,
-  # dieses Flag = USV-Wartung.
-  # Geschrieben von: battery_maintenance_ups_charge / _ups_stop (ups_batterie.yaml)
-  # Gelesen von:     ups_coarse_control -> maintenance_activ
-  ups_maintenance:
-    name: "USV Wartungsladung"
-    icon: mdi:battery-heart
-
 input_number:
   # Manuelle Ladevorgabe in W JE SPEICHER (nicht gesamt!).
   #   0      = aus, normale Regelung laeuft
   #   > 0    = charge_map setzt alle drei Venus fest auf diesen Wert (target_soc -> 110)
-  #   >= 1000 = ups_coarse_control wertet das als Wartungsmodus
   # Max 2500 W entspricht der Grenze in charge_map / sende_batterie_targets_v4.
   # ACHTUNG seit dem dritten Speicher: der eingestellte Wert wird DREIMAL
   # angefordert. 2500 hier = bis zu 7,5 kW Netzbezug. Wenn der Hausanschluss
@@ -46,7 +33,6 @@ input_number:
 input_datetime:
   # Zeitstempel "Batterie war zuletzt voll".
   # Geschrieben von: marstek_set_last_full_timestamp (Venus 1/2/3) und
-  #                  ups_set_last_full_timestamp (USV).
   # Gelesen von:     binary_sensor.battery_maintenance_required und
   #                  soc_override_weekly_control.
   venus_1_last_full:
@@ -63,12 +49,6 @@ input_datetime:
 
   venus_3_last_full:
     name: "Venus 3 zuletzt voll"
-    has_date: true
-    has_time: true
-    icon: mdi:battery-clock
-
-  ups_last_full:
-    name: "USV zuletzt voll"
     has_date: true
     has_time: true
     icon: mdi:battery-clock
@@ -109,8 +89,7 @@ template:
           {% set venus1 = states('sensor.marstek_venus_1_ac_power') | float(0) %}
           {% set venus2 = states('sensor.marstek_venus_2_ac_power') | float(0) %}
           {% set venus3 = states('sensor.marstek_venus_3_ac_power') | float(0) %}
-          {% set ups = states('sensor.ups_ac_power') | float(0) %}
-          {{ (venus1 + venus2 + venus3 + ups) | round(0) }}
+          {{ (venus1 + venus2 + venus3) | round(0) }}
 
       - name: "Remaining PV Today"
         # description: "for dashboard"
@@ -286,8 +265,7 @@ template:
           {% set now_ts = as_timestamp(now()) %}
           {% set ents = ['input_datetime.venus_1_last_full',
                          'input_datetime.venus_2_last_full',
-                         'input_datetime.venus_3_last_full',
-                         'input_datetime.ups_last_full'] %}
+                         'input_datetime.venus_3_last_full'] %}
 
           {# Fallback to 0 to avoid false triggers on restarts/connection drops.
              as_timestamp also secured with default value (now_ts). #}
@@ -302,4 +280,3 @@ template:
           v1_days: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.venus_1_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.venus_1_last_full') else '?' }}"
           v2_days: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.venus_2_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.venus_2_last_full') else '?' }}"
           v3_days: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.venus_3_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.venus_3_last_full') else '?' }}"
-          ups_days: "{{ ((as_timestamp(now()) - as_timestamp(states('input_datetime.ups_last_full'), as_timestamp(now()))) / 86400) | int if has_value('input_datetime.ups_last_full') else '?' }}"

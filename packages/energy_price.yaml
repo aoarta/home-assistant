@@ -385,9 +385,6 @@ automation:
       - condition: state
         entity_id: binary_sensor.battery_maintenance_required
         state: "off"
-      - condition: state
-        entity_id: input_boolean.ups_maintenance
-        state: "off"
       - condition: numeric_state
         entity_id: sensor.preis_ladeleistung_je_speicher
         above: 199
