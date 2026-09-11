@@ -69,6 +69,9 @@ template:
       - trigger: numeric_state
         entity_id: sensor.marstek_venus_1_soc
         above: 99.9
+      - trigger: numeric_state
+        entity_id: sensor.marstek_venus_1_modbus_minimale_zellenspannung
+        below: 2.95
       - trigger: time_pattern
         minutes: "/5"
     sensor:
@@ -80,8 +83,11 @@ template:
           {% set hw_soc = states('sensor.marstek_venus_1_soc') | float(-1) %}
           {% set neu_wh = states('sensor.venus_1_energy_wh') | float(none) %}
           {% set reset_wh = this.attributes.get('reset_point') | float(48840) %} 
+          {% set zelle = states('sensor.marstek_venus_1_modbus_minimale_zellenspannung') | float(none) %}
 
-          {% if neu_wh is none or reset_wh is none %}
+          {% if zelle is not none and zelle > 1.0 and zelle < 2.95 %}
+            0
+          {% elif neu_wh is none or reset_wh is none %}
             {{ this.state if is_number(this.state) else hw_soc }}
           {% elif hw_soc >= 100 %}
             100
@@ -98,8 +104,21 @@ template:
             {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
             {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
             {% set custom_soc = this.state | float(none) %}
+            {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
+            {% set zelle = states('sensor.marstek_venus_1_modbus_minimale_zellenspannung') | float(none) %}
+            {% set zelle_leer = zelle is not none and zelle > 1.0 and zelle < 2.95 %}
+            {% set sperre = this.attributes.get('zelle_leer', false) | bool(false) %}
+            {% set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) %}
 
-            {% if custom_soc == 0 and hw_soc is not none and current_energy is not none %}
+            {% if zelle_leer and current_energy is not none %}
+              {{ current_energy - cap_wh }}
+            {% elif zelle_leer or (sperre and not freigabe) %}
+              {% if current_energy is not none and current_energy - cap_wh > last_reset %}
+                {{ current_energy - cap_wh }}
+              {% else %}
+                {{ last_reset }}
+              {% endif %}
+            {% elif custom_soc == 0 and hw_soc is not none and current_energy is not none %}
               {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
             {% elif hw_soc is none or current_energy is none %}
               {{ last_reset if last_reset is not none else 0 }}
@@ -115,6 +134,14 @@ template:
                 {{ last_reset }}
               {% endif %}
             {% endif %}
+          zelle_leer: >-
+            {% set zelle = states('sensor.marstek_venus_1_modbus_minimale_zellenspannung') | float(none) %}
+            {% set hw_soc = states('sensor.marstek_venus_1_soc') | float(none) %}
+            {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
+            {% set custom_soc = this.state | float(none) %}
+            {% set sperre = this.attributes.get('zelle_leer', false) | bool(false) %}
+            {% set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) %}
+            {{ (zelle is not none and zelle > 1.0 and zelle < 2.95) or (sperre and not freigabe) }}
 
   - triggers:
       - trigger: homeassistant
@@ -124,6 +151,9 @@ template:
       - trigger: numeric_state
         entity_id: sensor.marstek_venus_2_soc
         above: 99.9
+      - trigger: numeric_state
+        entity_id: sensor.marstek_venus_2_modbus_minimale_zellenspannung
+        below: 2.95
       - trigger: time_pattern
         minutes: "/5"
     sensor:
@@ -135,8 +165,11 @@ template:
           {% set hw_soc = states('sensor.marstek_venus_2_soc') | float(-1) %}
           {% set neu_wh = states('sensor.venus_2_energy_wh') | float(none) %}
           {% set reset_wh = this.attributes.get('reset_point') | float(47381.0) %}
+          {% set zelle = states('sensor.marstek_venus_2_modbus_minimale_zellenspannung') | float(none) %}
 
-          {% if neu_wh is none or reset_wh is none %}
+          {% if zelle is not none and zelle > 1.0 and zelle < 2.95 %}
+            0
+          {% elif neu_wh is none or reset_wh is none %}
             {{ this.state if is_number(this.state) else hw_soc }}
           {% elif hw_soc >= 100 %}
             100
@@ -153,8 +186,21 @@ template:
             {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
             {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
             {% set custom_soc = this.state | float(none) %}
+            {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
+            {% set zelle = states('sensor.marstek_venus_2_modbus_minimale_zellenspannung') | float(none) %}
+            {% set zelle_leer = zelle is not none and zelle > 1.0 and zelle < 2.95 %}
+            {% set sperre = this.attributes.get('zelle_leer', false) | bool(false) %}
+            {% set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) %}
 
-            {% if custom_soc == 0 and hw_soc is not none and current_energy is not none %}
+            {% if zelle_leer and current_energy is not none %}
+              {{ current_energy - cap_wh }}
+            {% elif zelle_leer or (sperre and not freigabe) %}
+              {% if current_energy is not none and current_energy - cap_wh > last_reset %}
+                {{ current_energy - cap_wh }}
+              {% else %}
+                {{ last_reset }}
+              {% endif %}
+            {% elif custom_soc == 0 and hw_soc is not none and current_energy is not none %}
               {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
             {% elif hw_soc is none or current_energy is none %}
               {{ last_reset if last_reset is not none else 0 }}
@@ -170,6 +216,14 @@ template:
                 {{ last_reset }}
               {% endif %}
             {% endif %}
+          zelle_leer: >-
+            {% set zelle = states('sensor.marstek_venus_2_modbus_minimale_zellenspannung') | float(none) %}
+            {% set hw_soc = states('sensor.marstek_venus_2_soc') | float(none) %}
+            {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
+            {% set custom_soc = this.state | float(none) %}
+            {% set sperre = this.attributes.get('zelle_leer', false) | bool(false) %}
+            {% set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) %}
+            {{ (zelle is not none and zelle > 1.0 and zelle < 2.95) or (sperre and not freigabe) }}
 
   # Venus 3: reset_point-Startwert ist 50000, also der Offset aus
   # "Venus 3 Energy Wh" bei Riemann = 0. Das entspricht der Annahme
@@ -185,6 +239,9 @@ template:
       - trigger: numeric_state
         entity_id: sensor.marstek_venus_3_soc
         above: 99.9
+      - trigger: numeric_state
+        entity_id: sensor.marstek_venus_3_modbus_minimale_zellenspannung
+        below: 2.95
       - trigger: time_pattern
         minutes: "/5"
     sensor:
@@ -196,8 +253,11 @@ template:
           {% set hw_soc = states('sensor.marstek_venus_3_soc') | float(-1) %}
           {% set neu_wh = states('sensor.venus_3_energy_wh') | float(none) %}
           {% set reset_wh = this.attributes.get('reset_point') | float(50000) %}
+          {% set zelle = states('sensor.marstek_venus_3_modbus_minimale_zellenspannung') | float(none) %}
 
-          {% if neu_wh is none or reset_wh is none %}
+          {% if zelle is not none and zelle > 1.0 and zelle < 2.95 %}
+            0
+          {% elif neu_wh is none or reset_wh is none %}
             {{ this.state if is_number(this.state) else hw_soc }}
           {% elif hw_soc >= 100 %}
             100
@@ -214,8 +274,21 @@ template:
             {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
             {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
             {% set custom_soc = this.state | float(none) %}
+            {% set cap_wh = states('sensor.marstek_venus_3_batterie_gesamtenergie') | float(5.120) * 1000 %}
+            {% set zelle = states('sensor.marstek_venus_3_modbus_minimale_zellenspannung') | float(none) %}
+            {% set zelle_leer = zelle is not none and zelle > 1.0 and zelle < 2.95 %}
+            {% set sperre = this.attributes.get('zelle_leer', false) | bool(false) %}
+            {% set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) %}
 
-            {% if custom_soc == 0 and hw_soc is not none and current_energy is not none %}
+            {% if zelle_leer and current_energy is not none %}
+              {{ current_energy - cap_wh }}
+            {% elif zelle_leer or (sperre and not freigabe) %}
+              {% if current_energy is not none and current_energy - cap_wh > last_reset %}
+                {{ current_energy - cap_wh }}
+              {% else %}
+                {{ last_reset }}
+              {% endif %}
+            {% elif custom_soc == 0 and hw_soc is not none and current_energy is not none %}
               {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
             {% elif hw_soc is none or current_energy is none %}
               {{ last_reset if last_reset is not none else 0 }}
@@ -231,6 +304,14 @@ template:
                 {{ last_reset }}
               {% endif %}
             {% endif %}
+          zelle_leer: >-
+            {% set zelle = states('sensor.marstek_venus_3_modbus_minimale_zellenspannung') | float(none) %}
+            {% set hw_soc = states('sensor.marstek_venus_3_soc') | float(none) %}
+            {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
+            {% set custom_soc = this.state | float(none) %}
+            {% set sperre = this.attributes.get('zelle_leer', false) | bool(false) %}
+            {% set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) %}
+            {{ (zelle is not none and zelle > 1.0 and zelle < 2.95) or (sperre and not freigabe) }}
 
   - triggers:
       - trigger: homeassistant
