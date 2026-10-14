@@ -49,6 +49,7 @@ recorder:
       # - sensor.balkon_inverter_energy_power
       # - sensor.solarnet_leistung_vom_netz
       - sensor.remaining_pv_today
+      - automation.sende_lade_und_entladebefehle_an_hardware
 
     entity_globs:
       - sensor.*defekt*

@@ -206,23 +206,23 @@ template:
         {% else %}pv{% endif %}
 
     sensor:
-      - name: "Debug PV Surplus Calculation"
-        state: >-
-          marstek_ok: {{ marstek_ok }},
-          charger_power: {{ states('sensor.warp3_2ita_powernow') }} W,
-          power_from_net: {{ states('sensor.leistung_vom_netz') }} W,
-          venus1: {{ states('sensor.marstek_venus_1_ac_power_glatt') }} W,
-          venus2: {{ states('sensor.marstek_venus_2_ac_power_glatt') }} W,
-          venus3: {{ states('sensor.marstek_venus_3_ac_power_glatt') }} W,
-          surplus_ev_first_w: {{ (states('sensor.warp3_2ita_powernow') | float(0) - states('sensor.leistung_vom_netz') | float(0) - states('sensor.marstek_venus_1_ac_power_glatt') | float(0) - states('sensor.marstek_venus_2_ac_power_glatt') | float(0) - states('sensor.marstek_venus_3_ac_power_glatt') | float(0)) | round(2) }} W,
-          amps_ev_first: {{ amps_ev_first }}
-        attributes:
-          vehicle: "{{ states('input_select.ev_vehicle_mode') }}"
-          charge_mode: "{{ states('input_select.ev_charge_mode') }}"
-          cable: "{{ states('binary_sensor.warp3_2ita_cable') }}"
-          ev_soc: "{{ states('sensor.zero_sr_soc') if states('input_select.ev_vehicle_mode') == 'zero' else states('sensor.honda_e_soc') }}"
-          ev_soc_target: "{{ states('input_number.ev_charge_to_percent') }}"
-          ev_phase: "{{ ev_phase }}"
+      #      - name: "Debug PV Surplus Calculation"
+      #        state: >-
+      #          marstek_ok: {{ marstek_ok }},
+      #          charger_power: {{ states('sensor.warp3_2ita_powernow') }} W,
+      #          power_from_net: {{ states('sensor.leistung_vom_netz') }} W,
+      #          venus1: {{ states('sensor.marstek_venus_1_ac_power_glatt') }} W,
+      #          venus2: {{ states('sensor.marstek_venus_2_ac_power_glatt') }} W,
+      #          venus3: {{ states('sensor.marstek_venus_3_ac_power_glatt') }} W,
+      #          surplus_ev_first_w: {{ (states('sensor.warp3_2ita_powernow') | float(0) - states('sensor.leistung_vom_netz') | float(0) - states('sensor.marstek_venus_1_ac_power_glatt') | float(0) - states('sensor.marstek_venus_2_ac_power_glatt') | float(0) - states('sensor.marstek_venus_3_ac_power_glatt') | float(0)) | round(2) }} W,
+      #          amps_ev_first: {{ amps_ev_first }}
+      #        attributes:
+      #          vehicle: "{{ states('input_select.ev_vehicle_mode') }}"
+      #          charge_mode: "{{ states('input_select.ev_charge_mode') }}"
+      #          cable: "{{ states('binary_sensor.warp3_2ita_cable') }}"
+      #          ev_soc: "{{ states('sensor.zero_sr_soc') if states('input_select.ev_vehicle_mode') == 'zero' else states('sensor.honda_e_soc') }}"
+      #          ev_soc_target: "{{ states('input_number.ev_charge_to_percent') }}"
+      #          ev_phase: "{{ ev_phase }}"
 
       - name: "EV Target Charging Current"
         unique_id: ev_target_charging_current

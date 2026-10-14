@@ -80,15 +80,13 @@ template:
           {{ has_value('sensor.leistung_vom_netz') and
              has_value('sensor.marstek_ac_power_total') and
              has_value('sensor.pv_production_power') and
-             has_value('sensor.ev_charging_power') and
-             has_value('sensor.ups_ac_power')
+             has_value('sensor.ev_charging_power')
              }}
         state: >-
           {{ ( states('sensor.leistung_vom_netz') | float(0)
                + states('sensor.marstek_ac_power_total') | float(0)
                + states('sensor.pv_production_power') | float(0) 
                + states('sensor.ev_charging_power') | float(0)
-               + states('sensor.ups_ac_power') | float(0)
               ) | round(0) }}
 
   - triggers:

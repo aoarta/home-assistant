@@ -8,6 +8,9 @@ template:
         unique_id: global_parameter
         state: "OK"
         attributes:
+          # chemistry
+          lfp_min_voltage: 2.90
+          lfp_max_voltage: 3.55
           # batteries: capacity
           venus_capacity_wh: 5120
           venus_count: 3 # NEU - Zahl der Venus-Speicher, siehe Hinweis unten
