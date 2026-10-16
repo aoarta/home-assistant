@@ -416,21 +416,21 @@ automation:
           option: "off"
 
     # ===================================================================
-    # calculate charge energy delta, when target soc or vehicle changes
+    # Lade UM (ev_charge_by_percent) aus Lade AUF (ev_charge_to_percent)
+    # berechnen - NUR wenn Lade AUF geaendert wird.
     #
-    # Umgebaut: der Wert ist jetzt SELBSTKORRIGIEREND statt einmalig.
+    # Fahrzeugwechsel, Anstecken, BLE-Kalibrierung und Zeittakt aendern
+    # Lade UM bewusst NICHT mehr. Der Wert bleibt stehen, bis Lade AUF
+    # neu eingestellt wird (oder Lade UM direkt von Hand gesetzt wird).
+    #
     # Gerechnet wird "Restbedarf + was in dieser Session schon geladen
-    # wurde". Beides haengt am selben Wallbox-Zaehler, also bleibt das
-    # Ergebnis waehrend einer laufenden Ladung rechnerisch konstant -
-    # ein erneuter Lauf schreibt denselben Wert, es kann nichts
-    # weglaufen. Aendert sich dagegen der Anker (BLE-Kalibrierung), zieht
-    # der Wert sofort nach.
+    # wurde". Warum nicht einfach "Ziel - SoC": wird Lade AUF waehrend
+    # einer laufenden Ladung geaendert, waere ein Teil des Hubs schon in
+    # sensor.ev_session_energy enthalten - ohne den Session-Anteil wuerde
+    # wallbox_stop_on_limit_or_off die Ladung weit vor dem Ziel beenden.
     #
-    # Warum nicht einfach "Ziel - SoC": das wuerde waehrend des Ladens
-    # schrumpfen, waehrend sensor.ev_session_energy waechst -
-    # wallbox_stop_on_limit_or_off haette die Ladung dann weit vor dem
-    # Ziel beendet. Mit dem Session-Anteil drin bedeutet
-    # "session >= max" exakt "Ziel-SoC erreicht".
+    # Hinweis: Lade AUF auf denselben Wert setzen loest nichts aus (keine
+    # Zustandsaenderung) - dann kurz verstellen und zurueckstellen.
     #
     # Bei Ziel 100 % ist der Wert ohne Bedeutung - dort wird nicht mehr
     # ueber die Energiegrenze gestoppt.
@@ -439,31 +439,13 @@ automation:
     id: wallbox_calc_charge_delta
     mode: restart
     triggers:
-      # 1. Ziel-SOC geaendert
+      # Einziger Trigger: Lade AUF wurde geaendert.
+      # not_from verhindert einen Lauf beim Wiederherstellen nach Neustart.
       - trigger: state
         entity_id: input_number.ev_charge_to_percent
-      # 2. Fahrzeug gewechselt
-      - trigger: state
-        entity_id: input_select.ev_vehicle_mode
-      # 3. Kabel gesteckt - wallbox_reset_session_energy hat den
-      #    Session-Zaehler gerade genullt, danach neu rechnen
-      - trigger: state
-        entity_id: binary_sensor.warp3_2ita_cable
-        to: "on"
-        for: "00:00:05"
-      # 4. Fahrzeug-SoC hat sich geaendert und steht 10 s still
-      #    (= BLE-Kalibrierung im Stand; waehrend des Ladens laeuft der
-      #    Wert zu haeufig nach und der Trigger greift absichtlich nicht)
-      - trigger: state
-        entity_id:
-          - sensor.zero_sr_soc
-          - sensor.honda_e_soc
-        for: "00:00:10"
-      # 5. Nachzuegler: faengt den Fall ab, dass "Lade AUF" auf einen
-      #    Wert gesetzt wird, den es schon hatte - dann gibt es keine
-      #    Zustandsaenderung und damit keinen Trigger 1.
-      - trigger: time_pattern
-        minutes: "/5"
+        not_from:
+          - unknown
+          - unavailable
     conditions:
       # Nur ausführen, wenn auch wirklich ein Fahrzeug aktiv ausgewählt ist
       - condition: template
@@ -495,9 +477,7 @@ automation:
             {# Noch fehlender Hub, nie negativ #}
             {% set rest = [0, target - current_soc] | max %}
 
-            {# In DIESER Session bereits geladene Energie, in SoC-Prozent.
-               Ohne diesen Anteil wuerde das Delta waehrend des Ladens
-               schrumpfen und die Ladung viel zu frueh abbrechen. #}
+            {# In DIESER Session bereits geladene Energie, in SoC-Prozent. #}
             {% set done = ((states('sensor.ev_session_energy') | float(0)) * eff / cap * 100) if cap > 0 else 0 %}
 
             {{ [rest + done, 100] | min | round(1) }}
