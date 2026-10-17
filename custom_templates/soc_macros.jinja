@@ -1,22 +1,140 @@
-{% macro berechne_ladeleistung(current_soc) %}
-  {% set solar_today = states('sensor.pv_forecast_weighted') | float(-1) %}
-  {% set load_today = states('sensor.estimated_remaining_consumption') | float(-1) %}
-  {% set ts = state_attr('sensor.solar_zeit_logik', 'now_ts') | float(0) %}
-  {% set b_set = state_attr('sensor.solar_zeit_logik', 'b_set') | float(0) %}
-  {% set t1130 = state_attr('sensor.solar_zeit_logik', 't1130') | float(0) %}
+{# config/custom_templates/soc_macros.jinja
+   =========================================================================
+   Gemeinsame Makros fuer die Venus-Custom-SOC-Sensoren und die
+   "Time until"-Sensoren in packages/marstek_batteries.yaml.
 
-  {# Haupt-Logik: Prüfen ob Solar-Überschuss und im Zeitfenster #}
-  {% if (solar_today > load_today or solar_today == -1) and (ts >= t1130 and ts < b_set) %}
-      {% set sm = state_attr('sensor.dynamic_soc_grenzen', 'mid') | float(80) %}
-      {% set diff = [sm - (current_soc | float(20)), 100] | min %}
-      {% set dauer = (b_set - ts) / 3600 %}
-      
-      {# Division durch 0 verhindern #}
-      {% set korrigierte_dauer = dauer if dauer > 0.01 else 0.01 %}
-      {{ [ (5120 * diff / 100 / korrigierte_dauer * 1.2) | round(0), 2500 ] | min }}
-  {% else %}
-      2500
-  {% endif %}
-{% endmacro %}
+   NEU 2026-10: die Datei enthielt vorher nur das verwaiste Makro
+   "berechne_ladeleistung", das auf laengst entfernte Entitaeten
+   (sensor.solar_zeit_logik, sensor.dynamic_soc_grenzen) zeigte und von
+   nichts mehr aufgerufen wurde. Es ist ersatzlos geloescht.
 
+   Stattdessen stehen hier jetzt die vorher DREIFACH identisch in
+   marstek_batteries.yaml ausgeschriebenen Templates (Custom SOC, reset_point,
+   zelle_leer) sowie die SECHSFACH identischen Time-until-Templates - nur mit
+   der Geraetenummer n als Parameter. Die Logik ist 1:1 uebernommen, kein
+   Verhalten geaendert. Ein vierter Speicher braucht in
+   marstek_batteries.yaml nur noch einen weiteren duennen Aufrufblock.
 
+   Hinweis zu "this": Makros sehen das this-Objekt des aufrufenden Sensors
+   nicht - deshalb werden this.state und die benoetigten this-Attribute als
+   Argumente uebergeben.
+   ========================================================================= #}
+
+{# -------------------------------------------------------------------------
+   Custom SOC - State.
+     n             Geraetenummer (1, 2, 3, ...)
+     reset_default Startwert fuer reset_point, wenn das Attribut noch leer
+                   ist (geraetespezifisch, siehe marstek_batteries.yaml)
+     this_state    this.state des Sensors
+     this_reset    this.attributes.get('reset_point') des Sensors
+   ------------------------------------------------------------------------- #}
+{% macro custom_soc_state(n, reset_default, this_state, this_reset) -%}
+  {%- set hw_soc = states('sensor.marstek_venus_' ~ n ~ '_soc') | float(-1) -%}
+  {%- set neu_wh = states('sensor.venus_' ~ n ~ '_energy_wh') | float(none) -%}
+  {%- set reset_wh = this_reset | float(reset_default) -%}
+  {%- set zelle = states('sensor.marstek_venus_' ~ n ~ '_modbus_minimale_zellenspannung') | float(none) -%}
+
+  {%- if zelle is not none and zelle > 1.0 and zelle < 2.95 -%}
+    0
+  {%- elif neu_wh is none or reset_wh is none -%}
+    {{ this_state if is_number(this_state) else hw_soc }}
+  {%- elif hw_soc >= 100 -%}
+    100
+  {%- else -%}
+    {%- set cap_wh = states('sensor.marstek_venus_' ~ n ~ '_batterie_gesamtenergie') | float(5.120) * 1000 -%}
+    {%- set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) -%}
+    {{ calc_soc | round(1) | clamp(0, 100) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{# -------------------------------------------------------------------------
+   Custom SOC - Attribut reset_point.
+     n             Geraetenummer
+     reset_default Startwert (siehe oben)
+     this_state    this.state des Sensors (= Custom SOC)
+     this_reset    this.attributes.get('reset_point')
+     this_sperre   this.attributes.get('zelle_leer', false)
+   ------------------------------------------------------------------------- #}
+{% macro custom_soc_reset_point(n, reset_default, this_state, this_reset, this_sperre) -%}
+  {%- set current_energy = states('sensor.venus_' ~ n ~ '_energy_wh') | float(none) -%}
+  {%- set last_reset = this_reset | float(reset_default) -%}
+  {%- set hw_soc = states('sensor.marstek_venus_' ~ n ~ '_soc') | float(none) -%}
+  {%- set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) -%}
+  {%- set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) -%}
+  {%- set custom_soc = this_state | float(none) -%}
+  {%- set cap_wh = states('sensor.marstek_venus_' ~ n ~ '_batterie_gesamtenergie') | float(5.120) * 1000 -%}
+  {%- set zelle = states('sensor.marstek_venus_' ~ n ~ '_modbus_minimale_zellenspannung') | float(none) -%}
+  {%- set zelle_leer = zelle is not none and zelle > 1.0 and zelle < 2.95 -%}
+  {%- set sperre = this_sperre | bool(false) -%}
+  {%- set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) -%}
+
+  {%- if zelle_leer and current_energy is not none -%}
+    {{ current_energy - cap_wh }}
+  {%- elif zelle_leer or (sperre and not freigabe) -%}
+    {%- if current_energy is not none and current_energy - cap_wh > last_reset -%}
+      {{ current_energy - cap_wh }}
+    {%- else -%}
+      {{ last_reset }}
+    {%- endif -%}
+  {%- elif custom_soc == 0 and hw_soc is not none and current_energy is not none -%}
+    {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
+  {%- elif hw_soc is none or current_energy is none -%}
+    {{ last_reset if last_reset is not none else 0 }}
+  {%- else -%}
+    {%- set last_reset = last_reset if last_reset is not none else current_energy -%}
+    {%- if hw_soc <= stop_soc -%}
+      {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
+    {%- elif hw_soc >= 100 -%}
+      {{ current_energy }}
+    {%- elif current_energy < last_reset -%}
+      {{ current_energy }}
+    {%- else -%}
+      {{ last_reset }}
+    {%- endif -%}
+  {%- endif -%}
+{%- endmacro %}
+
+{# -------------------------------------------------------------------------
+   Custom SOC - Attribut zelle_leer (Sperr-Latch nach Tiefentladung).
+     n             Geraetenummer
+     this_state    this.state des Sensors
+     this_sperre   this.attributes.get('zelle_leer', false)
+   ------------------------------------------------------------------------- #}
+{% macro custom_soc_zelle_leer(n, this_state, this_sperre) -%}
+  {%- set zelle = states('sensor.marstek_venus_' ~ n ~ '_modbus_minimale_zellenspannung') | float(none) -%}
+  {%- set hw_soc = states('sensor.marstek_venus_' ~ n ~ '_soc') | float(none) -%}
+  {%- set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) -%}
+  {%- set custom_soc = this_state | float(none) -%}
+  {%- set sperre = this_sperre | bool(false) -%}
+  {%- set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) -%}
+  {{ (zelle is not none and zelle > 1.0 and zelle < 2.95) or (sperre and not freigabe) }}
+{%- endmacro %}
+
+{# -------------------------------------------------------------------------
+   Time until <target> % - State (Minuten) und ETA-Attribut.
+     n       Geraetenummer
+     target  Ziel-SOC in Prozent (80 oder 100)
+   ------------------------------------------------------------------------- #}
+{% macro time_until(n, target) -%}
+  {%- set soc = states('sensor.venus_' ~ n ~ '_custom_soc') | float(none) -%}
+  {%- set power = states('sensor.marstek_venus_' ~ n ~ '_batterieleistung') | float(0) -%}
+  {%- set cap_wh = states('sensor.marstek_venus_' ~ n ~ '_batterie_gesamtenergie') | float(5.120) * 1000 -%}
+  {%- if soc is none or power < 50 -%}
+    {{ none }}
+  {%- elif soc >= target -%}
+    0
+  {%- else -%}
+    {{ ((target - soc) / 100 * cap_wh / power * 60) | round(0) | int(0) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro time_until_eta(n, target) -%}
+  {%- set soc = states('sensor.venus_' ~ n ~ '_custom_soc') | float(none) -%}
+  {%- set power = states('sensor.marstek_venus_' ~ n ~ '_batterieleistung') | float(0) -%}
+  {%- set cap_wh = states('sensor.marstek_venus_' ~ n ~ '_batterie_gesamtenergie') | float(5.120) * 1000 -%}
+  {%- if soc is not none and soc < target and power >= 50 -%}
+    {{ (now() + timedelta(minutes = ((target - soc) / 100 * cap_wh / power * 60) | float(0))).isoformat() }}
+  {%- else -%}
+    {{ none }}
+  {%- endif -%}
+{%- endmacro %}

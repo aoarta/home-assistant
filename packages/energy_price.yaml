@@ -89,8 +89,10 @@ input_number:
     icon: mdi:speedometer
 
   # Obergrenze fuer den gesamten Netzbezug waehrend des Preis-Netzladens.
-  # Hauptsicherung 25 A einphasig ~ 5750 W - Hausverbrauch und eine laufende
-  # EV-Ladung werden unten abgezogen, hier steht das Gesamtbudget.
+  # Hausverbrauch und eine laufende EV-Ladung werden unten abgezogen, hier
+  # steht das Gesamtbudget. (Hauptsicherung laut global_parameter 32 A pro
+  # Phase - der alte Kommentar "25 A ~ 5750 W" war veraltet; das Budget hier
+  # bewusst deutlich darunter lassen, damit Reserven fuer Lastspitzen bleiben.)
   price_grid_limit_w:
     name: Preis - max. Netzbezug beim Laden
     min: 500
@@ -270,7 +272,16 @@ template:
       # ----------------------------------------------------------------- #
       # 5. Ladeleistung je Speicher unter Beachtung der Hauptsicherung     #
       #    Hausverbrauch und laufende EV-Ladung werden abgezogen, der Rest #
-      #    haelftig auf die beiden Venus verteilt, auf 50 W gerastert.     #
+      #    gleichmaessig auf ALLE Venus verteilt, auf 50 W gerastert.      #
+      #                                                                   #
+      #    FIX 2026-10: hier stand noch "frei / 2" aus der Zwei-Geraete-   #
+      #    Zeit. manual_charge_power wird aber JE SPEICHER angefordert,    #
+      #    also dreimal - bei Budget 4000 W und 500 W Hausverbrauch ergab  #
+      #    das 3 x 1750 = 5250 W Netzbezug, 50 % ueber dem Budget. Genau   #
+      #    den Sicherungsschutz, den dieser Sensor herstellen soll, hat    #
+      #    er damit unterlaufen. Jetzt wird durch venus_count aus          #
+      #    global_parameter geteilt (Fallback 3), ein vierter Speicher     #
+      #    braucht hier also keine Aenderung mehr.                        #
       # ----------------------------------------------------------------- #
       - name: "Preis Ladeleistung je Speicher"
         unique_id: price_charge_power_each
@@ -283,7 +294,8 @@ template:
           {% set ev = states('sensor.ev_charging_power') | float(0) %}
           {% set frei = [budget - haus - ev, 0] | max %}
           {% set cap = states('input_number.price_charge_power_max') | float(2500) %}
-          {% set je = [frei / 2, cap] | min %}
+          {% set n = [state_attr('sensor.global_parameter', 'venus_count') | int(3), 1] | max %}
+          {% set je = [frei / n, cap] | min %}
           {{ ((je / 50) | int(0) * 50) if je >= 200 else 0 }}
 
   - binary_sensor:

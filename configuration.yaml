@@ -50,6 +50,15 @@ recorder:
       # - sensor.solarnet_leistung_vom_netz
       - sensor.remaining_pv_today
       - automation.sende_lade_und_entladebefehle_an_hardware
+      # OPT 2026-10: offener Punkt aus energy_price.yaml (Abschnitt 8) -
+      # beide tragen grosse, rein statische bzw. stuendlich rotierende
+      # Attributlisten, die sonst bei jedem State-Write mit in die DB gehen.
+      - sensor.tarif_tabelle
+      - sensor.strompreis_horizont
+      # Gleicher Grund: das forecast-Attribut ist eine lange Punkteliste,
+      # die alle 15 min neu geschrieben wird - das Dashboard liest sie live,
+      # die Historie braucht niemand.
+      - sensor.pv_prognose_stundenprofil
 
     entity_globs:
       - sensor.*defekt*

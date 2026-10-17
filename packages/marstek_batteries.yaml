@@ -6,6 +6,14 @@
 # Logik auf eine Schleife ueber eine Geraeteliste umgestellt. Ein vierter
 # Speicher braucht dann nur noch neue Eintraege in den Listen (ids, ctl,
 # soc_raw, ...) und in range(3) -> range(4).
+#
+# OPTIMIERT 2026-10: die drei identischen Custom-SOC-Bloecke (State,
+# reset_point, zelle_leer) und die sechs identischen Time-until-Sensoren
+# liegen jetzt als Makros in custom_templates/soc_macros.jinja - hier stehen
+# nur noch duenne Aufrufbloecke mit der Geraetenummer. Logik 1:1 unveraendert
+# (~250 Zeilen Dreifachcode entfernt). Ein vierter Speicher: Aufrufblock
+# kopieren, Geraetenummer und reset_default anpassen - plus wie bisher die
+# Listen weiter unten erweitern.
 
 sensor:
   - platform: filter
@@ -80,68 +88,15 @@ template:
         unit_of_measurement: "%"
         device_class: battery
         state: >-
-          {% set hw_soc = states('sensor.marstek_venus_1_soc') | float(-1) %}
-          {% set neu_wh = states('sensor.venus_1_energy_wh') | float(none) %}
-          {% set reset_wh = this.attributes.get('reset_point') | float(48840) %} 
-          {% set zelle = states('sensor.marstek_venus_1_modbus_minimale_zellenspannung') | float(none) %}
-
-          {% if zelle is not none and zelle > 1.0 and zelle < 2.95 %}
-            0
-          {% elif neu_wh is none or reset_wh is none %}
-            {{ this.state if is_number(this.state) else hw_soc }}
-          {% elif hw_soc >= 100 %}
-            100
-          {% else %}
-            {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
-            {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
-            {{ calc_soc | round(1) | clamp(0, 100) }}
-          {% endif %}
+          {% from 'soc_macros.jinja' import custom_soc_state %}
+          {{ custom_soc_state(1, 48840, this.state, this.attributes.get('reset_point')) }}
         attributes:
           reset_point: >-
-            {% set current_energy = states('sensor.venus_1_energy_wh') | float(none) %}
-            {% set last_reset = this.attributes.get('reset_point') | float(48840) %}
-            {% set hw_soc = states('sensor.marstek_venus_1_soc') | float(none) %}
-            {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
-            {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
-            {% set custom_soc = this.state | float(none) %}
-            {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
-            {% set zelle = states('sensor.marstek_venus_1_modbus_minimale_zellenspannung') | float(none) %}
-            {% set zelle_leer = zelle is not none and zelle > 1.0 and zelle < 2.95 %}
-            {% set sperre = this.attributes.get('zelle_leer', false) | bool(false) %}
-            {% set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) %}
-
-            {% if zelle_leer and current_energy is not none %}
-              {{ current_energy - cap_wh }}
-            {% elif zelle_leer or (sperre and not freigabe) %}
-              {% if current_energy is not none and current_energy - cap_wh > last_reset %}
-                {{ current_energy - cap_wh }}
-              {% else %}
-                {{ last_reset }}
-              {% endif %}
-            {% elif custom_soc == 0 and hw_soc is not none and current_energy is not none %}
-              {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-            {% elif hw_soc is none or current_energy is none %}
-              {{ last_reset if last_reset is not none else 0 }}
-            {% else %}
-              {% set last_reset = last_reset if last_reset is not none else current_energy %}
-              {% if hw_soc <= stop_soc %}
-                {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-              {% elif hw_soc >= 100 %}
-                {{ current_energy }}
-              {% elif current_energy < last_reset %}
-                {{ current_energy }}
-              {% else %}
-                {{ last_reset }}
-              {% endif %}
-            {% endif %}
+            {% from 'soc_macros.jinja' import custom_soc_reset_point %}
+            {{ custom_soc_reset_point(1, 48840, this.state, this.attributes.get('reset_point'), this.attributes.get('zelle_leer', false)) }}
           zelle_leer: >-
-            {% set zelle = states('sensor.marstek_venus_1_modbus_minimale_zellenspannung') | float(none) %}
-            {% set hw_soc = states('sensor.marstek_venus_1_soc') | float(none) %}
-            {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
-            {% set custom_soc = this.state | float(none) %}
-            {% set sperre = this.attributes.get('zelle_leer', false) | bool(false) %}
-            {% set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) %}
-            {{ (zelle is not none and zelle > 1.0 and zelle < 2.95) or (sperre and not freigabe) }}
+            {% from 'soc_macros.jinja' import custom_soc_zelle_leer %}
+            {{ custom_soc_zelle_leer(1, this.state, this.attributes.get('zelle_leer', false)) }}
 
   - triggers:
       - trigger: homeassistant
@@ -162,68 +117,15 @@ template:
         unit_of_measurement: "%"
         device_class: battery
         state: >-
-          {% set hw_soc = states('sensor.marstek_venus_2_soc') | float(-1) %}
-          {% set neu_wh = states('sensor.venus_2_energy_wh') | float(none) %}
-          {% set reset_wh = this.attributes.get('reset_point') | float(47381.0) %}
-          {% set zelle = states('sensor.marstek_venus_2_modbus_minimale_zellenspannung') | float(none) %}
-
-          {% if zelle is not none and zelle > 1.0 and zelle < 2.95 %}
-            0
-          {% elif neu_wh is none or reset_wh is none %}
-            {{ this.state if is_number(this.state) else hw_soc }}
-          {% elif hw_soc >= 100 %}
-            100
-          {% else %}
-            {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
-            {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
-            {{ calc_soc | round(1) | clamp(0, 100) }}
-          {% endif %}
+          {% from 'soc_macros.jinja' import custom_soc_state %}
+          {{ custom_soc_state(2, 47381, this.state, this.attributes.get('reset_point')) }}
         attributes:
           reset_point: >-
-            {% set current_energy = states('sensor.venus_2_energy_wh') | float(none) %}
-            {% set last_reset = this.attributes.get('reset_point') | float(47381) %}
-            {% set hw_soc = states('sensor.marstek_venus_2_soc') | float(none) %}
-            {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
-            {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
-            {% set custom_soc = this.state | float(none) %}
-            {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
-            {% set zelle = states('sensor.marstek_venus_2_modbus_minimale_zellenspannung') | float(none) %}
-            {% set zelle_leer = zelle is not none and zelle > 1.0 and zelle < 2.95 %}
-            {% set sperre = this.attributes.get('zelle_leer', false) | bool(false) %}
-            {% set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) %}
-
-            {% if zelle_leer and current_energy is not none %}
-              {{ current_energy - cap_wh }}
-            {% elif zelle_leer or (sperre and not freigabe) %}
-              {% if current_energy is not none and current_energy - cap_wh > last_reset %}
-                {{ current_energy - cap_wh }}
-              {% else %}
-                {{ last_reset }}
-              {% endif %}
-            {% elif custom_soc == 0 and hw_soc is not none and current_energy is not none %}
-              {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-            {% elif hw_soc is none or current_energy is none %}
-              {{ last_reset if last_reset is not none else 0 }}
-            {% else %}
-              {% set last_reset = last_reset if last_reset is not none else current_energy %}
-              {% if hw_soc <= stop_soc %}
-                {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-              {% elif hw_soc >= 100 %}
-                {{ current_energy }}
-              {% elif current_energy < last_reset %}
-                {{ current_energy }}
-              {% else %}
-                {{ last_reset }}
-              {% endif %}
-            {% endif %}
+            {% from 'soc_macros.jinja' import custom_soc_reset_point %}
+            {{ custom_soc_reset_point(2, 47381, this.state, this.attributes.get('reset_point'), this.attributes.get('zelle_leer', false)) }}
           zelle_leer: >-
-            {% set zelle = states('sensor.marstek_venus_2_modbus_minimale_zellenspannung') | float(none) %}
-            {% set hw_soc = states('sensor.marstek_venus_2_soc') | float(none) %}
-            {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
-            {% set custom_soc = this.state | float(none) %}
-            {% set sperre = this.attributes.get('zelle_leer', false) | bool(false) %}
-            {% set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) %}
-            {{ (zelle is not none and zelle > 1.0 and zelle < 2.95) or (sperre and not freigabe) }}
+            {% from 'soc_macros.jinja' import custom_soc_zelle_leer %}
+            {{ custom_soc_zelle_leer(2, this.state, this.attributes.get('zelle_leer', false)) }}
 
   # Venus 3: reset_point-Startwert ist 50000, also der Offset aus
   # "Venus 3 Energy Wh" bei Riemann = 0. Das entspricht der Annahme
@@ -250,68 +152,15 @@ template:
         unit_of_measurement: "%"
         device_class: battery
         state: >-
-          {% set hw_soc = states('sensor.marstek_venus_3_soc') | float(-1) %}
-          {% set neu_wh = states('sensor.venus_3_energy_wh') | float(none) %}
-          {% set reset_wh = this.attributes.get('reset_point') | float(50000) %}
-          {% set zelle = states('sensor.marstek_venus_3_modbus_minimale_zellenspannung') | float(none) %}
-
-          {% if zelle is not none and zelle > 1.0 and zelle < 2.95 %}
-            0
-          {% elif neu_wh is none or reset_wh is none %}
-            {{ this.state if is_number(this.state) else hw_soc }}
-          {% elif hw_soc >= 100 %}
-            100
-          {% else %}
-            {% set cap_wh = states('sensor.marstek_venus_3_batterie_gesamtenergie') | float(5.120) * 1000 %}
-            {% set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) %}
-            {{ calc_soc | round(1) | clamp(0, 100) }}
-          {% endif %}
+          {% from 'soc_macros.jinja' import custom_soc_state %}
+          {{ custom_soc_state(3, 50000, this.state, this.attributes.get('reset_point')) }}
         attributes:
           reset_point: >-
-            {% set current_energy = states('sensor.venus_3_energy_wh') | float(none) %}
-            {% set last_reset = this.attributes.get('reset_point') | float(50000) %}
-            {% set hw_soc = states('sensor.marstek_venus_3_soc') | float(none) %}
-            {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
-            {% set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) %}
-            {% set custom_soc = this.state | float(none) %}
-            {% set cap_wh = states('sensor.marstek_venus_3_batterie_gesamtenergie') | float(5.120) * 1000 %}
-            {% set zelle = states('sensor.marstek_venus_3_modbus_minimale_zellenspannung') | float(none) %}
-            {% set zelle_leer = zelle is not none and zelle > 1.0 and zelle < 2.95 %}
-            {% set sperre = this.attributes.get('zelle_leer', false) | bool(false) %}
-            {% set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) %}
-
-            {% if zelle_leer and current_energy is not none %}
-              {{ current_energy - cap_wh }}
-            {% elif zelle_leer or (sperre and not freigabe) %}
-              {% if current_energy is not none and current_energy - cap_wh > last_reset %}
-                {{ current_energy - cap_wh }}
-              {% else %}
-                {{ last_reset }}
-              {% endif %}
-            {% elif custom_soc == 0 and hw_soc is not none and current_energy is not none %}
-              {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-            {% elif hw_soc is none or current_energy is none %}
-              {{ last_reset if last_reset is not none else 0 }}
-            {% else %}
-              {% set last_reset = last_reset if last_reset is not none else current_energy %}
-              {% if hw_soc <= stop_soc %}
-                {{ current_energy - ((100 - hw_soc) / 100 * capacity) }}
-              {% elif hw_soc >= 100 %}
-                {{ current_energy }}
-              {% elif current_energy < last_reset %}
-                {{ current_energy }}
-              {% else %}
-                {{ last_reset }}
-              {% endif %}
-            {% endif %}
+            {% from 'soc_macros.jinja' import custom_soc_reset_point %}
+            {{ custom_soc_reset_point(3, 50000, this.state, this.attributes.get('reset_point'), this.attributes.get('zelle_leer', false)) }}
           zelle_leer: >-
-            {% set zelle = states('sensor.marstek_venus_3_modbus_minimale_zellenspannung') | float(none) %}
-            {% set hw_soc = states('sensor.marstek_venus_3_soc') | float(none) %}
-            {% set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) %}
-            {% set custom_soc = this.state | float(none) %}
-            {% set sperre = this.attributes.get('zelle_leer', false) | bool(false) %}
-            {% set freigabe = hw_soc is not none and (hw_soc >= 100 or (hw_soc > stop_soc and custom_soc is not none and custom_soc > stop_soc)) %}
-            {{ (zelle is not none and zelle > 1.0 and zelle < 2.95) or (sperre and not freigabe) }}
+            {% from 'soc_macros.jinja' import custom_soc_zelle_leer %}
+            {{ custom_soc_zelle_leer(3, this.state, this.attributes.get('zelle_leer', false)) }}
 
   - triggers:
       - trigger: homeassistant
@@ -724,28 +573,12 @@ template:
         state_class: measurement
         icon: mdi:battery-clock
         state: >-
-          {% set target = 80 %}
-          {% set soc = states('sensor.venus_1_custom_soc') | float(none) %}
-          {% set power = states('sensor.marstek_venus_1_batterieleistung') | float(0) %}
-          {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
-          {% if soc is none or power < 50 %}
-            {{ none }}
-          {% elif soc >= target %}
-            0
-          {% else %}
-            {{ ((target - soc) / 100 * cap_wh / power * 60) | round(0) | int(0) }}
-          {% endif %}
+          {% from 'soc_macros.jinja' import time_until %}
+          {{ time_until(1, 80) }}
         attributes:
           eta: >-
-            {% set target = 80 %}
-            {% set soc = states('sensor.venus_1_custom_soc') | float(none) %}
-            {% set power = states('sensor.marstek_venus_1_batterieleistung') | float(0) %}
-            {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
-            {% if soc is not none and soc < target and power >= 50 %}
-              {{ (now() + timedelta(minutes = ((target - soc) / 100 * cap_wh / power * 60) | float(0))).isoformat() }}
-            {% else %}
-              {{ none }}
-            {% endif %}
+            {% from 'soc_macros.jinja' import time_until_eta %}
+            {{ time_until_eta(1, 80) }}
 
       - name: "Venus 1 Time until 100"
         unique_id: venus_1_time_until_100
@@ -754,28 +587,12 @@ template:
         state_class: measurement
         icon: mdi:battery-clock
         state: >-
-          {% set target = 100 %}
-          {% set soc = states('sensor.venus_1_custom_soc') | float(none) %}
-          {% set power = states('sensor.marstek_venus_1_batterieleistung') | float(0) %}
-          {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
-          {% if soc is none or power < 50 %}
-            {{ none }}
-          {% elif soc >= target %}
-            0
-          {% else %}
-            {{ ((target - soc) / 100 * cap_wh / power * 60) | round(0) | int(0) }}
-          {% endif %}
+          {% from 'soc_macros.jinja' import time_until %}
+          {{ time_until(1, 100) }}
         attributes:
           eta: >-
-            {% set target = 100 %}
-            {% set soc = states('sensor.venus_1_custom_soc') | float(none) %}
-            {% set power = states('sensor.marstek_venus_1_batterieleistung') | float(0) %}
-            {% set cap_wh = states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120) * 1000 %}
-            {% if soc is not none and soc < target and power >= 50 %}
-              {{ (now() + timedelta(minutes = ((target - soc) / 100 * cap_wh / power * 60) | float(0))).isoformat() }}
-            {% else %}
-              {{ none }}
-            {% endif %}
+            {% from 'soc_macros.jinja' import time_until_eta %}
+            {{ time_until_eta(1, 100) }}
 
       - name: "Venus 2 Time until 80"
         unique_id: venus_2_time_until_80
@@ -784,28 +601,12 @@ template:
         state_class: measurement
         icon: mdi:battery-clock
         state: >-
-          {% set target = 80 %}
-          {% set soc = states('sensor.venus_2_custom_soc') | float(none) %}
-          {% set power = states('sensor.marstek_venus_2_batterieleistung') | float(0) %}
-          {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
-          {% if soc is none or power < 50 %}
-            {{ none }}
-          {% elif soc >= target %}
-            0
-          {% else %}
-            {{ ((target - soc) / 100 * cap_wh / power * 60) | round(0) | int(0) }}
-          {% endif %}
+          {% from 'soc_macros.jinja' import time_until %}
+          {{ time_until(2, 80) }}
         attributes:
           eta: >-
-            {% set target = 80 %}
-            {% set soc = states('sensor.venus_2_custom_soc') | float(none) %}
-            {% set power = states('sensor.marstek_venus_2_batterieleistung') | float(0) %}
-            {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
-            {% if soc is not none and soc < target and power >= 50 %}
-              {{ (now() + timedelta(minutes = ((target - soc) / 100 * cap_wh / power * 60) | float(0))).isoformat() }}
-            {% else %}
-              {{ none }}
-            {% endif %}
+            {% from 'soc_macros.jinja' import time_until_eta %}
+            {{ time_until_eta(2, 80) }}
 
       - name: "Venus 2 Time until 100"
         unique_id: venus_2_time_until_100
@@ -814,28 +615,12 @@ template:
         state_class: measurement
         icon: mdi:battery-clock
         state: >-
-          {% set target = 100 %}
-          {% set soc = states('sensor.venus_2_custom_soc') | float(none) %}
-          {% set power = states('sensor.marstek_venus_2_batterieleistung') | float(0) %}
-          {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
-          {% if soc is none or power < 50 %}
-            {{ none }}
-          {% elif soc >= target %}
-            0
-          {% else %}
-            {{ ((target - soc) / 100 * cap_wh / power * 60) | round(0) | int(0) }}
-          {% endif %}
+          {% from 'soc_macros.jinja' import time_until %}
+          {{ time_until(2, 100) }}
         attributes:
           eta: >-
-            {% set target = 100 %}
-            {% set soc = states('sensor.venus_2_custom_soc') | float(none) %}
-            {% set power = states('sensor.marstek_venus_2_batterieleistung') | float(0) %}
-            {% set cap_wh = states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120) * 1000 %}
-            {% if soc is not none and soc < target and power >= 50 %}
-              {{ (now() + timedelta(minutes = ((target - soc) / 100 * cap_wh / power * 60) | float(0))).isoformat() }}
-            {% else %}
-              {{ none }}
-            {% endif %}
+            {% from 'soc_macros.jinja' import time_until_eta %}
+            {{ time_until_eta(2, 100) }}
 
       - name: "Venus 3 Time until 80"
         unique_id: venus_3_time_until_80
@@ -844,28 +629,12 @@ template:
         state_class: measurement
         icon: mdi:battery-clock
         state: >-
-          {% set target = 80 %}
-          {% set soc = states('sensor.venus_3_custom_soc') | float(none) %}
-          {% set power = states('sensor.marstek_venus_3_batterieleistung') | float(0) %}
-          {% set cap_wh = states('sensor.marstek_venus_3_batterie_gesamtenergie') | float(5.120) * 1000 %}
-          {% if soc is none or power < 50 %}
-            {{ none }}
-          {% elif soc >= target %}
-            0
-          {% else %}
-            {{ ((target - soc) / 100 * cap_wh / power * 60) | round(0) | int(0) }}
-          {% endif %}
+          {% from 'soc_macros.jinja' import time_until %}
+          {{ time_until(3, 80) }}
         attributes:
           eta: >-
-            {% set target = 80 %}
-            {% set soc = states('sensor.venus_3_custom_soc') | float(none) %}
-            {% set power = states('sensor.marstek_venus_3_batterieleistung') | float(0) %}
-            {% set cap_wh = states('sensor.marstek_venus_3_batterie_gesamtenergie') | float(5.120) * 1000 %}
-            {% if soc is not none and soc < target and power >= 50 %}
-              {{ (now() + timedelta(minutes = ((target - soc) / 100 * cap_wh / power * 60) | float(0))).isoformat() }}
-            {% else %}
-              {{ none }}
-            {% endif %}
+            {% from 'soc_macros.jinja' import time_until_eta %}
+            {{ time_until_eta(3, 80) }}
 
       - name: "Venus 3 Time until 100"
         unique_id: venus_3_time_until_100
@@ -874,28 +643,12 @@ template:
         state_class: measurement
         icon: mdi:battery-clock
         state: >-
-          {% set target = 100 %}
-          {% set soc = states('sensor.venus_3_custom_soc') | float(none) %}
-          {% set power = states('sensor.marstek_venus_3_batterieleistung') | float(0) %}
-          {% set cap_wh = states('sensor.marstek_venus_3_batterie_gesamtenergie') | float(5.120) * 1000 %}
-          {% if soc is none or power < 50 %}
-            {{ none }}
-          {% elif soc >= target %}
-            0
-          {% else %}
-            {{ ((target - soc) / 100 * cap_wh / power * 60) | round(0) | int(0) }}
-          {% endif %}
+          {% from 'soc_macros.jinja' import time_until %}
+          {{ time_until(3, 100) }}
         attributes:
           eta: >-
-            {% set target = 100 %}
-            {% set soc = states('sensor.venus_3_custom_soc') | float(none) %}
-            {% set power = states('sensor.marstek_venus_3_batterieleistung') | float(0) %}
-            {% set cap_wh = states('sensor.marstek_venus_3_batterie_gesamtenergie') | float(5.120) * 1000 %}
-            {% if soc is not none and soc < target and power >= 50 %}
-              {{ (now() + timedelta(minutes = ((target - soc) / 100 * cap_wh / power * 60) | float(0))).isoformat() }}
-            {% else %}
-              {{ none }}
-            {% endif %}
+            {% from 'soc_macros.jinja' import time_until_eta %}
+            {{ time_until_eta(3, 100) }}
 
   - sensor:
       - name: "Battery SOC Total"
@@ -1528,7 +1281,7 @@ automation:
     description: >
       Turns on SOC override if any battery has not been fully charged within
       the configured number of days; turns it off once all are fresh OR once
-      all four batteries report a full charge (hardware SOC and custom SOC).
+      all three batteries report a full charge (hardware SOC and custom SOC).
     id: soc_override_weekly_control
     triggers:
       - trigger: time_pattern

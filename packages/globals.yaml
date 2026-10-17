@@ -44,14 +44,15 @@ template:
           honda_e_phases: 1
 
           # bei Änderung oben auch hier anpassen
-          # calculated Attribut (3 * Venus * 0.8)
+          # calculated Attribut (3 * Venus * 0.8 + Zusatzspeicher * 0.6)
           #
           # venus_count / venus_capacity_wh oben sind die Doku, die Zahlen hier
           # sind die Rechnung - "this.attributes" ist beim ersten Durchlauf
           # nach dem Start noch leer und wurde deshalb seinerzeit auskommentiert.
           # Bei einem vierten Speicher also BEIDE Stellen anfassen.
           #
-          # 5120 * 3 * 0.8 = 12288 Wh + 2200 * 0.6 = 1320 Wh  ->  13.608 kWh
+          #
+          # 5120 * 3 * 0.8 = 12288 Wh = 12.288 kWh
           calculated_combined_capacity_kwh: >-
             {#{% set venus = this.attributes.get('venus_capacity_wh', 0) | float(0) %}#}
             {% set venus = 5120 %}

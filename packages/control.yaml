@@ -259,8 +259,14 @@ template:
         unique_id: battery_maintenance_required
         # Auf eine Schleife umgestellt, damit ein vierter Speicher nur noch
         # einen Listeneintrag braucht statt drei neuer Codezeilen.
+        #
+        # FIX 2026-10: Fallback 5 -> 8 Tage. global_parameter sagt
+        # battery_care_days: 8 und die Start-Automation in
+        # marstek_batteries.yaml faellt ebenfalls auf 8 zurueck - bei einem
+        # Ausfall von global_parameter zeigte dieser Sensor also frueher
+        # "faellig" an als die Automation startete.
         state: >-
-          {% set days = state_attr('sensor.global_parameter', 'battery_care_days') | float(5) %}
+          {% set days = state_attr('sensor.global_parameter', 'battery_care_days') | float(8) %}
           {% set threshold = days * 86400 %} {# in seconds #}
           {% set now_ts = as_timestamp(now()) %}
           {% set ents = ['input_datetime.venus_1_last_full',
