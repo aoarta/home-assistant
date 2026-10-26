@@ -59,6 +59,24 @@ template:
             {{ (venus * 3 * 0.8) / 1000 }}
 
           # ------------------------------------------------------------------
+          # Budget-Laden (charge_mode "min_6a_floor_battery")
+          # ------------------------------------------------------------------
+          # Bleibt immer im Speicher, zusaetzlich zu stop_soc.
+          ev_budget_reserve_kwh: 0.5
+          # Ladung startet erst ab diesem Budget und laeuft dann bis 0
+          # (Hysterese, verhindert Takten um die Nulllinie).
+          ev_budget_start_kwh: 1.0
+          # Sicherheitsaufschlag auf den geschaetzten Restverbrauch bis
+          # Sonnenaufgang.
+          ev_budget_consumption_buffer: 1.10
+          # Entladeleistung je Venus, die fuer die Wallbox eingeplant wird
+          # (2500 W abzueglich Reserve fuer Regelschwankungen).
+          # GESCHAETZT - nachpruefen: nachts im Budget-Modus laden und
+          # sensor.leistung_vom_netz beobachten. Bleibt er nicht bei ~0,
+          # diesen Wert senken.
+          ev_battery_discharge_per_venus_w: 2250
+
+          # ------------------------------------------------------------------
           # Zielzeit-Laden (charge_mode "target_time")
           # ------------------------------------------------------------------
           # Sicherheitsabstand zwischen geplantem Ladeende und Zielzeit.

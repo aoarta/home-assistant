@@ -1,6 +1,20 @@
 # ============================================================
 # PV surplus wallbox charging (WARP3) - Trigger Sensors
 #
+# MODUS 4 "min_6a_floor_battery" (Budget-Laden):
+#   Das Auto bekommt so viel, wie die Hausspeicher hergeben, ohne dass bis
+#   zum naechsten Sonnenaufgang voraussichtlich Netzstrom gekauft werden muss.
+#     Budget = nutzbare Speicherenergie * eta_Entladen
+#            + PV-Rest heute (nur bei Sonne ueber dem Horizont)
+#            - Restverbrauch Haus bis Sonnenaufgang * Puffer
+#            - Reserve
+#   Budget > 0  -> so schnell wie ohne Netzbezug moeglich
+#                  (PV-Ueberschuss + Entladeleistung der Venus)
+#   Budget weg  -> nur noch, was die Speicher nicht mehr aufnehmen koennen
+#   Hysterese ohne Helper: Start ab ev_budget_start_kwh, Weiterladen bis 0.
+#   Das Budget sinkt beim Laden von selbst um die bezogene Energie -
+#   kein Session-Zaehler, kein Latch.
+#
 # MODUS 6 "target_time": Fahrzeug soll bis input_datetime.ev_target_time
 # auf input_number.ev_charge_to_percent geladen sein.
 #   Phase "pv"    - nur PV-Ueberschuss, gedeckelt auf ev_pv_precharge_max_soc
@@ -14,6 +28,10 @@
 template:
   # ----------------------------------------------------------
   # BATTERY FLOOR SOC FOR EV -- computed reserve.
+  #
+  # Wird seit dem Budget-Laden (Modus 4) von keiner Regelung mehr gelesen,
+  # nur noch Dashboard/Diagnose. Kann geloescht werden, wenn er dort nicht
+  # gebraucht wird.
   # ----------------------------------------------------------
   - triggers:
       - trigger: state
@@ -57,8 +75,9 @@ template:
 
   # ----------------------------------------------------------
   # TARGET CHARGING CURRENT -- die Logik-Zentrale.
-  # Rechnet den PV-Ueberschuss und die Zielzeit-Planung selbst, damit
-  # alle Teilwerte garantiert aus derselben Momentaufnahme stammen.
+  # Rechnet den PV-Ueberschuss, das Energiebudget und die Zielzeit-Planung
+  # selbst, damit alle Teilwerte garantiert aus derselben Momentaufnahme
+  # stammen.
   # ----------------------------------------------------------
   - triggers:
       - trigger: time_pattern
@@ -77,7 +96,6 @@ template:
           - binary_sensor.warp3_2ita_cable
           # Entscheidungsgroessen
           - sensor.battery_soc_total
-          - sensor.battery_floor_soc_for_ev
           - sensor.ev_session_energy
           - sensor.ev_max_charge_energy
           - sensor.zero_sr_soc
@@ -85,6 +103,10 @@ template:
           - input_select.ev_charge_mode
           - input_select.ev_vehicle_mode
           - input_number.ev_manual_charging_current
+          # Budget-Laden (Modus 4)
+          - sensor.marstek_usable_energy
+          - sensor.target_soc
+          - binary_sensor.entladen_sperren
           # Zielzeit-Modus
           - input_number.ev_charge_to_percent
           - input_datetime.ev_target_time
@@ -118,7 +140,8 @@ template:
            and has_value('sensor.marstek_venus_3_ac_power_glatt') }}
 
       # ----- PV-Ueberschuss ------------------------------------------
-      # EV FIRST: Ladeleistung der Hausbatterie (negativ) wird freigegeben
+      # EV FIRST: Ladeleistung der Hausbatterie (negativ) wird freigegeben.
+      # Rechnerisch = PV minus Hausverbrauch, unabhaengig vom Wallbox-Strom.
       surplus_ev_first_w: >-
         {{ (charger_power - power_from_net - venus1 - venus2 - venus3) if marstek_ok else 0 }}
       # BATTERY FIRST: nur Entladeleistung (positiv) abziehen,
@@ -152,6 +175,76 @@ template:
         {% if vehicle == 'zero' %}{{ state_attr('sensor.global_parameter','zero_sr_max_charge_power') | float(0) }}
         {% elif vehicle == 'honda_e' %}{{ state_attr('sensor.global_parameter','honda_e_max_charge_power') | float(0) }}
         {% else %}0{% endif %}
+
+      # ----- Modus 4: Energiebudget bis Sonnenaufgang ----------------
+      # Zwischen Sonnenunter- und -aufgang zaehlt PV bewusst NICHT:
+      # ab 00:02 liefert pv_forecast_weighted den kompletten Ertrag des
+      # neuen Tages, der hilft der Nacht aber nicht.
+      # Beide Verbrauchsschaetzer reichen bis zum naechsten Sonnenaufgang
+      # und enthalten die Wallbox nicht (house_consumption_power_brutto).
+      ev_budget_kwh: >-
+        {% set gp = 'sensor.global_parameter' %}
+        {% set cs = [states('sensor.estimated_remaining_consumption'),
+                     states('sensor.expected_remaining_consumption_today')]
+                    | select('is_number') | map('float') | list %}
+        {% if cs | count == 0 or not has_value('sensor.marstek_usable_energy') %}
+          0
+        {% else %}
+          {% set eta_d = states('input_number.battery_eta_discharge') | float(95) / 100 %}
+          {% set usable = states('sensor.marstek_usable_energy') | float(0) * eta_d %}
+          {% set pv_rest = 0 if is_state('sun.sun', 'below_horizon')
+                           else states('sensor.pv_forecast_weighted') | float(0) %}
+          {% set buf = state_attr(gp, 'ev_budget_consumption_buffer') | float(1.1) %}
+          {% set reserve = state_attr(gp, 'ev_budget_reserve_kwh') | float(0.5) %}
+          {% set cons = (cs | sum / cs | count) * buf %}
+          {{ (usable + pv_rest - cons - reserve) | round(2) }}
+        {% endif %}
+
+      # Duerfen die Speicher ueberhaupt fuers Auto entladen?
+      #   target_soc >= 101: Override / Manuell / Wartung / Unterdeckung 13x
+      #   entladen_sperren:  Preissteuerung haelt die Speicher zurueck
+      ev_battery_use_ok: >-
+        {{ marstek_ok
+           and states('sensor.target_soc') | float(0) < 101
+           and not is_state('binary_sensor.entladen_sperren', 'on') }}
+
+      # Entladeleistung, die JETZT tatsaechlich zur Verfuegung steht -
+      # nur Venus mit Steuermodus, SOC ueber Minimum und Zellspannung ok
+      # (gleiche Kriterien wie discharge_map in marstek_batteries.yaml).
+      ev_bat_discharge_w: >-
+        {% if not ev_battery_use_ok %}
+          0
+        {% else %}
+          {% set per = state_attr('sensor.global_parameter', 'ev_battery_discharge_per_venus_w') | float(2250) %}
+          {% set min_soc = state_attr('sensor.solar_soc_logic', 'min') | float(15) %}
+          {% set min_v = state_attr('sensor.global_parameter', 'lfp_min_voltage') | float(2.90) %}
+          {% set ns = namespace(n=0) %}
+          {% for i in ['1', '2', '3'] %}
+            {% if is_state('switch.marstek_venus_' ~ i ~ '_modbus_rs485_steuermodus', 'on')
+                  and states('sensor.venus_' ~ i ~ '_custom_soc') | float(0) > min_soc + 2
+                  and states('sensor.marstek_venus_' ~ i ~ '_modbus_minimale_zellenspannung') | float(0) >= min_v %}
+              {% set ns.n = ns.n + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.n * per }}
+        {% endif %}
+
+      # Strom aus Budget: so schnell wie ohne Netzbezug moeglich.
+      # surplus_ev_first_w ist PV minus Hausverbrauch und haengt NICHT
+      # vom Wallbox-Strom ab -> keine Mitkopplung.
+      # Hysterese: Start erst ab ev_budget_start_kwh, laufende Ladung bis 0.
+      amps_budget: >-
+        {% set charging = is_state('binary_sensor.warp3_2ita_charging', 'on') %}
+        {% set start = state_attr('sensor.global_parameter', 'ev_budget_start_kwh') | float(1.0) %}
+        {% set thr = 0 if charging else start %}
+        {% if ev_bat_discharge_w > 0 and ev_budget_kwh > thr %}
+          {% set p = surplus_ev_first_w + ev_bat_discharge_w %}
+          {% if ev_pmax_vehicle > 0 %}{% set p = [p, ev_pmax_vehicle] | min %}{% endif %}
+          {% set a = (p / volt) | int %}
+          {{ [a, max_amps | int] | min if a >= 6 else 0 }}
+        {% else %}
+          0
+        {% endif %}
 
       # ----- Zielzeit: Leistungen ------------------------------------
       # Sollwerte fuer die Wallbox (ungedrosselt), beide einphasig: W = A * V
@@ -206,24 +299,6 @@ template:
         {% else %}pv{% endif %}
 
     sensor:
-      #      - name: "Debug PV Surplus Calculation"
-      #        state: >-
-      #          marstek_ok: {{ marstek_ok }},
-      #          charger_power: {{ states('sensor.warp3_2ita_powernow') }} W,
-      #          power_from_net: {{ states('sensor.leistung_vom_netz') }} W,
-      #          venus1: {{ states('sensor.marstek_venus_1_ac_power_glatt') }} W,
-      #          venus2: {{ states('sensor.marstek_venus_2_ac_power_glatt') }} W,
-      #          venus3: {{ states('sensor.marstek_venus_3_ac_power_glatt') }} W,
-      #          surplus_ev_first_w: {{ (states('sensor.warp3_2ita_powernow') | float(0) - states('sensor.leistung_vom_netz') | float(0) - states('sensor.marstek_venus_1_ac_power_glatt') | float(0) - states('sensor.marstek_venus_2_ac_power_glatt') | float(0) - states('sensor.marstek_venus_3_ac_power_glatt') | float(0)) | round(2) }} W,
-      #          amps_ev_first: {{ amps_ev_first }}
-      #        attributes:
-      #          vehicle: "{{ states('input_select.ev_vehicle_mode') }}"
-      #          charge_mode: "{{ states('input_select.ev_charge_mode') }}"
-      #          cable: "{{ states('binary_sensor.warp3_2ita_cable') }}"
-      #          ev_soc: "{{ states('sensor.zero_sr_soc') if states('input_select.ev_vehicle_mode') == 'zero' else states('sensor.honda_e_soc') }}"
-      #          ev_soc_target: "{{ states('input_number.ev_charge_to_percent') }}"
-      #          ev_phase: "{{ ev_phase }}"
-
       - name: "EV Target Charging Current"
         unique_id: ev_target_charging_current
         unit_of_measurement: "A"
@@ -242,7 +317,6 @@ template:
               {% set surplus_ev_first_amps = amps_ev_first | int(0) %}
               {% set surplus_bat_first_amps = amps_bat_first | int(0) %}
               {% set soc = states('sensor.battery_soc_total') | float(0) %}
-              {% set floor = states('sensor.battery_floor_soc_for_ev') | float(100) %}
 
               {# --- MODUS 1: PV-Ueberschuss Fahrzeug priorisiert --- #}
               {% if mode == 'pv_ev_first' %}
@@ -276,14 +350,12 @@ template:
                   {{ half_amps if half_amps >= 6 else 0 }}
                 {% endif %}
 
-              {# --- MODUS 4: Mind. 1.3 kW (6 A) / Max PV-Ueberschuss, Batterieschutz aktiv --- #}
+              {# --- MODUS 4: Budget-Laden - Speicher decken EV + Restverbrauch bis Sonnenaufgang --- #}
               {% elif mode == 'min_6a_floor_battery' %}
-                {% if surplus_ev_first_amps >= 6 %}
-                  {{ surplus_ev_first_amps }}
-                {% else %}
-                  {# Zu wenig Sonne: 6 A, sofern SOC ueber dem berechneten Floor #}
-                  {{ 6 if soc > floor else 0 }}
-                {% endif %}
+                {# Budget reicht: so schnell wie ohne Netzbezug moeglich.
+                   Budget weg: nur, was die Speicher nicht mehr aufnehmen -
+                   sonst ginge PV ins Auto, die nachts im Speicher fehlt. #}
+                {{ [amps_budget | int(0), surplus_bat_first_amps] | max }}
 
               {# --- MODUS 5: Mind. 1.3 kW (6 A) / Max PV-Ueberschuss, ohne Batterieschutz --- #}
               {% elif mode == 'min_6a_floor_grid' %}
@@ -323,6 +395,11 @@ template:
           # bewusst auf 100-W-Schritte gerundet: ein Attribut, das sich bei
           # jedem Render aendert, erzwingt jedes Mal einen State-Write
           surplus_w: "{{ ((surplus_ev_first_w / 100) | round(0) * 100) | int }}"
+          # Budget-Laden (Modus 4) - ebenfalls grob gerundet
+          ev_budget_kwh: "{{ ev_budget_kwh | float(0) | round(1) }}"
+          ev_battery_use_ok: "{{ ev_battery_use_ok }}"
+          ev_nogrid_power_w: "{{ (((surplus_ev_first_w + ev_bat_discharge_w) / 100) | round(0) * 100) | int }}"
+          amps_budget: "{{ amps_budget }}"
 
       # ----------------------------------------------------------
       # Zielzeit-Diagnose. Teilt sich die Variablen mit dem Sensor
