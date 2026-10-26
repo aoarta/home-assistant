@@ -14,6 +14,16 @@
 # (~250 Zeilen Dreifachcode entfernt). Ein vierter Speicher: Aufrufblock
 # kopieren, Geraetenummer und reset_default anpassen - plus wie bisher die
 # Listen weiter unten erweitern.
+#
+# GEAENDERT 2026-10-22: override_soc faellt erst zurueck, wenn JEDER Speicher
+# seit dem Einschalten mindestens einmal voll war. Der Einschaltzeitpunkt
+# liegt in input_datetime.override_soc_since (ueberlebt HA-Neustarts).
+
+input_datetime:
+  override_soc_since:
+    name: "Override SOC aktiv seit"
+    has_date: true
+    has_time: true
 
 sensor:
   - platform: filter
@@ -1277,71 +1287,112 @@ automation:
           name: "Battery Maintenance"
           message: "Venus-Wartungsladung bei Sonnenaufgang hart beendet."
 
+  # ==========================================================
+  # OVERRIDE SOC
+  #
+  # EIN:  sobald ein Speicher laenger als override_soc_days nicht voll war.
+  # AUS:  erst, wenn JEDER Speicher seit dem Einschalten mindestens einmal
+  #       voll war (venus_X_last_full >= override_soc_since).
+  #
+  # Der alte default-Zweig schaltete ab, sobald IRGENDEIN Speicher in den
+  # letzten 30 min voll war - die anderen wurden dann nie fertig geladen.
+  # Der Zweig "alle gleichzeitig 100 %" griff praktisch nie, weil ein voller
+  # Speicher wieder auf 99 % absinkt, waehrend die anderen noch laden.
+  #
+  # mode: queued, damit der override_on-Trigger, den das eigene turn_on
+  # ausloest, nicht als "Already running" verworfen wird.
+  #
+  # Achtung: erreicht ein Speicher nie 100 % (Zelle, haengender SOC),
+  # bleibt override_soc an - erkennbar an einem tagealten
+  # input_datetime.override_soc_since.
+  # ==========================================================
   - alias: "Battery Maintenance: Enable SOC Override When Overdue"
     description: >
-      Turns on SOC override if any battery has not been fully charged within
-      the configured number of days; turns it off once all are fresh OR once
-      all three batteries report a full charge (hardware SOC and custom SOC).
+      Schaltet override_soc ein, sobald ein Speicher laenger als
+      override_soc_days nicht voll war. Aus geht er erst, wenn JEDER
+      Speicher seit dem Einschalten mindestens einmal voll war
+      (venus_X_last_full >= override_soc_since).
     id: soc_override_weekly_control
+    mode: queued
+    max: 5
     triggers:
       - trigger: time_pattern
         minutes: "/10"
       - trigger: homeassistant
         event: start
+      - trigger: state
+        entity_id: input_boolean.override_soc
+        to: "on"
+        id: override_on
+      - trigger: state
+        entity_id:
+          - input_datetime.venus_1_last_full
+          - input_datetime.venus_2_last_full
+          - input_datetime.venus_3_last_full
     actions:
       - choose:
-          # --- Turn ON: any battery overdue ---
+          # --- Startzeitpunkt merken: bei manuellem Einschalten oder
+          #     falls der Helper noch nie gesetzt wurde ---
           - conditions:
+              - condition: state
+                entity_id: input_boolean.override_soc
+                state: "on"
+              - condition: template
+                value_template: >-
+                  {{ trigger.id == 'override_on'
+                     or as_timestamp(states('input_datetime.override_soc_since'), 0) < 1000000000 }}
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.override_soc_since
+                data:
+                  timestamp: "{{ now().timestamp() }}"
+
+          # --- AUS: jeder Speicher war seit dem Einschalten voll ---
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.override_soc
+                state: "on"
+              - condition: template
+                value_template: >-
+                  {% set since = as_timestamp(states('input_datetime.override_soc_since'), 0) %}
+                  {% set ns = namespace(all = since > 1000000000) %}
+                  {% for n in ['1', '2', '3'] %}
+                    {% set t = as_timestamp(states('input_datetime.venus_' ~ n ~ '_last_full'), 0) %}
+                    {% if t < since %}{% set ns.all = false %}{% endif %}
+                  {% endfor %}
+                  {{ ns.all }}
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.override_soc
+              - action: logbook.log
+                data:
+                  name: "Battery Maintenance"
+                  message: "override_soc aus - alle drei Venus waren seit dem Einschalten voll."
+
+          # --- EIN: irgendein Speicher ueberfaellig ---
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.override_soc
+                state: "off"
               - condition: template
                 value_template: >-
                   {% set days = state_attr('sensor.global_parameter', 'override_soc_days') | float(5) %}
                   {% set threshold = days * 86400 %}
                   {% set now_ts = as_timestamp(now()) %}
-                  {% set ents = ['input_datetime.venus_1_last_full',
-                                 'input_datetime.venus_2_last_full',
-                                 'input_datetime.venus_3_last_full'] %}
                   {% set ns = namespace(ages=[]) %}
-                  {% for e in ents %}
+                  {% for n in ['1', '2', '3'] %}
+                    {% set e = 'input_datetime.venus_' ~ n ~ '_last_full' %}
                     {% set ns.ages = ns.ages + [(now_ts - as_timestamp(states(e), 0)) if has_value(e) else 0] %}
                   {% endfor %}
                   {{ ns.ages | max > threshold }}
             sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.override_soc_since
+                data:
+                  timestamp: "{{ now().timestamp() }}"
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.override_soc
-
-          # --- Turn OFF: all batteries fully charged (HW SOC + custom SOC) ---
-          - conditions:
-              - condition: template
-                value_template: >-
-                  {{ states('sensor.marstek_venus_1_soc') | float(0) >= 100
-                    and states('sensor.venus_1_custom_soc') | float(0) >= 100
-                    and states('sensor.marstek_venus_2_soc') | float(0) >= 100
-                    and states('sensor.venus_2_custom_soc') | float(0) >= 100
-                    and states('sensor.marstek_venus_3_soc') | float(0) >= 100
-                    and states('sensor.venus_3_custom_soc') | float(0) >= 100 }}
-            sequence:
-              - action: input_boolean.turn_off
-                target:
-                  entity_id: input_boolean.override_soc
-        default:
-          - condition: template
-            value_template: >-
-              {% set now_ts = as_timestamp(now()) %}
-              {% set ents = ['input_datetime.venus_1_last_full',
-                             'input_datetime.venus_2_last_full',
-                             'input_datetime.venus_3_last_full'] %}
-              {% set ns = namespace(ages=[]) %}
-              {% for e in ents %}
-                {% set ns.ages = ns.ages + [(now_ts - as_timestamp(states(e), now_ts)) if has_value(e) else now_ts] %}
-              {% endfor %}
-              {# 900 statt 30 Sekunden: die Stempel-Automation und diese hier
-                 laufen BEIDE auf time_pattern /10, feuern also im selben Tick.
-                 Ob der Zeitstempel vorher oder nachher gesetzt wird, war
-                 Zufall - mit einem 30-s-Fenster ging override_soc deshalb
-                 haeufig gar nicht mehr aus und target_soc stand dauerhaft
-                 auf 101 (= Venus permanent auf 100 %, fuer LFP unnoetig). #}
-              {{ ns.ages | min < 900 }}
-          - action: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.override_soc
