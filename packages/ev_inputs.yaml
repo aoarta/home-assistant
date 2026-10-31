@@ -18,8 +18,7 @@ input_select:
       - "pv_shared_50_50" # 3. PV-Überschuss Fahrzeug-Batterie halbe/halbe
       - "pv_ev_first" # 1. PV-Überschuss Fahrzeug priorisiert
       - "pv_battery_first" # 2. PV-Überschuss Batterien priorisiert
-      - "min_6a_floor_battery" # 4. Min. 1.3kW (6A), Max aus PV, Batterie-Schutz aktiv
-      - "min_6a_floor_grid" # 5. Min. 1.3kW (6A), Max aus PV, ohne Batterie-Schutz
+      - "battery_budget" # 4. Speicher-Budget: so viel, wie Speicher + PV bis Sonnenaufgang ohne Netzbezug hergeben      - "min_6a_floor_grid" # 5. Min. 1.3kW (6A), Max aus PV, ohne Batterie-Schutz
       - "target_time" # 6. Fertig bis input_datetime.ev_target_time
     #initial: "pv_ev_first"
     icon: mdi:ev-station

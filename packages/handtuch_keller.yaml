@@ -1,0 +1,65 @@
+# packages/handtuch_keller.yaml
+# Handtuchheizkoerper Keller (Tasmota Nous A8T) mit PV-Ueberschuss betreiben.
+#
+# Vorzeichen (wie im restlichen Setup):
+#   sensor.leistung_vom_netz        > 0 = Bezug,  < 0 = Einspeisung
+#   sensor.marstek_ac_power_total   > 0 = Entladen, < 0 = Laden
+
+automation:
+  - id: handtuch_keller_ueberschuss_ein
+    alias: "Handtuch Keller – EIN bei PV-Überschuss"
+    mode: single
+    triggers:
+      # Einspeisung > 900 W
+      - trigger: numeric_state
+        entity_id: sensor.leistung_vom_netz
+        below: -900
+        for: "00:01:00"
+      # Batterieladung > 1900 W
+      - trigger: numeric_state
+        entity_id: sensor.marstek_ac_power_total
+        below: -1900
+        for: "00:01:00"
+      # Nachzuegler: falls die Bedingung schon erfuellt war (HA-Neustart,
+      # Reload, Heizkoerper manuell ausgeschaltet)
+      - trigger: time_pattern
+        minutes: "/5"
+    conditions:
+      - condition: state
+        entity_id: switch.handtuch_keller_tasmota
+        state: "off"
+      - condition: template
+        value_template: >-
+          {{ states('sensor.leistung_vom_netz') | float(0) < -900
+             or states('sensor.marstek_ac_power_total') | float(0) < -1900 }}
+    actions:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.handtuch_keller_tasmota
+
+  # Optional: AUS, sobald der Heizkoerper aus dem Netz bezieht.
+  # Ohne diese Automation bleibt er an, bis du ihn manuell ausschaltest.
+  - id: handtuch_keller_ueberschuss_aus
+    alias: "Handtuch Keller – AUS bei Netz- oder Batteriebezug "
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.leistung_vom_netz
+        above: 100
+        for: "00:01:00"
+      - trigger: numeric_state
+        entity_id: sensor.marstek_ac_power_total
+        above: 100
+        for: "00:01:00"
+    conditions:
+      - condition: state
+        entity_id: switch.handtuch_keller_tasmota
+        state: "on"
+      - condition: template
+        value_template: >-
+          {{ states('sensor.leistung_vom_netz') | float(0) > 100
+             or states('sensor.marstek_ac_power_total') | float(0) > 100 }}
+    actions:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.handtuch_keller_tasmota
