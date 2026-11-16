@@ -73,6 +73,134 @@ automation:
           message: "Vehicle mode = off -- charging blocked and stopped."
 
   # ============================================================
+  # KILLSWITCH HAUPTSICHERUNG
+  # Liegt der hoechste der drei Phasenstroeme laenger als 10 s ueber
+  # main_fuse_limit_a (global_parameter), wird sofort gestoppt, 0 A gesetzt
+  # und input_boolean.ev_killswitch eingeschaltet. Solange der an ist,
+  # liefert sensor.ev_target_charging_current 0 A, und weder die Start- noch
+  # die Manual-Automation starten - das gilt fuer ALLE Modi.
+  # Freigabe: alle drei Phasen 10 min unter main_fuse_release_a; danach
+  # starten die normalen Automationen von selbst wieder.
+  # Fehlende Stromwerte loesen NICHT aus (sonst sperrt jeder Zaehler-
+  # Aussetzer die Wallbox); fuer die Freigabe muessen alle drei da sein.
+  # ============================================================
+  - alias: "Wallbox: Killswitch Hauptsicherung"
+    id: ev_killswitch_hauptsicherung
+    # queued: ein Ueberstrom-Trigger darf nie als "already running" verloren
+    # gehen, nur weil gerade der charging-Trigger laeuft.
+    mode: queued
+    max: 3
+    triggers:
+      - trigger: template
+        value_template: >-
+          {% set i = [states('sensor.smart_meter_ts_65a_3_stromstarke_l1'),
+                      states('sensor.smart_meter_ts_65a_3_stromstarke_l2'),
+                      states('sensor.smart_meter_ts_65a_3_stromstarke_l3')]
+                     | select('is_number') | map('float') | map('abs') | list %}
+          {{ i | count > 0
+             and i | max > state_attr('sensor.global_parameter', 'main_fuse_limit_a') | float(32) }}
+        for: "00:00:10"
+        id: overcurrent
+      # Waehrend der Sperre: Ladestart aus anderer Quelle (z. B. Firmware-
+      # Autostart beim Anstecken) sofort wieder beenden.
+      - trigger: state
+        entity_id: binary_sensor.warp3_2ita_charging
+        to: "on"
+        id: charging
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.id == 'overcurrent'
+             or is_state('input_boolean.ev_killswitch', 'on') }}
+    actions:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.ev_killswitch
+      - action: number.set_value
+        target:
+          entity_id: number.warp3_2ita_globalcurrent
+        data:
+          value: 0
+      - action: button.press
+        target:
+          entity_id: button.warp3_2ita_stopcharge
+      - if:
+          - condition: template
+            value_template: "{{ trigger.id == 'overcurrent' }}"
+        then:
+          # Manuellen Ladestrom auf 29 A deckeln, falls er darueber lag.
+          - if:
+              - condition: numeric_state
+                entity_id: input_number.ev_manual_charging_current
+                above: 29
+            then:
+              - action: input_number.set_value
+                target:
+                  entity_id: input_number.ev_manual_charging_current
+                data:
+                  value: 29
+
+          - action: logbook.log
+            data:
+              name: "Wallbox"
+              message: >-
+                Killswitch: Phasenstrom ueber
+                {{ state_attr('sensor.global_parameter', 'main_fuse_limit_a') }} A
+                -- Ladung gestoppt und gesperrt.
+          - action: persistent_notification.create
+            data:
+              notification_id: ev_killswitch
+              title: "Wallbox: Killswitch ausgeloest"
+              message: >-
+                Phasenstrom ueber
+                {{ state_attr('sensor.global_parameter', 'main_fuse_limit_a') }} A
+                ({{ now().strftime('%d.%m. %H:%M') }}). Die Ladung bleibt gesperrt,
+                bis alle Phasen 10 min unter
+                {{ state_attr('sensor.global_parameter', 'main_fuse_release_a') }} A liegen.
+
+  - alias: "Wallbox: Killswitch Freigabe"
+    id: ev_killswitch_freigabe
+    mode: single
+    triggers:
+      - trigger: template
+        value_template: >-
+          {% set i = [states('sensor.smart_meter_ts_65a_3_stromstarke_l1'),
+                      states('sensor.smart_meter_ts_65a_3_stromstarke_l2'),
+                      states('sensor.smart_meter_ts_65a_3_stromstarke_l3')]
+                     | select('is_number') | map('float') | map('abs') | list %}
+          {{ i | count == 3
+             and i | max < state_attr('sensor.global_parameter', 'main_fuse_release_a') | float(30) }}
+        for: "00:10:00"
+      # Nachzuegler: nach Neustart/Reload fehlt dem Template-Trigger die Flanke
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/10"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.ev_killswitch
+        state: "on"
+        for: "00:10:00"
+      - condition: template
+        value_template: >-
+          {% set i = [states('sensor.smart_meter_ts_65a_3_stromstarke_l1'),
+                      states('sensor.smart_meter_ts_65a_3_stromstarke_l2'),
+                      states('sensor.smart_meter_ts_65a_3_stromstarke_l3')]
+                     | select('is_number') | map('float') | map('abs') | list %}
+          {{ i | count == 3
+             and i | max < state_attr('sensor.global_parameter', 'main_fuse_release_a') | float(30) }}
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.ev_killswitch
+      - action: logbook.log
+        data:
+          name: "Wallbox"
+          message: >-
+            Killswitch freigegeben -- alle Phasen seit 10 min unter
+            {{ state_attr('sensor.global_parameter', 'main_fuse_release_a') }} A.
+
+  # ============================================================
   # MANUAL: fixed-current charging (overrides every strategy).
   # Active whenever ev_manual_charging_current >= 6 A and vehicle != off.
   # ============================================================
@@ -103,6 +231,10 @@ automation:
       # Block when vehicle mode is off.
       - condition: template
         value_template: "{{ not is_state('input_select.ev_vehicle_mode', 'off') }}"
+      # Killswitch Hauptsicherung sperrt auch das manuelle Laden.
+      - condition: state
+        entity_id: input_boolean.ev_killswitch
+        state: "off"
       # Do not (re)start once the per-session energy limit is reached.
       # Ausnahme Zielzeit-Modus: dort ist der Live-SoC die Wahrheit, nicht
       # die Session-Energie (gleiche Begruendung wie in
@@ -202,6 +334,10 @@ automation:
       # Vehicle mode must not be 'off'
       - condition: template
         value_template: "{{ not is_state('input_select.ev_vehicle_mode', 'off') }}"
+      # Killswitch Hauptsicherung (der Sollstrom ist dann ohnehin 0 A)
+      - condition: state
+        entity_id: input_boolean.ev_killswitch
+        state: "off"
       # There must actually be a valid target current calculated (> 5 A)
       - condition: numeric_state
         entity_id: sensor.ev_target_charging_current
@@ -483,6 +619,8 @@ automation:
             {{ [rest + done, 100] | min | round(1) }}
 
   - alias: "EV: Manuellen Ladestrom auf 0 zurücksetzen"
+    # id ergaenzt (2026-11): ohne id keine Traces und nicht im UI editierbar
+    id: ev_manual_current_reset
     mode: single
     triggers:
       - trigger: state

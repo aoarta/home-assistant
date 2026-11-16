@@ -2,6 +2,15 @@
 # PV surplus wallbox charging (WARP3) - Inputs
 # ============================================================
 
+input_boolean:
+  # Killswitch Hauptsicherung (ev_automations.yaml): gesetzt von
+  # ev_killswitch_hauptsicherung, geloescht von ev_killswitch_freigabe.
+  # Solange "on", startet keine Ladung - auch keine manuelle.
+  # Kein initial: eine ausgeloeste Sperre ueberlebt einen Neustart.
+  ev_killswitch:
+    name: "EV Killswitch Hauptsicherung"
+    icon: mdi:fuse-alert
+
 input_select:
   ev_vehicle_mode:
     name: "EV Vehicle Mode"
@@ -18,7 +27,8 @@ input_select:
       - "pv_shared_50_50" # 3. PV-Überschuss Fahrzeug-Batterie halbe/halbe
       - "pv_ev_first" # 1. PV-Überschuss Fahrzeug priorisiert
       - "pv_battery_first" # 2. PV-Überschuss Batterien priorisiert
-      - "battery_budget" # 4. Speicher-Budget: so viel, wie Speicher + PV bis Sonnenaufgang ohne Netzbezug hergeben      - "min_6a_floor_grid" # 5. Min. 1.3kW (6A), Max aus PV, ohne Batterie-Schutz
+      - "battery_budget" # 4. Speicher-Budget: so viel, wie Speicher + PV bis Sonnenaufgang ohne Netzbezug hergeben
+      - "min_6a_floor_grid" # 5. Min. 1.3kW (6A), Max aus PV, ohne Batterie-Schutz
       - "target_time" # 6. Fertig bis input_datetime.ev_target_time
     #initial: "pv_ev_first"
     icon: mdi:ev-station

@@ -23,15 +23,22 @@
 {# -------------------------------------------------------------------------
    Custom SOC - State.
      n             Geraetenummer (1, 2, 3, ...)
-     reset_default Startwert fuer reset_point, wenn das Attribut noch leer
-                   ist (geraetespezifisch, siehe marstek_batteries.yaml)
+     reset_default letzter Rueckfall fuer reset_point. Fehlt das Attribut,
+                   wird seit 2026-11 zuerst aus Hardware-SOC und Energy Wh
+                   verankert (Custom-SOC startet = Hardware-SOC); der feste
+                   Wert greift nur noch, wenn beides nicht lesbar ist.
      this_state    this.state des Sensors
      this_reset    this.attributes.get('reset_point') des Sensors
    ------------------------------------------------------------------------- #}
 {% macro custom_soc_state(n, reset_default, this_state, this_reset) -%}
   {%- set hw_soc = states('sensor.marstek_venus_' ~ n ~ '_soc') | float(-1) -%}
   {%- set neu_wh = states('sensor.venus_' ~ n ~ '_energy_wh') | float(none) -%}
-  {%- set reset_wh = this_reset | float(reset_default) -%}
+  {%- set cap_wh = states('sensor.marstek_venus_' ~ n ~ '_batterie_gesamtenergie') | float(5.120) * 1000 -%}
+  {#- Startwert aus dem Hardware-SOC (2026-11): die festen reset_default-Werte
+      passten nicht mehr zu den gedrifteten Energy-Wh-Staenden. -#}
+  {%- set anker = (neu_wh - (100 - hw_soc) / 100 * cap_wh)
+                  if (neu_wh is not none and 0 <= hw_soc <= 100) else reset_default -%}
+  {%- set reset_wh = this_reset | float(anker) -%}
   {%- set zelle = states('sensor.marstek_venus_' ~ n ~ '_modbus_minimale_zellenspannung') | float(none) -%}
 
   {%- if zelle is not none and zelle > 1.0 and zelle < 2.95 -%}
@@ -41,7 +48,6 @@
   {%- elif hw_soc >= 100 -%}
     100
   {%- else -%}
-    {%- set cap_wh = states('sensor.marstek_venus_' ~ n ~ '_batterie_gesamtenergie') | float(5.120) * 1000 -%}
     {%- set calc_soc = 100 - ((neu_wh - reset_wh) / cap_wh * 100) -%}
     {{ calc_soc | round(1) | clamp(0, 100) }}
   {%- endif -%}
@@ -57,12 +63,16 @@
    ------------------------------------------------------------------------- #}
 {% macro custom_soc_reset_point(n, reset_default, this_state, this_reset, this_sperre) -%}
   {%- set current_energy = states('sensor.venus_' ~ n ~ '_energy_wh') | float(none) -%}
-  {%- set last_reset = this_reset | float(reset_default) -%}
   {%- set hw_soc = states('sensor.marstek_venus_' ~ n ~ '_soc') | float(none) -%}
   {%- set stop_soc = state_attr('sensor.global_parameter', 'stop_soc') | float(15) -%}
   {%- set capacity = state_attr('sensor.global_parameter', 'venus_capacity_wh') | float(5120) -%}
   {%- set custom_soc = this_state | float(none) -%}
   {%- set cap_wh = states('sensor.marstek_venus_' ~ n ~ '_batterie_gesamtenergie') | float(5.120) * 1000 -%}
+  {#- Startwert wie in custom_soc_state aus dem Hardware-SOC (2026-11) -#}
+  {%- set anker = (current_energy - (100 - hw_soc) / 100 * cap_wh)
+                  if (current_energy is not none and hw_soc is not none and 0 <= hw_soc <= 100)
+                  else reset_default -%}
+  {%- set last_reset = this_reset | float(anker) -%}
   {%- set zelle = states('sensor.marstek_venus_' ~ n ~ '_modbus_minimale_zellenspannung') | float(none) -%}
   {%- set zelle_leer = zelle is not none and zelle > 1.0 and zelle < 2.95 -%}
   {%- set sperre = this_sperre | bool(false) -%}

@@ -1,7 +1,7 @@
 # ============================================================
 # PV surplus wallbox charging (WARP3) - Trigger Sensors
 #
-# MODUS 4 "min_6a_floor_battery" (Budget-Laden):
+# MODUS 4 "battery_budget" (Budget-Laden):
 #   Das Auto bekommt so viel, wie die Hausspeicher hergeben, ohne dass bis
 #   zum naechsten Sonnenaufgang voraussichtlich Netzstrom gekauft werden muss.
 #     Budget = nutzbare Speicherenergie * eta_Entladen
@@ -22,7 +22,11 @@
 #   Phase "full"  - alles was geht, Netz inbegriffen (Notfallstufe)
 # Die beiden Startzeitpunkte laufen rechnerisch exakt bei Ladeende zusammen:
 # laeuft alles nach Plan, wird "full" nie erreicht; faellt die Ladung zurueck,
-# greift die Stufe von selbst. Kein Helper, kein Latch, keine Hysterese.
+# greift die Stufe von selbst.
+# Einmal erreicht, haelt ein Merker (Attribut paced_latch) die Phase "paced"
+# bis Ziel, Abstecken oder Moduswechsel - ohne ihn fiel sie nach dem Start
+# sofort wieder heraus (Begruendung beim Attribut). Kein Helper noetig.
+# Killswitch Hauptsicherung (input_boolean.ev_killswitch) -> immer 0 A.
 # ============================================================
 
 template:
@@ -49,10 +53,10 @@ template:
         state_class: measurement
         state: >-
           {% set consumption_buffer = 1.10 %}
-          {# Fallback 13.6 = 3 x 5120 x 0.8 + 2200 x 0.6, muss zu
+          {# Fallback 12.288 = 3 x 5120 x 0.8, muss zu
              calculated_combined_capacity_kwh passen. Ein zu kleiner Wert
-             treibt den Floor nach oben und sperrt die EV-Ladung. #}
-          {% set max_storage = state_attr('sensor.global_parameter', 'calculated_combined_capacity_kwh') | float(13.6) %}
+             treibt den Floor nach oben. #}
+          {% set max_storage = state_attr('sensor.global_parameter', 'calculated_combined_capacity_kwh') | float(12.288) %}
           {% set expected_daily_consumption = states('sensor.expected_daily_consumption') | float(0) %}
           {% set consumption_today = states('sensor.house_consumption_energy_today') | float(0) %}
           {% set consumption_static = [0, expected_daily_consumption - consumption_today] | max %}
@@ -103,6 +107,7 @@ template:
           - input_select.ev_charge_mode
           - input_select.ev_vehicle_mode
           - input_number.ev_manual_charging_current
+          - input_boolean.ev_killswitch
           # Budget-Laden (Modus 4)
           - sensor.marstek_usable_energy
           - sensor.target_soc
@@ -306,7 +311,8 @@ template:
         state_class: measurement
         state: >-
           {% set cable = is_state('binary_sensor.warp3_2ita_cable', 'on') %}
-          {% if vehicle == 'off' or not cable %}
+          {# Killswitch Hauptsicherung sperrt alle Modi, auch manuell #}
+          {% if vehicle == 'off' or not cable or is_state('input_boolean.ev_killswitch', 'on') %}
             0
           {% else %}
             {% set manual = states('input_number.ev_manual_charging_current') | int(0) %}
@@ -370,8 +376,9 @@ template:
                 {% elif ev_phase == 'full' %}
                   {# zu knapp geworden: volle Leistung, Netz inbegriffen #}
                   {{ ev_amps_full }}
-                {% elif ev_phase == 'paced' %}
-                  {# Batterietempo - oder mehr, falls die Sonne mehr hergibt #}
+                {% elif ev_phase == 'paced' or this.attributes.get('paced_latch', false) | bool(false) %}
+                  {# Batterietempo - oder mehr, falls die Sonne mehr hergibt.
+                     Nach dem Start haelt der Merker paced_latch die Phase. #}
                   {{ [[ev_amps_paced, surplus_ev_first_amps] | max, max_amps | int] | min }}
                 {% elif ev_soc < pv_cap %}
                   {# davor: nur geschenkte Energie, gedeckelt auf 85 % #}
@@ -400,6 +407,23 @@ template:
           ev_battery_use_ok: "{{ ev_battery_use_ok }}"
           ev_nogrid_power_w: "{{ (((surplus_ev_first_w + ev_bat_discharge_w) / 100) | round(0) * 100) | int }}"
           amps_budget: "{{ amps_budget }}"
+          # Zielzeit-Merker (FIX 2026-11). Ohne ihn fiel "paced" sofort nach
+          # dem Start wieder heraus: Start = Deadline - Puffer
+          # - Restbedarf / (derate * P), geladen wird aber mit P. Restbedarf /
+          # (derate * P) schrumpft also um 1/derate (~1,18) Sekunden pro
+          # Sekunde, die Startzeit laeuft der Uhr davon, die Phase kippt beim
+          # naechsten Render auf "pv" (nachts 0 A), stop_on_idle beendet und
+          # kurz darauf startet es wieder - simuliert ~30 Start/Stopp-Zyklen
+          # pro Nacht. Der Merker wird gesetzt, sobald "paced" oder "full"
+          # erreicht ist, und faellt erst bei Ziel erreicht, Abstecken oder
+          # Moduswechsel. this = Stand vor diesem Render, also eine Runde
+          # Verzoegerung - unkritisch, beim Setzen ist ev_phase schon "paced".
+          paced_latch: >-
+            {{ is_state('input_select.ev_charge_mode', 'target_time')
+               and is_state('binary_sensor.warp3_2ita_cable', 'on')
+               and ev_needed_kwh > 0
+               and (ev_phase in ['paced', 'full']
+                    or this.attributes.get('paced_latch', false) | bool(false)) }}
 
       # ----------------------------------------------------------
       # Zielzeit-Diagnose. Teilt sich die Variablen mit dem Sensor
@@ -418,7 +442,12 @@ template:
         attributes:
           deadline: "{{ as_datetime(ev_deadline_ts | int).isoformat() if ev_deadline_ts > 0 else '' }}"
           fallback_full_power: "{{ as_datetime(ev_start_full_ts | int).isoformat() if ev_start_full_ts > 0 else '' }}"
-          phase: "{{ ev_phase }}"
+          # mit Merker: bleibt nach dem Start "paced", auch wenn die reine
+          # Zeitrechnung schon wieder "pv" ergibt
+          phase: >-
+            {{ 'paced' if ev_phase == 'pv'
+                          and state_attr('sensor.ev_target_charging_current', 'paced_latch') | bool(false)
+               else ev_phase }}
           needed_kwh: "{{ ev_needed_kwh }}"
           needed_min_paced: "{{ (ev_needed_kwh * 60000 / ev_plan_paced_w) | round(0) | int if ev_plan_paced_w > 0 else 0 }}"
           paced_amps: "{{ ev_amps_paced }}"

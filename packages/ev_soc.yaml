@@ -131,6 +131,11 @@ automation:
         value_template: >-
           {{ trigger.to_state is not none
              and trigger.to_state.state | regex_replace('[^0-9.-]', '') | float(-1) > 0 }}
+      # Ohne gueltigen Wallbox-Zaehler NICHT kalibrieren (FIX 2026-11): der
+      # Anker-Zaehler wurde sonst 0 und der SoC sprang auf Anker + gesamter
+      # Zaehlerstand, also 100 %. Der naechste BLE-Wert kalibriert dann.
+      - condition: template
+        value_template: "{{ is_number(states('sensor.warp3_2ita_energyabs')) }}"
     action:
       - variables:
           raw_soc: >-
@@ -165,6 +170,11 @@ automation:
         value_template: >-
           {{ trigger.to_state is not none
              and trigger.to_state.state | regex_replace('[^0-9.-]', '') | float(-1) > 0 }}
+      # Ohne gueltigen Wallbox-Zaehler NICHT kalibrieren (FIX 2026-11): der
+      # Anker-Zaehler wurde sonst 0 und der SoC sprang auf Anker + gesamter
+      # Zaehlerstand, also 100 %. Der naechste BLE-Wert kalibriert dann.
+      - condition: template
+        value_template: "{{ is_number(states('sensor.warp3_2ita_energyabs')) }}"
     action:
       - variables:
           raw_soc: >-

@@ -32,7 +32,7 @@ input_number:
 
 input_datetime:
   # Zeitstempel "Batterie war zuletzt voll".
-  # Geschrieben von: marstek_set_last_full_timestamp (Venus 1/2/3) und
+  # Geschrieben von: marstek_set_last_full_timestamp (Venus 1/2/3)
   # Gelesen von:     binary_sensor.battery_maintenance_required und
   #                  soc_override_weekly_control.
   venus_1_last_full:
@@ -61,7 +61,10 @@ template:
         state: >-
           {{ 'Night' if is_state('sun.sun', 'below_horizon') else 'Day' }}
         attributes:
-          now_ts: "{{ as_timestamp(now()) }}"
+          # now_ts entfernt (2026-11): aenderte sich jede Minute und erzeugte
+          # damit jede Minute einen neuen State- und Attribut-Datensatz im
+          # Recorder. limits_map in marstek_batteries.yaml nimmt jetzt
+          # direkt as_timestamp(now()).
           sun_rise: >-
             {% set ts = as_timestamp(state_attr('sun.sun', 'next_rising'), 0) %}
             {{ ts - 86400 if ts > as_timestamp(now()) else ts }}
@@ -88,7 +91,7 @@ template:
         state: >-
           {% set venus1 = states('sensor.marstek_venus_1_ac_power') | float(0) %}
           {% set venus2 = states('sensor.marstek_venus_2_ac_power') | float(0) %}
-          {% set venus3 = states('sensor.marstek_venus_3_ac_power') | float(0) %}
+          {% set venus3 =  float(0) %}
           {{ (venus1 + venus2 + venus3) | round(0) }}
 
       - name: "Remaining PV Today"
@@ -163,7 +166,8 @@ template:
         unique_id: expected_remaining_consumption_today
         unit_of_measurement: "kWh"
         device_class: energy
-        state_class: total
+        # keine state_class (2026-11): Restbedarf-Schaetzung, kein Zaehler -
+        # mit "total" ging jede Abnahme als negative Aenderung in die Statistik
         icon: mdi:home-lightning-bolt-outline
         availability: >-
           {{ has_value('sensor.expected_daily_consumption')
@@ -196,10 +200,10 @@ template:
                WICHTIG nach dem Ausbau auf drei Speicher: die Rueckfalloption 10
                stammt aus der Zwei-Geraete-Zeit. Faellt global_parameter aus,
                rechnet die ganze Bilanz sonst mit einem zu kleinen Speicher und
-               springt zu frueh auf 130/131/133 (= dauerhaftes Volladen aus dem
-               Netz). 13.6 entspricht calculated_combined_capacity_kwh
-               (3 x 5120 x 0.8 + 2200 x 0.6). #}
-            {% set max_storage = state_attr('sensor.global_parameter', 'calculated_combined_capacity_kwh') | float(13.6) %}
+               springt zu frueh auf 130/131/133. 12.288 entspricht
+               calculated_combined_capacity_kwh (3 x 5120 x 0.8, ein
+               Zusatzspeicher ist dort derzeit nicht eingerechnet). #}
+            {% set max_storage = state_attr('sensor.global_parameter', 'calculated_combined_capacity_kwh') | float(12.288) %}
 
             {# === Today (remaining) === #}
             {% set pv_forecast_today = states('sensor.pv_forecast_weighted') | float(0) %}

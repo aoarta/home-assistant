@@ -15,6 +15,13 @@
       target:
         entity_id:
           - switch.marstek_venus_2_modbus_rs485_steuermodus
+    # Venus 3 fehlte seit dem Ausbau auf drei Speicher - ohne Steuermodus
+    # bekommt sie aus charge_map/discharge_map keine Leistung.
+    - delay: "00:00:10"
+    - action: switch.turn_on
+      target:
+        entity_id:
+          - switch.marstek_venus_3_modbus_rs485_steuermodus
 
   mode: single
 

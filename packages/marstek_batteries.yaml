@@ -18,6 +18,19 @@
 # GEAENDERT 2026-10-22: override_soc faellt erst zurueck, wenn JEDER Speicher
 # seit dem Einschalten mindestens einmal voll war. Der Einschaltzeitpunkt
 # liegt in input_datetime.override_soc_since (ueberlebt HA-Neustarts).
+#
+# GEAENDERT 2026-11: Entladen mit Deckel 2500 W + Umverteilung, volle bzw.
+# ungesteuerte Venus bekommen keinen Ladeanteil mehr, manual nimmt
+# zusaetzlichen PV-Ueberschuss mit (Details an den Stellen selbst).
+# Venus X Energy Wh ohne 0/100000-Begrenzung, limits_map ohne
+# solar_soc_logic.now_ts.
+#
+# GEAENDERT 2026-11-13: PRAESENZ je Venus (binary_sensor.venus_X_vorhanden).
+# Fehlte ein Speicher, blieb marstek_available dauerhaft aus ->
+# charge_power unavailable -> die anderen luden nicht. Ausserdem blieben
+# override_soc und die Wartungsladung am fehlenden Speicher haengen.
+# Watchdog, Summen (AC/DC/SOC/usable Energy), ctl-Listen, Wartungsladung
+# und override_soc rechnen jetzt nur noch ueber VORHANDENE Speicher.
 
 input_datetime:
   override_soc_since:
@@ -137,12 +150,10 @@ template:
             {% from 'soc_macros.jinja' import custom_soc_zelle_leer %}
             {{ custom_soc_zelle_leer(2, this.state, this.attributes.get('zelle_leer', false)) }}
 
-  # Venus 3: reset_point-Startwert ist 50000, also der Offset aus
-  # "Venus 3 Energy Wh" bei Riemann = 0. Das entspricht der Annahme
-  # "beim ersten Start voll". Der Wert korrigiert sich beim ersten
-  # Erreichen von 100 % bzw. von stop_soc selbst - danach steht hier
-  # der echte Zaehlerstand. Wer den Speicher leer in Betrieb nimmt:
-  # einmal voll laden lassen, dann passt es.
+  # Venus 3: reset_default 50000 ist seit 2026-11 nur noch letzter
+  # Rueckfall. Fehlt reset_point (Neuanlage), verankert soc_macros.jinja
+  # aus Hardware-SOC und Energy Wh - der Custom-SOC startet also auf dem
+  # Hardware-SOC, egal wie voll der Speicher bei Inbetriebnahme ist.
   - triggers:
       - trigger: homeassistant
         event: start
@@ -184,6 +195,11 @@ template:
       - trigger: numeric_state
         entity_id: sensor.marstek_venus_3_soc
         above: 99.9
+      - trigger: state
+        entity_id:
+          - binary_sensor.venus_1_vorhanden
+          - binary_sensor.venus_2_vorhanden
+          - binary_sensor.venus_3_vorhanden
       - trigger: time_pattern
         minutes: "/5"
     sensor:
@@ -199,26 +215,24 @@ template:
         # Speicher voll waren. Die HW-SOCs werden hier ohnehin nur als
         # Notfallwert gebraucht; gerechnet wird mit den Custom-SOCs.
         #
-        # Ab drei Speichern gilt zusaetzlich: faellt NUR EINER aus, wird
-        # nicht mehr der ganze Sensor eingefroren, sondern nur der
-        # ausgefallene Speicher mit 0 kWh gewertet. Das Einfrieren des
-        # letzten guten Werts bleibt dem Fall vorbehalten, dass gar kein
-        # Custom-SOC lesbar ist.
+        # Gezaehlt werden nur VORHANDENE Speicher (2026-11-13). Der
+        # Custom-SOC eines fehlenden Speichers kann eingefroren auf einem
+        # alten Wert stehen und haette die nutzbare Energie aufgeblaeht.
+        # Faellt ein vorhandener aus, wird er mit 0 kWh gewertet. Das
+        # Einfrieren des letzten guten Werts bleibt dem Fall vorbehalten,
+        # dass gar kein Custom-SOC lesbar ist.
         state: >-
           {% set min_soc = state_attr('sensor.solar_soc_logic', 'min') | float(15) %}
-          {% set socs = [
-               states('sensor.venus_1_custom_soc'),
-               states('sensor.venus_2_custom_soc'),
-               states('sensor.venus_3_custom_soc')
-             ] %}
-          {% set caps = [
-               states('sensor.marstek_venus_1_batterie_gesamtenergie') | float(5.120),
-               states('sensor.marstek_venus_2_batterie_gesamtenergie') | float(5.120),
-               states('sensor.marstek_venus_3_batterie_gesamtenergie') | float(5.120)
-             ] %}
-          {% set ok = socs | select('is_number') | list | count %}
-
-          {% if ok == 0 %}
+          {% set ns = namespace(sum=0, ok=0) %}
+          {% for i in [1, 2, 3] if is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+            {% set soc = states('sensor.venus_' ~ i ~ '_custom_soc') %}
+            {% if is_number(soc) %}
+              {% set cap = states('sensor.marstek_venus_' ~ i ~ '_batterie_gesamtenergie') | float(5.120) %}
+              {% set ns.ok = ns.ok + 1 %}
+              {% set ns.sum = ns.sum + ([0, (soc | float(0)) - min_soc] | max) / 100 * cap %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.ok == 0 %}
             {# Kein SOC lesbar: letzten guten Wert halten. Ein eingefrorener
                Wert ist beim Modbus-Aussetzer die deutlich harmlosere Luege
                als eine gemeldete 0 - die Bilanzstufen in control.yaml haengen
@@ -226,25 +240,25 @@ template:
                Attribut "stale" bzw. in binary_sensor.marstek_available. #}
             {{ this.state if is_number(this.state) else 0 }}
           {% else %}
-            {% set ns = namespace(sum=0) %}
-            {% for i in range(3) %}
-              {% if is_number(socs[i]) %}
-                {% set usable = [0, (socs[i] | float(0)) - min_soc] | max %}
-                {% set ns.sum = ns.sum + (usable / 100 * caps[i]) %}
-              {% endif %}
-            {% endfor %}
             {{ ns.sum | round(3) }}
           {% endif %}
         attributes:
           stale: >-
-            {{ not (is_number(states('sensor.venus_1_custom_soc'))
-                    and is_number(states('sensor.venus_2_custom_soc'))
-                    and is_number(states('sensor.venus_3_custom_soc'))) }}
+            {% set ns = namespace(s=false) %}
+            {% for i in [1, 2, 3] if is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+              {% if not is_number(states('sensor.venus_' ~ i ~ '_custom_soc')) %}{% set ns.s = true %}{% endif %}
+            {% endfor %}
+            {{ ns.s }}
           missing: >-
-            {% set ents = ['sensor.venus_1_custom_soc',
-                           'sensor.venus_2_custom_soc',
-                           'sensor.venus_3_custom_soc'] %}
-            {{ ents | reject('has_value') | list | join(', ') }}
+            {% set ns = namespace(l=[]) %}
+            {% for i in [1, 2, 3] %}
+              {% if not is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+                {% set ns.l = ns.l + ['venus_' ~ i ~ ' (nicht vorhanden)'] %}
+              {% elif not has_value('sensor.venus_' ~ i ~ '_custom_soc') %}
+                {% set ns.l = ns.l + ['sensor.venus_' ~ i ~ '_custom_soc'] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.l | join(', ') }}
 
   - triggers:
       - trigger: homeassistant
@@ -255,6 +269,9 @@ template:
           - input_boolean.override_soc
           - binary_sensor.einspeisen_besser_als_speichern # tarife
           - binary_sensor.entladen_sperren # tarife
+          - binary_sensor.venus_1_vorhanden
+          - binary_sensor.venus_2_vorhanden
+          - binary_sensor.venus_3_vorhanden
         for:
           milliseconds: 2000
       - trigger: state
@@ -267,7 +284,8 @@ template:
       # ---------------------------------------------------------------
       limits_map: >-
         {% set default = {'v1': 2500, 'v2': 2500, 'v3': 2500} %}
-        {% set ts = state_attr('sensor.solar_soc_logic', 'now_ts') | float(0) %}
+        {# frueher solar_soc_logic.now_ts - das Attribut ist weg (Recorder) #}
+        {% set ts = as_timestamp(now()) %}
         {% set sun_set_minus_3h = state_attr('sensor.solar_soc_logic', 'sun_set_minus_3h') | float(0) %}
         {% set t1115 = state_attr('sensor.solar_soc_logic', 't1115') | float(0) %}
         {% set ziel_soc = states('sensor.target_soc') | float(80) %}
@@ -295,7 +313,9 @@ template:
       # LADEVERTEILUNG
       #
       # Ablauf:
-      #   1. Bedarf w_i = Ziel-SOC - Ist-SOC (0, wenn kein Steuermodus)
+      #   1. Bedarf w_i = Ziel-SOC - Ist-SOC (0 ohne Steuermodus, bei
+      #      nicht vorhandenem Speicher oder wenn der Hardware-SOC voll
+      #      meldet)
       #   2. proportionale Rohverteilung des Ueberschusses
       #   3. Mindest-Sollwert (floor) anheben, den Aufschlag bei den
       #      groesseren Werten abziehen -> Summe bleibt gleich, es wird
@@ -309,9 +329,9 @@ template:
       # ---------------------------------------------------------------
       charge_map: >-
         {% set ctl = [
-             is_state('switch.marstek_venus_1_modbus_rs485_steuermodus', 'on'),
-             is_state('switch.marstek_venus_2_modbus_rs485_steuermodus', 'on'),
-             is_state('switch.marstek_venus_3_modbus_rs485_steuermodus', 'on')
+             is_state('switch.marstek_venus_1_modbus_rs485_steuermodus', 'on') and is_state('binary_sensor.venus_1_vorhanden', 'on'),
+             is_state('switch.marstek_venus_2_modbus_rs485_steuermodus', 'on') and is_state('binary_sensor.venus_2_vorhanden', 'on'),
+             is_state('switch.marstek_venus_3_modbus_rs485_steuermodus', 'on') and is_state('binary_sensor.venus_3_vorhanden', 'on')
            ] %}
         {% set soc_raw = [
              states('sensor.venus_1_custom_soc'),
@@ -328,10 +348,19 @@ template:
              schrieb beim naechsten Trigger wieder den vollen manual-Wert hinein.
              Der Steuermodus-Switch wird ebenfalls beruecksichtigt - ohne
              Modbus-Steuerung nimmt der Speicher den Wert ohnehin nicht an. #}
-          {% set ns = namespace(o=[]) %}
+          {# Mindestens manual je Speicher; liegt mehr PV-Ueberschuss an, wird
+             er mitgenommen statt eingespeist (FIX 2026-11: beim Preis-Netzladen
+             mittags ging alles ueber 3 x manual ins Netz). Nachts ohne PV
+             bleibt es exakt bei manual. charge_power haengt nicht von der
+             Batterieleistung ab, -charge_power ist also der echte Ueberschuss. #}
+          {% set ns = namespace(o=[], n=0) %}
+          {% for i in range(3) %}
+            {% if ctl[i] and (soc_raw[i] | float(0)) < 99.5 %}{% set ns.n = ns.n + 1 %}{% endif %}
+          {% endfor %}
+          {% set pv_je = ([0, -(states('sensor.charge_power') | float(0))] | max) / ([ns.n, 1] | max) %}
           {% for i in range(3) %}
             {% set ok = ctl[i] and (soc_raw[i] | float(0)) < 99.5 %}
-            {% set ns.o = ns.o + [(manual | round(0) | int(0)) if ok else 0] %}
+            {% set ns.o = ns.o + [([manual, pv_je] | max | round(0) | int(0)) if ok else 0] %}
           {% endfor %}
           {{ {'v1': ns.o[0], 'v2': ns.o[1], 'v3': ns.o[2]} }}
         {% else %}
@@ -343,11 +372,23 @@ template:
           {% set lims = [limits_map.get('v1', 2500), limits_map.get('v2', 2500), limits_map.get('v3', 2500)]
                         if limits_map is mapping else [2500, 2500, 2500] %}
 
+          {# Gewicht 0 fuer Speicher ohne Steuermodus und fuer Speicher, deren
+             HARDWARE-SOC voll meldet (FIX 2026-11). Bei target_soc > 100
+             (100.5, 101, 120, 13x) bekamen beide vorher dyn_soc - 100 > 0, und
+             der Mindest-Sollwert hob sie auf 200/500 W - Leistung, die keiner
+             aufnimmt und die ins Netz ging. Hardware- statt Custom-SOC, damit
+             Override/Wartung weiterladen, bis die Hardware wirklich voll ist. #}
+          {% set hw = [
+               states('sensor.marstek_venus_1_soc'),
+               states('sensor.marstek_venus_2_soc'),
+               states('sensor.marstek_venus_3_soc')
+             ] %}
           {% set nsw = namespace(socs=[], ws=[]) %}
           {% for i in range(3) %}
             {% set s = (soc_raw[i] | float(100)) if ctl[i] else 100 %}
+            {% set voll = (hw[i] | float(0)) >= 99.5 %}
             {% set nsw.socs = nsw.socs + [s] %}
-            {% set nsw.ws = nsw.ws + [[dyn_soc - s, 0] | max] %}
+            {% set nsw.ws = nsw.ws + [0 if (voll or not ctl[i]) else [dyn_soc - s, 0] | max] %}
           {% endfor %}
           {% set socs = nsw.socs %}
           {% set ws = nsw.ws %}
@@ -445,9 +486,9 @@ template:
 
       # ---------------------------------------------------------------
       # ENTLADEVERTEILUNG
-      # Gleiche Struktur wie charge_map, nur ohne Leistungsdeckel und mit
-      # der zusaetzlichen Zellenspannungs-Sperre. floor = 250 W je Geraet,
-      # aktiv ab 250 * n_aktiv Gesamtleistung.
+      # Gleiche Struktur wie charge_map, mit festem Deckel 2500 W je Venus
+      # samt Umverteilung des Rests und der zusaetzlichen Zellenspannungs-
+      # Sperre. floor = 250 W je Geraet, aktiv ab 250 * n_aktiv Gesamtleistung.
       # ---------------------------------------------------------------
       discharge_map: >-
         {% set raw = states('sensor.charge_power') | float(0) %}
@@ -462,9 +503,9 @@ template:
           {% set min_v = state_attr('sensor.global_parameter', 'lfp_min_voltage') | float(2.90) %}
 
           {% set ctl = [
-               is_state('switch.marstek_venus_1_modbus_rs485_steuermodus', 'on'),
-               is_state('switch.marstek_venus_2_modbus_rs485_steuermodus', 'on'),
-               is_state('switch.marstek_venus_3_modbus_rs485_steuermodus', 'on')
+               is_state('switch.marstek_venus_1_modbus_rs485_steuermodus', 'on') and is_state('binary_sensor.venus_1_vorhanden', 'on'),
+               is_state('switch.marstek_venus_2_modbus_rs485_steuermodus', 'on') and is_state('binary_sensor.venus_2_vorhanden', 'on'),
+               is_state('switch.marstek_venus_3_modbus_rs485_steuermodus', 'on') and is_state('binary_sensor.venus_3_vorhanden', 'on')
              ] %}
           {% set cell = [
                states('sensor.marstek_venus_1_modbus_minimale_zellenspannung') | float(0),
@@ -535,7 +576,32 @@ template:
                   {% set nso.o = nso.o + [t_raw[i] | round(0) | int(0)] %}
                 {% endif %}
               {% endfor %}
-              {{ {'v1': nso.o[0], 'v2': nso.o[1], 'v3': nso.o[2]} }}
+              {# Deckel 2500 W je Venus, den abgeschnittenen Rest auf die
+                 Speicher mit Luft verteilen - wie in charge_map (FIX 2026-11).
+                 Vorher kappte erst die Sende-Automation und der Rest kam aus
+                 dem Netz: SOC 70/50/30 % bei 7,2 kW -> 2500/2400/1029 W. #}
+              {% set lim = 2500 %}
+              {% set nsl = namespace(t=nso.o) %}
+              {% for p in range(2) %}
+                {% set nsc = namespace(cap=[], over=0, head=0) %}
+                {% for i in range(3) %}
+                  {% set v = [nsl.t[i], lim] | min %}
+                  {% set nsc.cap = nsc.cap + [v] %}
+                  {% set nsc.over = nsc.over + (nsl.t[i] - v) %}
+                  {% if ws[i] > 0 %}{% set nsc.head = nsc.head + (lim - v) %}{% endif %}
+                {% endfor %}
+                {% set nsn = namespace(t=[]) %}
+                {% for i in range(3) %}
+                  {% if nsc.head > 0 and nsc.over > 0 and ws[i] > 0 %}
+                    {% set nsn.t = nsn.t + [nsc.cap[i] + (lim - nsc.cap[i]) / nsc.head * nsc.over] %}
+                  {% else %}
+                    {% set nsn.t = nsn.t + [nsc.cap[i]] %}
+                  {% endif %}
+                {% endfor %}
+                {% set nsl.t = nsn.t %}
+              {% endfor %}
+              {% set o = nsl.t | map('round', 0) | map('int') | list %}
+              {{ {'v1': [o[0], lim] | min, 'v2': [o[1], lim] | min, 'v3': [o[2], lim] | min} }}
             {% endif %}
           {% endif %}
         {% else %}
@@ -665,47 +731,49 @@ template:
         unique_id: battery_soc_total
         unit_of_measurement: "%"
         device_class: battery
-        # Mittelwert ueber alle lesbaren Custom-SOCs; faellt auf die
-        # Hardware-SOCs zurueck, wenn gar kein Custom-SOC da ist.
-        # (Ungewichtet - alle drei haben dieselbe Nennkapazitaet.)
+        # Mittelwert ueber die VORHANDENEN Speicher (2026-11-13); Custom-SOC
+        # bevorzugt, Hardware-SOC als Rueckfall, wenn gar kein Custom-SOC
+        # lesbar ist. (Ungewichtet - alle haben dieselbe Nennkapazitaet.)
         state: >-
-          {% set custom = [
-               states('sensor.venus_1_custom_soc'),
-               states('sensor.venus_2_custom_soc'),
-               states('sensor.venus_3_custom_soc')
-             ] | select('is_number') | map('float') | list %}
-          {% if custom | count > 0 %}
-            {{ (custom | sum / (custom | count)) | round(0) | int(0) }}
-          {% else %}
-            {% set hw = [
-                 states('sensor.marstek_venus_1_soc'),
-                 states('sensor.marstek_venus_2_soc'),
-                 states('sensor.marstek_venus_3_soc')
-               ] | select('is_number') | map('float') | list %}
-            {{ (hw | sum / (hw | count)) | round(0) | int(0) if hw | count > 0 else 0 }}
-          {% endif %}
+          {% set ns = namespace(c=[], h=[]) %}
+          {% for i in [1, 2, 3] if is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+            {% set c = states('sensor.venus_' ~ i ~ '_custom_soc') %}
+            {% set h = states('sensor.marstek_venus_' ~ i ~ '_soc') %}
+            {% if is_number(c) %}{% set ns.c = ns.c + [c | float] %}{% endif %}
+            {% if is_number(h) %}{% set ns.h = ns.h + [h | float] %}{% endif %}
+          {% endfor %}
+          {% set l = ns.c if ns.c | count > 0 else ns.h %}
+          {{ (l | sum / (l | count)) | round(0) | int(0) if l | count > 0 else 0 }}
         availability: >-
-          {{ ([states('sensor.venus_1_custom_soc'),
-               states('sensor.venus_2_custom_soc'),
-               states('sensor.venus_3_custom_soc'),
-               states('sensor.marstek_venus_1_soc'),
-               states('sensor.marstek_venus_2_soc'),
-               states('sensor.marstek_venus_3_soc')] | select('is_number') | list | count) > 0 }}
+          {% set ns = namespace(n=0) %}
+          {% for i in [1, 2, 3] if is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+            {% if is_number(states('sensor.venus_' ~ i ~ '_custom_soc'))
+                  or is_number(states('sensor.marstek_venus_' ~ i ~ '_soc')) %}
+              {% set ns.n = ns.n + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.n > 0 }}
 
       - name: "Marstek AC Power Total"
         unique_id: marstek_ac_power_total
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
+        # Summe ueber die VORHANDENEN Speicher (2026-11-13). Fehlt ein
+        # vorhandener, bleibt der Sensor wie bisher unavailable.
         state: >-
-          {% set venus1 = states('sensor.marstek_venus_1_ac_power') | float(0) %}
-          {% set venus2 = states('sensor.marstek_venus_2_ac_power') | float(0) %}
-          {% set venus3 = states('sensor.marstek_venus_3_ac_power') | float(0) %}
-          {{ (venus1 + venus2 + venus3) | round(0) }}
+          {% set ns = namespace(sum=0) %}
+          {% for i in [1, 2, 3] if is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+            {% set ns.sum = ns.sum + states('sensor.marstek_venus_' ~ i ~ '_ac_power') | float(0) %}
+          {% endfor %}
+          {{ ns.sum | round(0) }}
         availability: >-
-          {{ is_number(states('sensor.marstek_venus_1_ac_power')) and
-             is_number(states('sensor.marstek_venus_2_ac_power')) and
-             is_number(states('sensor.marstek_venus_3_ac_power')) }}
+          {% set ns = namespace(n=0, ok=true) %}
+          {% for i in [1, 2, 3] if is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+            {% set ns.n = ns.n + 1 %}
+            {% if not is_number(states('sensor.marstek_venus_' ~ i ~ '_ac_power')) %}{% set ns.ok = false %}{% endif %}
+          {% endfor %}
+          {{ ns.ok and ns.n > 0 }}
 
       - name: "Marstek DC Power Total"
         unique_id: marstek_dc_power_total
@@ -713,14 +781,18 @@ template:
         device_class: power
         state_class: measurement
         state: >-
-          {% set venus1 = states('sensor.marstek_venus_1_batterieleistung') | float(0) %}
-          {% set venus2 = states('sensor.marstek_venus_2_batterieleistung') | float(0) %}
-          {% set venus3 = states('sensor.marstek_venus_3_batterieleistung') | float(0) %}
-          {{ (-(venus1 + venus2 + venus3)) | round(0) }}
+          {% set ns = namespace(sum=0) %}
+          {% for i in [1, 2, 3] if is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+            {% set ns.sum = ns.sum + states('sensor.marstek_venus_' ~ i ~ '_batterieleistung') | float(0) %}
+          {% endfor %}
+          {{ (-ns.sum) | round(0) }}
         availability: >-
-          {{ is_number(states('sensor.marstek_venus_1_batterieleistung')) and
-             is_number(states('sensor.marstek_venus_2_batterieleistung')) and
-             is_number(states('sensor.marstek_venus_3_batterieleistung')) }}
+          {% set ns = namespace(n=0, ok=true) %}
+          {% for i in [1, 2, 3] if is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+            {% set ns.n = ns.n + 1 %}
+            {% if not is_number(states('sensor.marstek_venus_' ~ i ~ '_batterieleistung')) %}{% set ns.ok = false %}{% endif %}
+          {% endfor %}
+          {{ ns.ok and ns.n > 0 }}
 
       - name: "Venus 1 Energy Wh"
         unique_id: venus_1_energy_wh
@@ -728,9 +800,13 @@ template:
         device_class: energy
         state_class: total
         state: >
-          {# Riemann liefert kWh -> * 1000 = Wh. Offset von 50000 dazu #}
+          {# Riemann liefert kWh -> * 1000 = Wh. Offset von 50000 dazu.
+             Keine Begrenzung auf 0...100000 mehr (2026-11, gilt fuer alle
+             drei): der Riemann-Zaehler laeuft unbegrenzt weiter und driftet.
+             An einer Grenze waere der Wert eingefroren und mit ihm der
+             Custom-SOC - Venus 3 stand Anfang November schon bei ~23 200. #}
           {% set val = (states('sensor.venus_1_riemann') | float(0) * (-1000)) + 50000 %}
-          {{ [[val, 0] | max, 100000] | min }}
+          {{ val | round(1) }}
 
       - name: "Venus 2 Energy Wh"
         unique_id: venus_2_energy_wh
@@ -739,7 +815,7 @@ template:
         state_class: total
         state: >
           {% set val = (states('sensor.venus_2_riemann') | float(0) * (-1000)) + 50000 %}
-          {{ [[val, 0] | max, 100000] | min }}
+          {{ val | round(1) }}
 
       - name: "Venus 3 Energy Wh"
         unique_id: venus_3_energy_wh
@@ -748,8 +824,17 @@ template:
         state_class: total
         state: >
           {% set val = (states('sensor.venus_3_riemann') | float(0) * (-1000)) + 50000 %}
-          {{ [[val, 0] | max, 100000] | min }}
+          {{ val | round(1) }}
 
+    # PRAESENZ je Venus (NEU 2026-11-13)
+    #
+    # "nicht vorhanden" = SOC seit 15 min durchgehend unavailable oder
+    # eingefroren (last_reported aelter als 300 s). Erst dann faellt der
+    # Speicher aus Watchdog, Summen, Verteilung und Wartungslogik heraus.
+    # Kurze Aussetzer (Coordinator-Pause 180 s) schlagen wie bisher im
+    # Watchdog an. Kommt der Speicher zurueck, ist er sofort wieder dabei.
+    # Der Zustand wird bei Neustarts wiederhergestellt.
+    #
     # WATCHDOG: liefert die Marstek-Integration gerade gueltige Werte?
     #
     # Der Coordinator pausiert nach einem Lesefehler 180 s. In dieser Zeit
@@ -757,6 +842,10 @@ template:
     # behalten einfach ihren letzten Wert. Beide Faelle werden hier erkannt:
     #   has_value      -> deckt "unavailable"/"unknown" ab (sofort)
     #   last_reported  -> deckt eingefrorene Werte ab (nach max_age)
+    #
+    # Geprueft werden nur VORHANDENE Speicher (2026-11-13). Vorher blieb der
+    # Watchdog ohne Venus 3 dauerhaft aus -> charge_power unavailable ->
+    # die anderen beiden luden nicht.
     #
     # Gelesen von: ev_sensor_trigger.yaml (Ueberschussrechnung),
     #              consumption.yaml (sensor.charge_power),
@@ -769,45 +858,70 @@ template:
     # eine Regelung zu frueh einfrieren als zu spaet.
 
   - binary_sensor:
+      - name: "Venus 1 vorhanden"
+        unique_id: venus_1_vorhanden
+        device_class: connectivity
+        delay_off: "00:15:00"
+        state: >-
+          {% set e = 'sensor.marstek_venus_1_soc' %}
+          {% set s = states[e] %}
+          {{ s is not none and has_value(e) and
+             (now() - (s.last_reported if s.last_reported is defined else s.last_updated)).total_seconds() < 300 }}
+
+      - name: "Venus 2 vorhanden"
+        unique_id: venus_2_vorhanden
+        device_class: connectivity
+        delay_off: "00:15:00"
+        state: >-
+          {% set e = 'sensor.marstek_venus_2_soc' %}
+          {% set s = states[e] %}
+          {{ s is not none and has_value(e) and
+             (now() - (s.last_reported if s.last_reported is defined else s.last_updated)).total_seconds() < 300 }}
+
+      - name: "Venus 3 vorhanden"
+        unique_id: venus_3_vorhanden
+        device_class: connectivity
+        delay_off: "00:15:00"
+        state: >-
+          {% set e = 'sensor.marstek_venus_3_soc' %}
+          {% set s = states[e] %}
+          {{ s is not none and has_value(e) and
+             (now() - (s.last_reported if s.last_reported is defined else s.last_updated)).total_seconds() < 300 }}
+
       - name: "Marstek available"
         unique_id: marstek_available
         device_class: connectivity
         icon: mdi:lan-connect
         delay_on: "00:00:20"
         state: >-
-          {% set ents = [
-               'sensor.marstek_venus_1_ac_power',
-               'sensor.marstek_venus_2_ac_power',
-               'sensor.marstek_venus_3_ac_power',
-               'sensor.marstek_venus_1_soc',
-               'sensor.marstek_venus_2_soc',
-               'sensor.marstek_venus_3_soc'
-             ] %}
           {% set max_age = 300 %}
-          {% set ns = namespace(ok=true) %}
-          {% for e in ents %}
-            {% set s = states[e] %}
-            {% if s is none or not has_value(e) %}
-              {% set ns.ok = false %}
-            {% else %}
-              {% set ts = s.last_reported if s.last_reported is defined else s.last_updated %}
-              {% if (now() - ts).total_seconds() > max_age %}
+          {% set ns = namespace(ok=true, n=0) %}
+          {% for i in [1, 2, 3] if is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+            {% set ns.n = ns.n + 1 %}
+            {% for e in ['sensor.marstek_venus_' ~ i ~ '_ac_power', 'sensor.marstek_venus_' ~ i ~ '_soc'] %}
+              {% set s = states[e] %}
+              {% if s is none or not has_value(e) %}
                 {% set ns.ok = false %}
+              {% else %}
+                {% set ts = s.last_reported if s.last_reported is defined else s.last_updated %}
+                {% if (now() - ts).total_seconds() > max_age %}{% set ns.ok = false %}{% endif %}
               {% endif %}
-            {% endif %}
+            {% endfor %}
           {% endfor %}
-          {{ ns.ok }}
+          {{ ns.ok and ns.n > 0 }}
         attributes:
           stale_entities: >-
-            {% set ents = [
-                 'sensor.marstek_venus_1_ac_power',
-                 'sensor.marstek_venus_2_ac_power',
-                 'sensor.marstek_venus_3_ac_power',
-                 'sensor.marstek_venus_1_soc',
-                 'sensor.marstek_venus_2_soc',
-                 'sensor.marstek_venus_3_soc'
-               ] %}
-            {{ ents | reject('has_value') | list | join(', ') }}
+            {% set ns = namespace(l=[]) %}
+            {% for i in [1, 2, 3] if is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+              {% set ns.l = ns.l + ['sensor.marstek_venus_' ~ i ~ '_ac_power', 'sensor.marstek_venus_' ~ i ~ '_soc'] %}
+            {% endfor %}
+            {{ ns.l | reject('has_value') | list | join(', ') }}
+          nicht_vorhanden: >-
+            {% set ns = namespace(l=[]) %}
+            {% for i in [1, 2, 3] if not is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+              {% set ns.l = ns.l + ['Venus ' ~ i] %}
+            {% endfor %}
+            {{ ns.l | join(', ') }}
 
 automation:
   - alias: "Sende Lade und Entladebefehle an Hardware"
@@ -1184,6 +1298,10 @@ automation:
   # "on" BLEIBT. Ein abgebrochener Zyklus konnte damit fruehestens am
   # naechsten Abend erneut starten.
   #
+  # Start und Stopp beruecksichtigen nur VORHANDENE Speicher (2026-11-13).
+  # Vorher startete die Wartungsladung ohne Venus 3 jede Nacht und lief
+  # bis Sonnenaufgang.
+  #
   # ACHTUNG bei drei Speichern: 1000 W je Geraet sind jetzt 3 kW aus dem
   # Netz. Wenn das zu viel ist, den Wert hier reduzieren.
   # ==========================================================
@@ -1204,13 +1322,13 @@ automation:
       # weiterhin "Hard stop at sunrise".
       - condition: template
         value_template: "{{ is_state('sun.sun', 'below_horizon') }}"
-      # Nur starten, wenn wirklich ein VENUS ueberfaellig ist.
+      # Nur starten, wenn wirklich ein VORHANDENER Venus ueberfaellig ist.
       - condition: template
         value_template: >-
           {% set days = state_attr('sensor.global_parameter', 'battery_care_days') | float(8) %}
           {% set now_ts = as_timestamp(now()) %}
-          {% set ns = namespace(ages=[]) %}
-          {% for n in ['1', '2', '3'] %}
+          {% set ns = namespace(ages=[0]) %}
+          {% for n in ['1', '2', '3'] if is_state('binary_sensor.venus_' ~ n ~ '_vorhanden', 'on') %}
             {% set e = 'input_datetime.venus_' ~ n ~ '_last_full' %}
             {% set ns.ages = ns.ages + [(now_ts - as_timestamp(states(e), now_ts)) if has_value(e) else 0] %}
           {% endfor %}
@@ -1246,15 +1364,15 @@ automation:
       - condition: numeric_state
         entity_id: input_number.manual_charge_power
         above: 0
-      - condition: numeric_state
-        entity_id: sensor.marstek_venus_1_soc
-        above: 99.5
-      - condition: numeric_state
-        entity_id: sensor.marstek_venus_2_soc
-        above: 99.5
-      - condition: numeric_state
-        entity_id: sensor.marstek_venus_3_soc
-        above: 99.5
+      # Alle VORHANDENEN Speicher voll (Hardware-SOC > 99.5).
+      - condition: template
+        value_template: >-
+          {% set ns = namespace(all=true, n=0) %}
+          {% for n in ['1', '2', '3'] if is_state('binary_sensor.venus_' ~ n ~ '_vorhanden', 'on') %}
+            {% set ns.n = ns.n + 1 %}
+            {% if states('sensor.marstek_venus_' ~ n ~ '_soc') | float(0) <= 99.5 %}{% set ns.all = false %}{% endif %}
+          {% endfor %}
+          {{ ns.all and ns.n > 0 }}
     actions:
       - action: input_number.set_value
         target:
@@ -1290,9 +1408,13 @@ automation:
   # ==========================================================
   # OVERRIDE SOC
   #
-  # EIN:  sobald ein Speicher laenger als override_soc_days nicht voll war.
-  # AUS:  erst, wenn JEDER Speicher seit dem Einschalten mindestens einmal
-  #       voll war (venus_X_last_full >= override_soc_since).
+  # EIN:  sobald ein vorhandener Speicher laenger als override_soc_days
+  #       nicht voll war.
+  # AUS:  erst, wenn JEDER vorhandene Speicher seit dem Einschalten
+  #       mindestens einmal voll war (venus_X_last_full >= override_soc_since).
+  #
+  # Nicht vorhandene Speicher werden ignoriert (2026-11-13) - vorher blieb
+  # override_soc ohne Venus 3 dauerhaft an.
   #
   # Der alte default-Zweig schaltete ab, sobald IRGENDEIN Speicher in den
   # letzten 30 min voll war - die anderen wurden dann nie fertig geladen.
@@ -1302,15 +1424,15 @@ automation:
   # mode: queued, damit der override_on-Trigger, den das eigene turn_on
   # ausloest, nicht als "Already running" verworfen wird.
   #
-  # Achtung: erreicht ein Speicher nie 100 % (Zelle, haengender SOC),
-  # bleibt override_soc an - erkennbar an einem tagealten
+  # Achtung: erreicht ein vorhandener Speicher nie 100 % (Zelle, haengender
+  # SOC), bleibt override_soc an - erkennbar an einem tagealten
   # input_datetime.override_soc_since.
   # ==========================================================
   - alias: "Battery Maintenance: Enable SOC Override When Overdue"
     description: >
-      Schaltet override_soc ein, sobald ein Speicher laenger als
+      Schaltet override_soc ein, sobald ein vorhandener Speicher laenger als
       override_soc_days nicht voll war. Aus geht er erst, wenn JEDER
-      Speicher seit dem Einschalten mindestens einmal voll war
+      vorhandene Speicher seit dem Einschalten mindestens einmal voll war
       (venus_X_last_full >= override_soc_since).
     id: soc_override_weekly_control
     mode: queued
@@ -1329,6 +1451,9 @@ automation:
           - input_datetime.venus_1_last_full
           - input_datetime.venus_2_last_full
           - input_datetime.venus_3_last_full
+          - binary_sensor.venus_1_vorhanden
+          - binary_sensor.venus_2_vorhanden
+          - binary_sensor.venus_3_vorhanden
     actions:
       - choose:
           # --- Startzeitpunkt merken: bei manuellem Einschalten oder
@@ -1348,7 +1473,7 @@ automation:
                 data:
                   timestamp: "{{ now().timestamp() }}"
 
-          # --- AUS: jeder Speicher war seit dem Einschalten voll ---
+          # --- AUS: jeder vorhandene Speicher war seit dem Einschalten voll ---
           - conditions:
               - condition: state
                 entity_id: input_boolean.override_soc
@@ -1357,7 +1482,7 @@ automation:
                 value_template: >-
                   {% set since = as_timestamp(states('input_datetime.override_soc_since'), 0) %}
                   {% set ns = namespace(all = since > 1000000000) %}
-                  {% for n in ['1', '2', '3'] %}
+                  {% for n in ['1', '2', '3'] if is_state('binary_sensor.venus_' ~ n ~ '_vorhanden', 'on') %}
                     {% set t = as_timestamp(states('input_datetime.venus_' ~ n ~ '_last_full'), 0) %}
                     {% if t < since %}{% set ns.all = false %}{% endif %}
                   {% endfor %}
@@ -1369,9 +1494,9 @@ automation:
               - action: logbook.log
                 data:
                   name: "Battery Maintenance"
-                  message: "override_soc aus - alle drei Venus waren seit dem Einschalten voll."
+                  message: "override_soc aus - alle vorhandenen Venus waren seit dem Einschalten voll."
 
-          # --- EIN: irgendein Speicher ueberfaellig ---
+          # --- EIN: irgendein vorhandener Speicher ueberfaellig ---
           - conditions:
               - condition: state
                 entity_id: input_boolean.override_soc
@@ -1379,14 +1504,13 @@ automation:
               - condition: template
                 value_template: >-
                   {% set days = state_attr('sensor.global_parameter', 'override_soc_days') | float(5) %}
-                  {% set threshold = days * 86400 %}
                   {% set now_ts = as_timestamp(now()) %}
-                  {% set ns = namespace(ages=[]) %}
-                  {% for n in ['1', '2', '3'] %}
+                  {% set ns = namespace(ages=[0]) %}
+                  {% for n in ['1', '2', '3'] if is_state('binary_sensor.venus_' ~ n ~ '_vorhanden', 'on') %}
                     {% set e = 'input_datetime.venus_' ~ n ~ '_last_full' %}
                     {% set ns.ages = ns.ages + [(now_ts - as_timestamp(states(e), 0)) if has_value(e) else 0] %}
                   {% endfor %}
-                  {{ ns.ages | max > threshold }}
+                  {{ ns.ages | max > days * 86400 }}
             sequence:
               - action: input_datetime.set_datetime
                 target:

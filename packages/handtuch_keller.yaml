@@ -4,6 +4,10 @@
 # Vorzeichen (wie im restlichen Setup):
 #   sensor.leistung_vom_netz        > 0 = Bezug,  < 0 = Einspeisung
 #   sensor.marstek_ac_power_total   > 0 = Entladen, < 0 = Laden
+#
+# Waehrend einer Zwangsladung (input_number.manual_charge_power > 0:
+# Wartungsladung, Preis-Netzladen) bleibt der Heizkoerper aus - die
+# Batterie laedt dann aus dem Netz, nicht aus PV.
 
 automation:
   - id: handtuch_keller_ueberschuss_ein
@@ -28,6 +32,11 @@ automation:
       - condition: state
         entity_id: switch.handtuch_keller_tasmota
         state: "off"
+      # Keine Zwangsladung: sonst laedt die Batterie mit > 1900 W aus dem
+      # NETZ und der Batterie-Trigger schaltet mit Netzstrom ein.
+      - condition: numeric_state
+        entity_id: input_number.manual_charge_power
+        below: 1
       - condition: template
         value_template: >-
           {{ states('sensor.leistung_vom_netz') | float(0) < -900
@@ -51,6 +60,11 @@ automation:
         entity_id: sensor.marstek_ac_power_total
         above: 100
         for: "00:01:00"
+      # Zwangsladung beginnt -> aus. Die Bezugs-Trigger oben sind Flanken
+      # und feuern nicht, wenn der Bezug schon vorher ueber 100 W lag.
+      - trigger: numeric_state
+        entity_id: input_number.manual_charge_power
+        above: 0
     conditions:
       - condition: state
         entity_id: switch.handtuch_keller_tasmota
@@ -58,7 +72,8 @@ automation:
       - condition: template
         value_template: >-
           {{ states('sensor.leistung_vom_netz') | float(0) > 100
-             or states('sensor.marstek_ac_power_total') | float(0) > 100 }}
+             or states('sensor.marstek_ac_power_total') | float(0) > 100
+             or states('input_number.manual_charge_power') | float(0) > 0 }}
     actions:
       - action: switch.turn_off
         target:

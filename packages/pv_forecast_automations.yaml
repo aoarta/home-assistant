@@ -38,11 +38,16 @@ automation:
       # Warten, bis pv_forecast_calc nach dem Fetch mindestens einmal gelaufen ist
       - delay: "00:06:00"
 
+      # Ohne Nowcast-Faktor (2026-11): der Snapshot laeuft NACH Sonnenaufgang,
+      # dann wirkt der Nowcast schon, sobald modeled und measured > 20 W sind.
+      # Das Bias-Lernen um 23:55 soll aber nur Prognose gegen Ertrag sehen.
       - action: input_number.set_value
         target:
           entity_id: input_number.pv_prognose_this_morning
         data:
-          value: "{{ states('sensor.pv_forecast_weighted') | float(0) | round(2) }}"
+          value: >-
+            {% set roh = state_attr('sensor.pv_forecast_weighted', 'ohne_nowcast') %}
+            {{ (roh if is_number(roh) else states('sensor.pv_forecast_weighted')) | float(0) | round(2) }}
       - repeat:
           for_each: ["solcast", "forecastsolar", "openmeteo", "dwd"]
           sequence:

@@ -46,12 +46,15 @@ template:
   # "verbleibende Leistung heute" liefern den KOMPLETTEN Tagesertrag des
   # neuen Tages. Ohne den 00:02-Lauf bliebe pv_forecast_weighted auf 0.0
   # stehen, control.yaml wuerde balance_today < 0 rechnen und target_soc auf
-  # 130 setzen -> die Venus wuerden die ganze Nacht aus dem Netz laden.
+  # 130 setzen -> die Speicher stuenden fuers Budget-Laden des Autos nicht
+  # zur Verfuegung und die Preissteuerung saehe Unterdeckung. (Aus dem Netz
+  # geladen wird bei 130 allein nicht - charge_map nimmt ohne manual nur
+  # Ueberschuss.)
   # Ausserdem waere pv_forecast_weighted_tomorrow um einen Tag verschoben.
   #
-  # Der Sonnenaufgang-45min-Lauf stellt sicher, dass der Morgen-Snapshot in
-  # pv_forecast_automations.yaml (Sonnenaufgang -15 min) auf frischen Werten
-  # sitzt - der naechste regulaere /5-Tick koennte sonst zu spaet kommen.
+  # Der Sonnenaufgang-45min-Lauf sorgt fuer frische Werte vor dem
+  # Morgen-Snapshot in pv_forecast_automations.yaml (Sonnenaufgang + Fetch
+  # + 6 min).
   # ==========================================================================
   - trigger:
       - trigger: time_pattern
@@ -313,9 +316,9 @@ template:
                bleibt nur zur Diagnose erhalten. #}
             {# Live-Nowcast-Korrektur aus gemessener Einstrahlung, siehe
                pv_forecast_nowcast.yaml. Nur fuer HEUTE relevant - vor
-               Sonnenaufgang/bei zu wenig Signal ist der Faktor 1.0 (neutral),
-               beruehrt also weder den Morgen-Snapshot noch die
-               Bias-Lernschleife in pv_forecast_automations.yaml. #}
+               Sonnenaufgang/bei zu wenig Signal ist der Faktor 1.0 (neutral).
+               Der Morgen-Snapshot (und damit die Bias-Lernschleife) liest das
+               Attribut ohne_nowcast, sieht den Faktor also nie. #}
             {% set nowcast = states('sensor.pv_nowcast_correction_factor') | float(1) %}
             {{ ((sc_w * sc + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias * nowcast) | round(1) }}
           {% elif is_state('sun.sun', 'below_horizon') and not state_attr('sun.sun', 'rising') %}
@@ -323,6 +326,23 @@ template:
           {% else %}
             {{ this.state | float(0) }}
           {% endif %}
+        attributes:
+          # Gleiche Gewichtung OHNE Nowcast-Faktor (2026-11). Liest der
+          # Morgen-Snapshot in pv_forecast_automations.yaml: der laeuft erst
+          # nach Sonnenaufgang, wenn der Nowcast schon wirkt, und das
+          # Bias-Lernen soll ihn nicht sehen.
+          ohne_nowcast: >-
+            {% set sc = sc_today | float(0) %}
+            {% set fs = fs_today | float(0) %}
+            {% set om = om_today | float(0) %}
+            {% set dw = dw_today | float(0) %}
+            {% set sc_w = bw_sc if sc > 0 else 0 %}
+            {% set fs_w = bw_fs if fs > 0 else 0 %}
+            {% set om_w = bw_om if om > 0 else 0 %}
+            {% set dw_w = bw_dw if dw > 0 else 0 %}
+            {% set total_weight = sc_w + fs_w + om_w + dw_w %}
+            {{ ((sc_w * sc + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias) | round(2)
+               if total_weight > 0 else 0 }}
 
       - name: "PV Forecast Weighted Tomorrow"
         unique_id: pv_forecast_weighted_tomorrow

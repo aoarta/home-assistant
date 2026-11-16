@@ -1,10 +1,15 @@
 ###############################################################################
 # packages/energy_price.yaml
-# Fester Stundentarif: 24 Bezugspreise + 24 Einspeiseverguetungen
+# Fester Stundentarif TIWAG "dual fix privat" (seit 2026-11 saisonal):
+#   bezug_sommer  - April bis September (sommer_monate), 10-16 Uhr halber
+#                   Arbeitspreis plus Sommer-Netzentgelt
+#   bezug_winter  - Oktober bis Maerz, ganztags gleicher Preis
+#   einspeisung   - ganzjaehrig
 #
-# Beide Listen: Index 0 = 00:00-01:00 ... Index 23 = 23:00-24:00
+# Alle Listen: Index 0 = 00:00-01:00 ... Index 23 = 23:00-24:00
 # Werte in ct/kWh, fertig gerechnet (Bezug inkl. Netz, Abgaben, USt).
-# Tarifwechsel = nur die zwei Listen in sensor.tarif_tabelle anfassen.
+# Tarifwechsel = nur die Listen (und sommer_monate) in sensor.tarif_tabelle
+# anfassen. Der Horizont waehlt die Liste je Stunde nach deren Monat.
 #
 # Eingriff in die bestehende Regelung:
 #   Netzladen  -> ueber input_number.manual_charge_power (bestehender Pfad,
@@ -114,11 +119,20 @@ template:
         icon: mdi:table-clock
         state: "OK"
         attributes:
-          bezug: >
+          # Monate, in denen bezug_sommer gilt (dual fix: April-September)
+          sommer_monate: "{{ [4, 5, 6, 7, 8, 9] }}"
+          bezug_sommer: >
             {{ [
               21.15, 21.15, 21.15, 21.15, 21.15, 21.15,
               21.15, 21.15, 21.15, 21.15, 13.56, 13.56,
-              13.65, 13.65, 13.65, 13.65, 21.15, 21.15,
+              13.56, 13.56, 13.56, 13.56, 21.15, 21.15,
+              21.15, 21.15, 21.15, 21.15, 21.15, 21.15,
+            ] }}
+          bezug_winter: >
+            {{ [
+              21.15, 21.15, 21.15, 21.15, 21.15, 21.15,
+              21.15, 21.15, 21.15, 21.15, 21.15, 21.15,
+              21.15, 21.15, 21.15, 21.15, 21.15, 21.15,
               21.15, 21.15, 21.15, 21.15, 21.15, 21.15,
             ] }}
           einspeisung: >
@@ -137,9 +151,17 @@ template:
         unit_of_measurement: "ct/kWh"
         state_class: measurement
         icon: mdi:currency-eur
-        availability: "{{ (state_attr('sensor.tarif_tabelle','bezug') or []) | count == 24 }}"
+        availability: >-
+          {{ (state_attr('sensor.tarif_tabelle','bezug_sommer') or []) | count == 24
+             and (state_attr('sensor.tarif_tabelle','bezug_winter') or []) | count == 24 }}
         state: >
-          {{ (state_attr('sensor.tarif_tabelle','bezug'))[now().hour] | float(0) | round(2) }}
+          {% set t = 'sensor.tarif_tabelle' %}
+          {% set sommer = now().month in (state_attr(t, 'sommer_monate') or []) %}
+          {{ state_attr(t, 'bezug_sommer' if sommer else 'bezug_winter')[now().hour] | float(0) | round(2) }}
+        attributes:
+          saison: >-
+            {{ 'Sommer' if now().month in (state_attr('sensor.tarif_tabelle', 'sommer_monate') or [])
+               else 'Winter' }}
 
       - name: "Einspeiseverguetung aktuell"
         unique_id: feedin_price_now
@@ -186,18 +208,24 @@ template:
         state: "{{ states('input_number.price_horizon_hours') | int(24) }}"
         attributes:
           stunden: >
-            {% set b = state_attr('sensor.tarif_tabelle','bezug') or [] %}
-            {% set e = state_attr('sensor.tarif_tabelle','einspeisung') or [] %}
+            {# Liste je Stunde nach deren Monat - am 30.9. abends zaehlt fuer
+               den 1.10. schon der Wintertarif. #}
+            {% set t = 'sensor.tarif_tabelle' %}
+            {% set bs = state_attr(t, 'bezug_sommer') or [] %}
+            {% set bw = state_attr(t, 'bezug_winter') or [] %}
+            {% set sm = state_attr(t, 'sommer_monate') or [] %}
+            {% set e = state_attr(t, 'einspeisung') or [] %}
             {% set n = states('input_number.price_horizon_hours') | int(24) %}
-            {% set h = now().hour %}
+            {% set start = now().replace(minute=0, second=0, microsecond=0) %}
             {% set ns = namespace(out=[]) %}
-            {% if b | count == 24 and e | count == 24 %}
+            {% if bs | count == 24 and bw | count == 24 and e | count == 24 %}
               {% for i in range(n) %}
-                {% set k = (h + i) % 24 %}
+                {% set z = start + timedelta(hours=i) %}
+                {% set b = bs if z.month in sm else bw %}
                 {% set ns.out = ns.out + [ {
-                     'stunde': k,
-                     'bezug': b[k] | float(0),
-                     'einspeisung': e[k] | float(0) } ] %}
+                     'stunde': z.hour,
+                     'bezug': b[z.hour] | float(0),
+                     'einspeisung': e[z.hour] | float(0) } ] %}
               {% endfor %}
             {% endif %}
             {{ ns.out }}
@@ -291,7 +319,11 @@ template:
         state: >
           {% set budget = states('input_number.price_grid_limit_w') | float(4000) %}
           {% set haus = states('sensor.house_consumption_power_brutto') | float(500) %}
-          {% set ev = states('sensor.ev_charging_power') | float(0) %}
+          {# Wallbox-Leistung hier POSITIV (FIX 2026-11). sensor.ev_charging_power
+             ist beim Laden negativ (Vorzeichen fuer die Hausbilanz in
+             consumption.yaml) - damit WUCHS das freie Budget bisher um die
+             Ladeleistung, statt zu schrumpfen. #}
+          {% set ev = [states('sensor.warp3_2ita_powernow') | float(0), 0] | max %}
           {% set frei = [budget - haus - ev, 0] | max %}
           {% set cap = states('input_number.price_charge_power_max') | float(2500) %}
           {% set n = [state_attr('sensor.global_parameter', 'venus_count') | int(3), 1] | max %}
@@ -317,6 +349,7 @@ template:
       #     Preis im Horizont
       #   - die bestehende Bilanzrechnung meldet Unterdeckung: target_soc
       #     130/131/133 oder Speicher + Rest-PV decken den Restbedarf nicht
+      #     (oder das Preis-Netzladen laeuft bereits - Hysterese, siehe unten)
       #   - SOC noch unter dem Preis-Ziel-SOC
       - name: "Netzladen sinnvoll"
         unique_id: grid_charge_worth_it
@@ -333,7 +366,15 @@ template:
           {% set need_exp = states('sensor.expected_remaining_consumption_today') | float(0) %}
           {% set need = (need_est + need_exp) / 2 %}
           {% set pv = states('sensor.pv_forecast_weighted') | float(0) %}
-          {% set unterdeckung = t in [130, 131, 133] or (stored + pv) < need %}
+          {# Laeuft das eigene Netzladen schon, bleibt die Unterdeckung stehen
+             (FIX 2026-11): manual_charge_power > 0 setzt target_soc auf 110 und
+             verdeckt damit 131/133. Vorher ging der Sensor nach delay_off aus,
+             target_soc sprang auf 131 zurueck und eine Minute spaeter startete
+             das Laden neu - Takt ~6 min ueber die ganze guenstige Phase.
+             Beendet wird jetzt ueber Ziel-SOC, Ende der guenstigen Stunde,
+             Arbitrage, Budget oder Wartung. #}
+          {% set eigen = is_state('input_boolean.price_grid_charge_active', 'on') %}
+          {% set unterdeckung = eigen or t in [130, 131, 133] or (stored + pv) < need %}
           {{ is_state('input_boolean.price_control_enabled', 'on')
              and is_state('binary_sensor.guenstige_stunde', 'on')
              and (now_p / eta + cyc) < hi

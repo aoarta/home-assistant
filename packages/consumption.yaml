@@ -99,7 +99,10 @@ template:
         unique_id: house_consumption_energy_today
         unit_of_measurement: "kWh"
         device_class: energy
-        state_class: total
+        # total_increasing (2026-11): der taegliche Reset bei Sonnenaufgang
+        # ist ein neuer Zaehlzyklus - mit "total" ging er als negativer
+        # Verbrauch in die Langzeitstatistik.
+        state_class: total_increasing
         state: >-
           {% set v = states('sensor.house_consumption_energy_today_um') | float(none) %}
           {% set last = this.state | float(none) %}

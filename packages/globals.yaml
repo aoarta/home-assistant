@@ -26,7 +26,7 @@ template:
           # Wallbox
           wallbox_max_amps: 32
 
-          # MAIN FUSE
+          # MAIN FUSE - Killswitch in ev_automations.yaml
           main_fuse_limit_a: 32 # Hauptsicherung pro Phase
           main_fuse_release_a: 30 # Freigabe erst wieder darunter
 
@@ -44,7 +44,9 @@ template:
           honda_e_phases: 1
 
           # bei Änderung oben auch hier anpassen
-          # calculated Attribut (3 * Venus * 0.8 + Zusatzspeicher * 0.6)
+          # calculated Attribut (3 * Venus * 0.8). Ein Zusatzspeicher ist
+          # derzeit NICHT eingerechnet - kommt einer dazu, hier ergaenzen und
+          # die Fallbacks in control.yaml / ev_sensor_trigger.yaml mitziehen.
           #
           # venus_count / venus_capacity_wh oben sind die Doku, die Zahlen hier
           # sind die Rechnung - "this.attributes" ist beim ersten Durchlauf
@@ -56,10 +58,10 @@ template:
           calculated_combined_capacity_kwh: >-
             {#{% set venus = this.attributes.get('venus_capacity_wh', 0) | float(0) %}#}
             {% set venus = 5120 %}
-            {{ (venus * 3 * 0.8) / 1000 }}
+            {{ (venus * 2 * 0.8) / 1000 }}
 
           # ------------------------------------------------------------------
-          # Budget-Laden (charge_mode "min_6a_floor_battery")
+          # Budget-Laden (charge_mode "battery_budget")
           # ------------------------------------------------------------------
           # Bleibt immer im Speicher, zusaetzlich zu stop_soc.
           ev_budget_reserve_kwh: 0.5
@@ -82,11 +84,13 @@ template:
           # Sicherheitsabstand zwischen geplantem Ladeende und Zielzeit.
           target_time_buffer_min: 30
           # Geht NUR in die Startzeitberechnung ein, nicht in den Sollwert der
-          # Wallbox. Dadurch wird tatsaechlich schneller geladen als geplant,
-          # der Restbedarf schrumpft schneller als die Uhr laeuft und die
-          # Startbedingung rastet nach dem Ausloesen von selbst ein.
-          # Deckt gleichzeitig die abflachende Ladekurve und die Rundung auf
-          # ganze Ampere ab. Immer < 1.0 lassen.
+          # Wallbox: es wird frueher gestartet und schneller geladen als
+          # geplant. Reserve fuer die abflachende Ladekurve und die Rundung auf
+          # ganze Ampere. Immer < 1.0 lassen.
+          # Achtung: dadurch laeuft die berechnete Startzeit nach dem Start der
+          # Uhr DAVON (Restbedarf/(derate*P) schrumpft schneller als die Zeit).
+          # Die Phase "paced" haelt deshalb ein Merker (paced_latch in
+          # ev_sensor_trigger.yaml), nicht die Startbedingung selbst.
           target_time_power_derate: 0.85
           # Bis zu diesem SoC darf vor dem Startzeitpunkt mit PV-Ueberschuss
           # geladen werden. Greift nur, wenn ev_charge_to_percent darueber liegt.
