@@ -254,6 +254,16 @@ automation:
              or states('input_number.ev_charge_to_percent') | float(0) >= 100
              or states('sensor.ev_session_energy') | float(0)
                 < states('sensor.ev_max_charge_energy') | float(0) }}
+      # Fahrzeug nicht schon voll (2026-11-16). Bei Ladeziel 100 % greift
+      # keine Energiegrenze - war das Fahrzeug voll und nahm nichts mehr ab,
+      # wurde jede Minute neu gestartet (samt Logbuch-Eintrag).
+      # Meldet der hochgerechnete SoC zu frueh 100 %, korrigiert ihn der
+      # naechste BLE-Wert (ev_soc.yaml), danach startet es wieder.
+      - condition: template
+        value_template: >-
+          {% set v = states('input_select.ev_vehicle_mode') %}
+          {% set e = 'sensor.zero_sr_soc' if v == 'zero' else 'sensor.honda_e_soc' %}
+          {{ states(e) | float(0) < 99.5 }}
     variables:
       # Deckel auf wallbox_max_amps: der Slider laesst bis 32 A zu.
       manual_amps: >-
@@ -351,6 +361,16 @@ automation:
           {{ is_state('input_select.ev_charge_mode', 'target_time')
              or states('input_number.ev_charge_to_percent') | float(0) >= 100
              or states('sensor.ev_session_energy') | float(0) < states('sensor.ev_max_charge_energy') | float(0) }}
+      # Fahrzeug nicht schon voll (2026-11-16). Bei Ladeziel 100 % greift
+      # keine Energiegrenze - war das Fahrzeug voll und nahm nichts mehr ab,
+      # wurde jede Minute neu gestartet (samt Logbuch-Eintrag).
+      # Meldet der hochgerechnete SoC zu frueh 100 %, korrigiert ihn der
+      # naechste BLE-Wert (ev_soc.yaml), danach startet es wieder.
+      - condition: template
+        value_template: >-
+          {% set v = states('input_select.ev_vehicle_mode') %}
+          {% set e = 'sensor.zero_sr_soc' if v == 'zero' else 'sensor.honda_e_soc' %}
+          {{ states(e) | float(0) < 99.5 }}
     actions:
       # 1. Wait a moment to let the target sensor calculate the correct current after triggers
       - delay:
@@ -433,6 +453,15 @@ automation:
         below: 6
         for:
           minutes: 2
+      # Nachzuegler (2026-11-16). Der numeric_state-Trigger feuert nur beim
+      # UNTERSCHREITEN von 6 A. Lag der Sollwert bei Neustart/Reload schon
+      # darunter, lief die Wallbox mit dem zuletzt gesetzten Strom weiter
+      # (wallbox_track_target folgt nur Sollwerten > 5 A) - aus dem Netz.
+      # Stoppt auch eine Ladung, die an HA vorbei (WARP-App) gestartet wurde,
+      # waehrend der Sollwert 0 A ist - dafuer den manuellen Strom nehmen.
+      - trigger: time_pattern
+        minutes: "/5"
+        id: catchup
     conditions:
       - condition: state
         entity_id: binary_sensor.warp3_2ita_charging
@@ -441,6 +470,13 @@ automation:
       - condition: numeric_state
         entity_id: input_number.ev_manual_charging_current
         below: 6
+      # Nachzuegler: Sollwert seit mindestens 2 min unter 6 A
+      - condition: template
+        value_template: >-
+          {% set s = states.sensor.ev_target_charging_current %}
+          {{ trigger.id != 'catchup'
+             or (s is not none and is_number(s.state) and s.state | int(0) < 6
+                 and (now() - s.last_changed).total_seconds() > 120) }}
     actions:
       - action: button.press
         target:
@@ -448,7 +484,9 @@ automation:
       - action: logbook.log
         data:
           name: "Wallbox"
-          message: "Charging stopped -- target current dropped to 0 A."
+          message: >-
+            Charging stopped -- target current dropped to 0 A{{
+            ' (Nachzuegler)' if trigger.id == 'catchup' else '' }}.
 
   # ============================================================
   # STOP (limit / off): stop when the energy target is reached or vehicle = off.

@@ -91,7 +91,8 @@ template:
         state: >-
           {% set venus1 = states('sensor.marstek_venus_1_ac_power') | float(0) %}
           {% set venus2 = states('sensor.marstek_venus_2_ac_power') | float(0) %}
-          {% set venus3 =  float(0) %}
+          {# FIX 2026-11-16: stand auf float(0) - Venus 3 fehlte in der Summe #}
+          {% set venus3 = states('sensor.marstek_venus_3_ac_power') | float(0) %}
           {{ (venus1 + venus2 + venus3) | round(0) }}
 
       - name: "Remaining PV Today"
@@ -273,14 +274,17 @@ template:
           {% set days = state_attr('sensor.global_parameter', 'battery_care_days') | float(8) %}
           {% set threshold = days * 86400 %} {# in seconds #}
           {% set now_ts = as_timestamp(now()) %}
-          {% set ents = ['input_datetime.venus_1_last_full',
-                         'input_datetime.venus_2_last_full',
-                         'input_datetime.venus_3_last_full'] %}
-
-          {# Fallback to 0 to avoid false triggers on restarts/connection drops.
+          {# Nur VORHANDENE Speicher (FIX 2026-11-16) - wie die Wartungs-
+             Automation in marstek_batteries.yaml. Vorher alterte der
+             Zeitstempel einer fehlenden Venus weiter; nach battery_care_days
+             stand target_soc dauerhaft auf 120 (Speicher immer voll laden,
+             kein Speicher fuers EV-Budget, Preis-Netzladen gesperrt), und die
+             Wartungsladung, die fehlende Speicher ignoriert, loeste das nie auf.
+             Fallback to 0 to avoid false triggers on restarts/connection drops.
              as_timestamp also secured with default value (now_ts). #}
-          {% set ns = namespace(ages=[]) %}
-          {% for e in ents %}
+          {% set ns = namespace(ages=[0]) %}
+          {% for i in ['1', '2', '3'] if is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+            {% set e = 'input_datetime.venus_' ~ i ~ '_last_full' %}
             {% set ns.ages = ns.ages + [(now_ts - as_timestamp(states(e), now_ts)) if has_value(e) else 0] %}
           {% endfor %}
 

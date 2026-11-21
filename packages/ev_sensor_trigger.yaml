@@ -97,6 +97,9 @@ template:
           # Ausfall der Marstek-Integration muss sofort durchschlagen,
           # nicht erst beim naechsten 30-s-Tick
           - binary_sensor.marstek_available
+          - binary_sensor.venus_1_vorhanden
+          - binary_sensor.venus_2_vorhanden
+          - binary_sensor.venus_3_vorhanden
           - binary_sensor.warp3_2ita_cable
           # Entscheidungsgroessen
           - sensor.battery_soc_total
@@ -119,9 +122,11 @@ template:
       # ----- Rohwerte ------------------------------------------------
       charger_power: "{{ states('sensor.warp3_2ita_powernow') | float(0) }}"
       power_from_net: "{{ states('sensor.leistung_vom_netz') | float(0) }}"
-      venus1: "{{ states('sensor.marstek_venus_1_ac_power_glatt') | float(0) }}"
-      venus2: "{{ states('sensor.marstek_venus_2_ac_power_glatt') | float(0) }}"
-      venus3: "{{ states('sensor.marstek_venus_3_ac_power_glatt') | float(0) }}"
+      # Nicht vorhandene Venus zaehlen 0 W (2026-11-16) - ein eingefrorener
+      # Restwert waere sonst als Phantomleistung abgezogen worden.
+      venus1: "{{ states('sensor.marstek_venus_1_ac_power_glatt') | float(0) if is_state('binary_sensor.venus_1_vorhanden', 'on') else 0 }}"
+      venus2: "{{ states('sensor.marstek_venus_2_ac_power_glatt') | float(0) if is_state('binary_sensor.venus_2_vorhanden', 'on') else 0 }}"
+      venus3: "{{ states('sensor.marstek_venus_3_ac_power_glatt') | float(0) if is_state('binary_sensor.venus_3_vorhanden', 'on') else 0 }}"
       volt: "{{ states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) }}"
       max_amps: "{{ state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) }}"
 
@@ -138,11 +143,19 @@ template:
       # entlaedt staerker -> noch mehr scheinbarer Ueberschuss. Die Schleife
       # laeuft bis ans Amperelimit bzw. bis zur Fahrzeuggrenze hoch, und die
       # Differenz kommt aus dem Netz.
+      #
+      # FIX 2026-11-16: "jeder" heisst jeder VORHANDENE (binary_sensor.venus_X_
+      # vorhanden, wie Watchdog und Summen in marstek_batteries.yaml). Vorher
+      # wurden alle drei verlangt - fehlte eine Venus, war ihr Filter-Sensor
+      # unavailable, marstek_ok blieb false und das PV-Laden des Autos stand
+      # in ALLEN Modi still. Eine fehlende Venus traegt nichts zur Bilanz bei
+      # (venus1..3 oben = 0), es gibt also keine Mitkopplung.
       marstek_ok: >-
-        {{ is_state('binary_sensor.marstek_available', 'on')
-           and has_value('sensor.marstek_venus_1_ac_power_glatt')
-           and has_value('sensor.marstek_venus_2_ac_power_glatt')
-           and has_value('sensor.marstek_venus_3_ac_power_glatt') }}
+        {% set ns = namespace(ok=is_state('binary_sensor.marstek_available', 'on')) %}
+        {% for i in ['1', '2', '3'] if is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on') %}
+          {% if not has_value('sensor.marstek_venus_' ~ i ~ '_ac_power_glatt') %}{% set ns.ok = false %}{% endif %}
+        {% endfor %}
+        {{ ns.ok }}
 
       # ----- PV-Ueberschuss ------------------------------------------
       # EV FIRST: Ladeleistung der Hausbatterie (negativ) wird freigegeben.
@@ -214,8 +227,10 @@ template:
            and not is_state('binary_sensor.entladen_sperren', 'on') }}
 
       # Entladeleistung, die JETZT tatsaechlich zur Verfuegung steht -
-      # nur Venus mit Steuermodus, SOC ueber Minimum und Zellspannung ok
-      # (gleiche Kriterien wie discharge_map in marstek_batteries.yaml).
+      # nur VORHANDENE Venus mit Steuermodus, SOC ueber Minimum und
+      # Zellspannung ok (gleiche Kriterien wie discharge_map in
+      # marstek_batteries.yaml; "vorhanden" seit 2026-11-16 - sonst plante das
+      # Budget-Laden 2250 W einer fehlenden Venus ein).
       ev_bat_discharge_w: >-
         {% if not ev_battery_use_ok %}
           0
@@ -225,7 +240,8 @@ template:
           {% set min_v = state_attr('sensor.global_parameter', 'lfp_min_voltage') | float(2.90) %}
           {% set ns = namespace(n=0) %}
           {% for i in ['1', '2', '3'] %}
-            {% if is_state('switch.marstek_venus_' ~ i ~ '_modbus_rs485_steuermodus', 'on')
+            {% if is_state('binary_sensor.venus_' ~ i ~ '_vorhanden', 'on')
+                  and is_state('switch.marstek_venus_' ~ i ~ '_modbus_rs485_steuermodus', 'on')
                   and states('sensor.venus_' ~ i ~ '_custom_soc') | float(0) > min_soc + 2
                   and states('sensor.marstek_venus_' ~ i ~ '_modbus_minimale_zellenspannung') | float(0) >= min_v %}
               {% set ns.n = ns.n + 1 %}

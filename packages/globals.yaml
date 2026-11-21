@@ -55,10 +55,16 @@ template:
           #
           #
           # 5120 * 3 * 0.8 = 12288 Wh = 12.288 kWh
+          #
+          # FIX 2026-11-16: hier stand "venus * 2" (8.192 kWh). target_soc und
+          # Battery Floor rechneten seit dem dritten Speicher mit zwei Dritteln
+          # der Kapazitaet - Bilanz zu frueh gedeckelt (haeufiger 131/133),
+          # die Stufen 60/80/90 % entsprachen zu wenig Energie.
           calculated_combined_capacity_kwh: >-
             {#{% set venus = this.attributes.get('venus_capacity_wh', 0) | float(0) %}#}
             {% set venus = 5120 %}
-            {{ (venus * 2 * 0.8) / 1000 }}
+            {% set anzahl = 3 %}
+            {{ (venus * anzahl * 0.8) / 1000 }}
 
           # ------------------------------------------------------------------
           # Budget-Laden (charge_mode "battery_budget")

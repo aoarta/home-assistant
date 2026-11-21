@@ -1,29 +1,59 @@
 - alias: "Venus: Enable Control Mode After Sunrise"
   id: set_venus_control_mode
-  description: "Enables the Marstek Venus control mode switches on sunrise."
+  description: >-
+    Schaltet den RS485-Steuermodus der Marstek Venus bei Sonnenaufgang ein
+    und haelt ihn danach eingeschaltet (Waechter seit 2026-11-16).
   triggers:
     - trigger: sun
       event: sunrise
       offset: "00:00:00"
+      id: sunrise
+    # Waechter (2026-11-16): fiel der Steuermodus nach einem Venus-Neustart
+    # oder Modbus-Reset weg, fehlte die Venus bis zum naechsten
+    # Sonnenaufgang in charge_map/discharge_map.
+    # ACHTUNG: wer den Steuermodus von Hand ausschaltet, bekommt ihn nach
+    # 5 Minuten zurueck - zum Testen diese Automation deaktivieren.
+    - trigger: state
+      entity_id:
+        - switch.marstek_venus_1_modbus_rs485_steuermodus
+        - switch.marstek_venus_2_modbus_rs485_steuermodus
+        - switch.marstek_venus_3_modbus_rs485_steuermodus
+      to: "off"
+      for: "00:05:00"
+      id: watchdog
+    - trigger: homeassistant
+      event: start
+      id: startup
   actions:
-    - action: switch.turn_on
-      target:
-        entity_id:
-          - switch.marstek_venus_1_modbus_rs485_steuermodus
-    - delay: "00:00:10"
-    - action: switch.turn_on
-      target:
-        entity_id:
-          - switch.marstek_venus_2_modbus_rs485_steuermodus
+    - if:
+        - condition: trigger
+          id: startup
+      then:
+        # Modbus-Verbindung erst aufbauen lassen
+        - delay: "00:01:00"
     # Venus 3 fehlte seit dem Ausbau auf drei Speicher - ohne Steuermodus
     # bekommt sie aus charge_map/discharge_map keine Leistung.
-    - delay: "00:00:10"
-    - action: switch.turn_on
-      target:
-        entity_id:
+    - repeat:
+        for_each:
+          - switch.marstek_venus_1_modbus_rs485_steuermodus
+          - switch.marstek_venus_2_modbus_rs485_steuermodus
           - switch.marstek_venus_3_modbus_rs485_steuermodus
+        sequence:
+          # Bei Sonnenaufgang wie bisher alle (setzt das Register neu),
+          # sonst nur die, die gerade aus sind. Nicht erreichbare Venus
+          # (unavailable) werden ausser bei Sonnenaufgang uebersprungen.
+          - if:
+              - condition: template
+                value_template: "{{ trigger.id == 'sunrise' or is_state(repeat.item, 'off') }}"
+            then:
+              - action: switch.turn_on
+                target:
+                  entity_id: "{{ repeat.item }}"
+                continue_on_error: true
+              - delay: "00:00:10"
 
-  mode: single
+  mode: queued
+  max: 3
 
 - alias: "System: Set CPU Governor Schedutil"
   id: set_cpu_schedutil

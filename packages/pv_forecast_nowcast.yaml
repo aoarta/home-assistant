@@ -37,6 +37,14 @@
 #   5. Faktor in pv_forecast_calc.yaml NUR in "PV Forecast Weighted" (heute)
 #      multiplizieren - nicht in Tomorrow/Day After, da eine Live-Messung
 #      fuer die Zukunft nichts aussagt.
+#   6. (2026-11-16) Und auch heute nicht mehr auf den ganzen Resttag: eine
+#      Wolke um 10 Uhr sagt ueber den Nachmittag nichts. pv_forecast_calc.yaml
+#      blendet den Faktor ueber die naechsten nowcast_stunden (Standard 3)
+#      aus - aktuelle Stunde voll, dann 2/3, 1/3, danach 0. Wirksam auf den
+#      Resttag ist  1 + (Faktor - 1) * Anteil dieser Stunden an der
+#      Restenergie  (Attribute nowcast_wirksam / nowcast_anteil von
+#      sensor.pv_forecast_weighted). Dieser Sensor hier bleibt unveraendert
+#      der Faktor fuer JETZT; der Clamp 0.3-2.5 gilt weiter fuer ihn.
 #
 # Bekannte Einschraenkung: der gelernte Umrechnungsfaktor (Schritt 2) ist
 # durch Einfallswinkel-Effekte bei fest montierten Panels im Tagesverlauf

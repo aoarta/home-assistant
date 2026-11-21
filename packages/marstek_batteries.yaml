@@ -31,6 +31,9 @@
 # override_soc und die Wartungsladung am fehlenden Speicher haengen.
 # Watchdog, Summen (AC/DC/SOC/usable Energy), ctl-Listen, Wartungsladung
 # und override_soc rechnen jetzt nur noch ueber VORHANDENE Speicher.
+#
+# GEAENDERT 2026-11-16: charge_map prueft "voll" auch im manual-Zweig
+# (Wartungs- und Preis-Netzladen) am HARDWARE-SOC statt am Custom-SOC.
 
 input_datetime:
   override_soc_since:
@@ -339,6 +342,17 @@ template:
              states('sensor.venus_3_custom_soc')
            ] %}
         {% set manual = states('input_number.manual_charge_power') | float(0) %}
+        {# Hardware-SOC fuer "voll" - jetzt in BEIDEN Zweigen (FIX 2026-11-16).
+           Im manual-Zweig stand der Custom-SOC: lief der dem Hardware-SOC
+           voraus, bekam die Venus waehrend der Wartungsladung 0 W, "Stop When
+           Full" wartete aber auf Hardware > 99.5. Ende erst beim Hard stop am
+           Morgen, last_full blieb alt, naechste Nacht von vorn. 99.5 passt zu
+           marstek_set_last_full_timestamp und Stop When Full. #}
+        {% set hw = [
+             states('sensor.marstek_venus_1_soc'),
+             states('sensor.marstek_venus_2_soc'),
+             states('sensor.marstek_venus_3_soc')
+           ] %}
 
         {% if manual > 0 %}
           {# Voll gemeldete Batterie nicht weiter anfordern.
@@ -355,11 +369,11 @@ template:
              Batterieleistung ab, -charge_power ist also der echte Ueberschuss. #}
           {% set ns = namespace(o=[], n=0) %}
           {% for i in range(3) %}
-            {% if ctl[i] and (soc_raw[i] | float(0)) < 99.5 %}{% set ns.n = ns.n + 1 %}{% endif %}
+            {% if ctl[i] and (hw[i] | float(0)) < 99.5 %}{% set ns.n = ns.n + 1 %}{% endif %}
           {% endfor %}
           {% set pv_je = ([0, -(states('sensor.charge_power') | float(0))] | max) / ([ns.n, 1] | max) %}
           {% for i in range(3) %}
-            {% set ok = ctl[i] and (soc_raw[i] | float(0)) < 99.5 %}
+            {% set ok = ctl[i] and (hw[i] | float(0)) < 99.5 %}
             {% set ns.o = ns.o + [([manual, pv_je] | max | round(0) | int(0)) if ok else 0] %}
           {% endfor %}
           {{ {'v1': ns.o[0], 'v2': ns.o[1], 'v3': ns.o[2]} }}
@@ -378,11 +392,7 @@ template:
              der Mindest-Sollwert hob sie auf 200/500 W - Leistung, die keiner
              aufnimmt und die ins Netz ging. Hardware- statt Custom-SOC, damit
              Override/Wartung weiterladen, bis die Hardware wirklich voll ist. #}
-          {% set hw = [
-               states('sensor.marstek_venus_1_soc'),
-               states('sensor.marstek_venus_2_soc'),
-               states('sensor.marstek_venus_3_soc')
-             ] %}
+          {# hw (Hardware-SOC) wird jetzt oben fuer beide Zweige gesetzt #}
           {% set nsw = namespace(socs=[], ws=[]) %}
           {% for i in range(3) %}
             {% set s = (soc_raw[i] | float(100)) if ctl[i] else 100 %}

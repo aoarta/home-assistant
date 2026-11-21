@@ -190,6 +190,48 @@ template:
           {{ states('sensor.pv_forecast_dwd_all') | float(0) }}
         {% endif %}
 
+      # ------------------------------------------------------------------
+      # Nowcast nur fuer die naechsten Stunden (2026-11-16)
+      #
+      # Der Korrekturfaktor aus pv_forecast_nowcast.yaml wirkte bisher auf den
+      # GANZEN Resttag - eine Wolke um 10 Uhr kuerzte auch den Nachmittag.
+      # Jetzt wird er ausgeblendet: aktuelle Stunde voll, danach linear bis 0
+      # nach nowcast_stunden Stunden (bei 3: 1 - 2/3 - 1/3 - 0).
+      #
+      # nowcast_share = gewichteter Anteil dieser Stunden an der Restenergie
+      # heute (Profil aus OpenMeteo, gleiche Horizontfaktoren wie om_today).
+      # Wirksamer Faktor auf den Resttag: 1 + (Faktor - 1) * nowcast_share.
+      # Ohne OpenMeteo-Profil 1.0 -> Verhalten wie frueher (ganzer Resttag).
+      # ------------------------------------------------------------------
+      nowcast_stunden: 3
+      nowcast_share: >-
+        {% from 'horizon_dach.jinja' import horizon_factor_ts as hf_ts_dach %}
+        {% from 'horizon_fassade.jinja' import horizon_factor_ts as hf_ts_fassade %}
+        {% set dach = state_attr('sensor.pv_roof_openmeteo_production_today', 'wh_period') %}
+        {% set fassade = state_attr('sensor.pv_fassade_openmeteo_production_today', 'wh_period') %}
+        {% set n_h = [nowcast_stunden | float(3), 1] | max %}
+        {% if dach is mapping and fassade is mapping %}
+          {% set now_dt = now() %}
+          {% set today = now_dt.strftime('%Y-%m-%d') %}
+          {% set cur = now_dt.replace(minute=0, second=0, microsecond=0).timestamp() %}
+          {% set fraction_left = (3600 - (now_dt.minute * 60 + now_dt.second)) / 3600 %}
+          {% set ns = namespace(alle=0, nah=0) %}
+          {% for ts, d_val in dach.items() if ts.startswith(today) %}
+            {% set t = as_timestamp(ts) %}
+            {% if t >= cur %}
+              {% set f_val = fassade[ts] | float(0) if ts in fassade else 0 %}
+              {% set wh = ((d_val | float(0)) * (hf_ts_dach(ts) | float(1))) + (f_val * (hf_ts_fassade(ts) | float(1))) %}
+              {% set k = ((t - cur) / 3600) | round(0) | int %}
+              {% if k == 0 %}{% set wh = wh * fraction_left %}{% endif %}
+              {% set ns.alle = ns.alle + wh %}
+              {% set ns.nah = ns.nah + wh * ([1 - k / n_h, 0] | max) %}
+            {% endif %}
+          {% endfor %}
+          {{ (ns.nah / ns.alle) | round(3) if ns.alle > 0 else 1 }}
+        {% else %}
+          1
+        {% endif %}
+
       sc_tomorrow: >-
         {% set val = states('sensor.solcast_pv_forecast_prognose_morgen') %}
         {{ val | float if is_number(val) else states('sensor.pv_forecast_solcast_tomorrow') | float(0) }}
@@ -229,25 +271,54 @@ template:
           0.0
         {% endif %}
 
-      om_tomorrow: >-
-        {% set dach = states('sensor.pv_roof_openmeteo_production_tomorrow') | float(0) %}
-        {% set fassade = states('sensor.pv_fassade_openmeteo_production_tomorrow') | float(0) %}
-        {{ dach + fassade }}
+      # ------------------------------------------------------------------
+      # Morgen / Uebermorgen fuer OpenMeteo und DWD MIT Horizontfaktoren
+      # (FIX 2026-11-16). Vorher rohe Tagessummen, waehrend om/dw/fs_today
+      # und fs_tomorrow horizontkorrigiert sind - im Winter lagen morgen und
+      # uebermorgen damit systematisch zu hoch, 131/133 kamen zu spaet und die
+      # Preissteuerung sah zu wenig Unterdeckung. Der Bias lernt an "heute"
+      # und gleicht das nicht aus.
+      #
+      # Quelle je Tag: wh_period des Tages-Sensors (_tomorrow/_day_after);
+      # hat der keins, wh_period des _today-Sensors mit Datumsfilter; findet
+      # sich fuer den Tag kein einziger Stundenwert, die rohe Summe wie bisher.
+      # Reihenfolge: om_tomorrow, dw_tomorrow, om_day_after, dw_day_after
+      # ------------------------------------------------------------------
+      fern_tage: >-
+        {% from 'horizon_dach.jinja' import horizon_factor_ts as hf_d %}
+        {% from 'horizon_fassade.jinja' import horizon_factor_ts as hf_f %}
+        {% set ns = namespace(out=[]) %}
+        {% for src, sfx, off in [('openmeteo', 'tomorrow', 1), ('dwd', 'tomorrow', 1),
+                                 ('openmeteo', 'day_after', 2), ('dwd', 'day_after', 2)] %}
+          {% set tag = (now() + timedelta(days=off)).strftime('%Y-%m-%d') %}
+          {% set e_d = 'sensor.pv_roof_' ~ src ~ '_production_' ~ sfx %}
+          {% set e_f = 'sensor.pv_fassade_' ~ src ~ '_production_' ~ sfx %}
+          {% set d = state_attr(e_d, 'wh_period') %}
+          {% set f = state_attr(e_f, 'wh_period') %}
+          {% if not (d is mapping and f is mapping) %}
+            {% set d = state_attr('sensor.pv_roof_' ~ src ~ '_production_today', 'wh_period') %}
+            {% set f = state_attr('sensor.pv_fassade_' ~ src ~ '_production_today', 'wh_period') %}
+          {% endif %}
+          {% set nt = namespace(sum=0, n=0) %}
+          {% if d is mapping and f is mapping %}
+            {% for ts, dv in d.items() if ts.startswith(tag) %}
+              {% set fv = f[ts] | float(0) if ts in f else 0 %}
+              {% set nt.sum = nt.sum + (dv | float(0)) * (hf_d(ts) | float(1)) + fv * (hf_f(ts) | float(1)) %}
+              {% set nt.n = nt.n + 1 %}
+            {% endfor %}
+          {% endif %}
+          {% if nt.n > 0 %}
+            {% set ns.out = ns.out + [(nt.sum / 1000) | round(2)] %}
+          {% else %}
+            {% set ns.out = ns.out + [((states(e_d) | float(0)) + (states(e_f) | float(0))) | round(2)] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.out }}
 
-      dw_tomorrow: >-
-        {% set dach = states('sensor.pv_roof_dwd_production_tomorrow') | float(0) %}
-        {% set fassade = states('sensor.pv_fassade_dwd_production_tomorrow') | float(0) %}
-        {{ dach + fassade }}
-
-      om_day_after: >-
-        {% set dach = states('sensor.pv_roof_openmeteo_production_day_after') | float(0) %}
-        {% set fassade = states('sensor.pv_fassade_openmeteo_production_day_after') | float(0) %}
-        {{ (dach + fassade) | round(2) }}
-
-      dw_day_after: >-
-        {% set dach = states('sensor.pv_roof_dwd_production_day_after') | float(0) %}
-        {% set fassade = states('sensor.pv_fassade_dwd_production_day_after') | float(0) %}
-        {{ (dach + fassade) | round(2) }}
+      om_tomorrow: "{{ (fern_tage[0] if fern_tage is list and fern_tage | count == 4 else 0) | float(0) }}"
+      dw_tomorrow: "{{ (fern_tage[1] if fern_tage is list and fern_tage | count == 4 else 0) | float(0) }}"
+      om_day_after: "{{ (fern_tage[2] if fern_tage is list and fern_tage | count == 4 else 0) | float(0) }}"
+      dw_day_after: "{{ (fern_tage[3] if fern_tage is list and fern_tage | count == 4 else 0) | float(0) }}"
 
     sensor:
       - name: "PV Forecast Forecastsolar all"
@@ -318,9 +389,12 @@ template:
                pv_forecast_nowcast.yaml. Nur fuer HEUTE relevant - vor
                Sonnenaufgang/bei zu wenig Signal ist der Faktor 1.0 (neutral).
                Der Morgen-Snapshot (und damit die Bias-Lernschleife) liest das
-               Attribut ohne_nowcast, sieht den Faktor also nie. #}
+               Attribut ohne_nowcast, sieht den Faktor also nie.
+               Seit 2026-11-16 nur auf den nahen Teil des Resttags
+               (nowcast_share, siehe variables). #}
             {% set nowcast = states('sensor.pv_nowcast_correction_factor') | float(1) %}
-            {{ ((sc_w * sc + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias * nowcast) | round(1) }}
+            {% set nf = 1 + (nowcast - 1) * (nowcast_share | float(1)) %}
+            {{ ((sc_w * sc + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias * nf) | round(1) }}
           {% elif is_state('sun.sun', 'below_horizon') and not state_attr('sun.sun', 'rising') %}
             0.0
           {% else %}
@@ -343,6 +417,13 @@ template:
             {% set total_weight = sc_w + fs_w + om_w + dw_w %}
             {{ ((sc_w * sc + fs_w * fs + om_w * om + dw_w * dw) / total_weight * bias) | round(2)
                if total_weight > 0 else 0 }}
+          # Diagnose Nowcast (2026-11-16): tatsaechlich auf den Resttag
+          # angewandter Faktor und Anteil der naechsten Stunden an der
+          # Restenergie.
+          nowcast_wirksam: >-
+            {% set nowcast = states('sensor.pv_nowcast_correction_factor') | float(1) %}
+            {{ (1 + (nowcast - 1) * (nowcast_share | float(1))) | round(3) }}
+          nowcast_anteil: "{{ nowcast_share | float(1) | round(3) }}"
 
       - name: "PV Forecast Weighted Tomorrow"
         unique_id: pv_forecast_weighted_tomorrow
