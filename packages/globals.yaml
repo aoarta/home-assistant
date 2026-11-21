@@ -30,6 +30,22 @@ template:
           main_fuse_limit_a: 32 # Hauptsicherung pro Phase
           main_fuse_release_a: 30 # Freigabe erst wieder darunter
 
+          # SICHERUNGSSCHUTZ - Drosselung VOR dem Killswitch (2026-11-21)
+          # sensor.ev_fuse_limit_current (ev_sensor_trigger.yaml) rechnet, wie
+          # viel Strom die Wallbox nehmen darf, damit die Phase unter
+          # fuse_soft_limit_a bleibt. Runter geht es sofort, rauf nur in
+          # Schritten von fuse_ramp_step_a alle fuse_ramp_interval_s Sekunden
+          # und nur mit 1 A Reserve. Der Killswitch bleibt als letzte Stufe.
+          fuse_soft_limit_a: 31
+          fuse_ramp_step_a: 2
+          fuse_ramp_interval_s: 60
+          # Phase, an der die einphasige Wallbox haengt: 1, 2 oder 3.
+          # 0 = unbekannt -> es zaehlt die hoechste Phase. Das ist sicher, drosselt
+          # aber auch, wenn die Ueberlast auf einer ANDEREN Phase liegt (dann
+          # hilft Drosseln nichts, der Ladestrom faellt bis 0 - so wie frueher
+          # beim Killswitch). Mit der richtigen Phase wird nur dort geregelt.
+          wallbox_phase: 0
+
           # Zero
           # if charging goes to high, increase the efficienc
           zero_sr_capacity: 13.6 # 14.4 kWh brutto

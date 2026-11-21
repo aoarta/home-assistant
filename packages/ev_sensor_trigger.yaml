@@ -78,6 +78,77 @@ template:
           {% endif %}
 
   # ----------------------------------------------------------
+  # SICHERUNGSSCHUTZ -- Stromgrenze fuer die Wallbox (2026-11-21)
+  #
+  # Wie viel Ampere darf die Wallbox nehmen, ohne dass die Phase ueber
+  # fuse_soft_limit_a (29 A) geht?
+  #   Grundlast der Phase = Phasenstrom - aktueller Wallbox-Strom
+  #   erlaubt             = fuse_soft_limit_a - Grundlast
+  # Runter: sofort auf "erlaubt" (abgerundet).
+  # Rauf:   hoechstens fuse_ramp_step_a pro fuse_ramp_interval_s und nur bis
+  #         "erlaubt - 1 A" (Hysterese gegen Pendeln mit dem Hausverbrauch).
+  # Gilt auch ohne laufende Ladung: ist die Phase schon vorher voll, startet
+  # die Wallbox gar nicht erst mit vollem Strom.
+  # Wird in "EV Target Charging Current" (alle Modi, auch manuell) und in
+  # wallbox_manual_charge angewandt; "Wallbox: Sicherungsschutz drosseln"
+  # in ev_automations.yaml setzt die Wallbox bei Bedarf sofort herunter.
+  # Fehlen die Zaehlerwerte, bleibt der letzte Wert stehen - der Killswitch
+  # arbeitet davon unabhaengig weiter.
+  # abs() wie im Killswitch: bei Einspeisung liegt der Phasenstrom hoechstens
+  # bei der PV-Leistung je Phase (~14 A), das stoert nicht.
+  # ----------------------------------------------------------
+  - triggers:
+      - trigger: state
+        entity_id:
+          - sensor.smart_meter_ts_65a_3_stromstarke_l1
+          - sensor.smart_meter_ts_65a_3_stromstarke_l2
+          - sensor.smart_meter_ts_65a_3_stromstarke_l3
+      - trigger: time_pattern
+        seconds: "/15"
+      - trigger: homeassistant
+        event: start
+    sensor:
+      - name: "EV Fuse Limit Current"
+        unique_id: ev_fuse_limit_current
+        unit_of_measurement: "A"
+        device_class: current
+        state_class: measurement
+        icon: mdi:fuse-alert
+        state: >-
+          {% set gp = 'sensor.global_parameter' %}
+          {% set max_amps = state_attr(gp, 'wallbox_max_amps') | int(16) %}
+          {% set soft = state_attr(gp, 'fuse_soft_limit_a') | float(29) %}
+          {% set step = state_attr(gp, 'fuse_ramp_step_a') | int(2) %}
+          {% set wait = state_attr(gp, 'fuse_ramp_interval_s') | float(60) %}
+          {% set phase = state_attr(gp, 'wallbox_phase') | int(0) %}
+          {% set alt = this.state | int(max_amps) %}
+          {% set raw = [states('sensor.smart_meter_ts_65a_3_stromstarke_l1'),
+                        states('sensor.smart_meter_ts_65a_3_stromstarke_l2'),
+                        states('sensor.smart_meter_ts_65a_3_stromstarke_l3')] %}
+          {% set sel = [raw[phase - 1]] if phase in [1, 2, 3] else raw %}
+          {% set i = sel | select('is_number') | map('float') | map('abs') | list %}
+          {% if i | count == 0 %}
+            {{ [alt, max_amps] | min }}
+          {% else %}
+            {% set volt = [states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235), 100] | max %}
+            {% set wb = ([states('sensor.warp3_2ita_powernow') | float(0), 0] | max) / volt %}
+            {% set erlaubt = soft - (i | max - wb) %}
+            {% set runter = [[erlaubt | int(0), 0] | max, max_amps] | min %}
+            {% set seit = as_timestamp(now()) - as_timestamp(this.last_changed | default(now(), true)) %}
+            {% if runter < alt %}
+              {{ runter }}
+            {% elif seit >= wait %}
+              {% set rauf = [alt + step, (erlaubt - 1) | int(0), max_amps] | min %}
+              {{ [rauf, alt] | max }}
+            {% else %}
+              {{ [alt, max_amps] | min }}
+            {% endif %}
+          {% endif %}
+        attributes:
+          begrenzt: >-
+            {{ this.state | int(0) < state_attr('sensor.global_parameter', 'wallbox_max_amps') | int(16) }}
+
+  # ----------------------------------------------------------
   # TARGET CHARGING CURRENT -- die Logik-Zentrale.
   # Rechnet den PV-Ueberschuss, das Energiebudget und die Zielzeit-Planung
   # selbst, damit alle Teilwerte garantiert aus derselben Momentaufnahme
@@ -111,6 +182,8 @@ template:
           - input_select.ev_vehicle_mode
           - input_number.ev_manual_charging_current
           - input_boolean.ev_killswitch
+          # Sicherungsschutz - Drosselung muss sofort durchschlagen
+          - sensor.ev_fuse_limit_current
           # Budget-Laden (Modus 4)
           - sensor.marstek_usable_energy
           - sensor.target_soc
@@ -129,6 +202,9 @@ template:
       venus3: "{{ states('sensor.marstek_venus_3_ac_power_glatt') | float(0) if is_state('binary_sensor.venus_3_vorhanden', 'on') else 0 }}"
       volt: "{{ states('sensor.smart_meter_ts_65a_3_spannung_l1') | float(235) }}"
       max_amps: "{{ state_attr('sensor.global_parameter', 'wallbox_max_amps') | float(16) }}"
+      # Sicherungsschutz: Obergrenze fuer ALLE Modi (auch manuell).
+      # Faellt der Sensor aus, gilt wallbox_max_amps - der Killswitch bleibt.
+      fuse_cap: "{{ states('sensor.ev_fuse_limit_current') | int(max_amps | int) }}"
 
       # Sind die Speicherleistungen gerade ueberhaupt gueltig?
       # Ohne diesen Guard wurden fehlende Werte als 0 W gelesen: entladen
@@ -326,6 +402,10 @@ template:
         device_class: current
         state_class: measurement
         state: >-
+          {# Sicherungsschutz (2026-11-21): der ganze Entscheidungsbaum landet
+             in "roh", danach wird auf fuse_cap gedeckelt. Unter 6 A kann die
+             Wallbox nicht laden -> 0. #}
+          {% set roh %}
           {% set cable = is_state('binary_sensor.warp3_2ita_cable', 'on') %}
           {# Killswitch Hauptsicherung sperrt alle Modi, auch manuell #}
           {% if vehicle == 'off' or not cable or is_state('input_boolean.ev_killswitch', 'on') %}
@@ -408,8 +488,13 @@ template:
               {% endif %}
             {% endif %}
           {% endif %}
+          {% endset %}
+          {% set a = [roh | trim | int(0), fuse_cap | int(0)] | min %}
+          {{ a if a >= 6 else 0 }}
         attributes:
           charge_mode: "{{ states('input_select.ev_charge_mode') }}"
+          # Obergrenze aus dem Sicherungsschutz (sensor.ev_fuse_limit_current)
+          fuse_cap: "{{ fuse_cap }}"
           # Steht hier "false", ist der Ueberschuss absichtlich 0 -
           # dann fehlen die Marstek-Daten, nicht die Sonne.
           marstek_ok: "{{ marstek_ok }}"

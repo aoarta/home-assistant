@@ -83,6 +83,13 @@ automation:
   # starten die normalen Automationen von selbst wieder.
   # Fehlende Stromwerte loesen NICHT aus (sonst sperrt jeder Zaehler-
   # Aussetzer die Wallbox); fuer die Freigabe muessen alle drei da sein.
+  #
+  # Seit 2026-11-21 nur noch LETZTE Stufe: vorher greift der
+  # Sicherungsschutz (sensor.ev_fuse_limit_current + "Wallbox:
+  # Sicherungsschutz drosseln") und nimmt den Ladestrom ab 29 A zurueck.
+  # Verzoegerung deshalb 10 s -> 20 s, damit Zaehler-Update, Drosselung und
+  # das Herunterregeln im Fahrzeug sicher vorher fertig sind. Eine 32-A-
+  # Hauptsicherung haelt leichte Ueberlast deutlich laenger aus.
   # ============================================================
   - alias: "Wallbox: Killswitch Hauptsicherung"
     id: ev_killswitch_hauptsicherung
@@ -99,7 +106,7 @@ automation:
                      | select('is_number') | map('float') | map('abs') | list %}
           {{ i | count > 0
              and i | max > state_attr('sensor.global_parameter', 'main_fuse_limit_a') | float(32) }}
-        for: "00:00:10"
+        for: "00:00:20"
         id: overcurrent
       # Waehrend der Sperre: Ladestart aus anderer Quelle (z. B. Firmware-
       # Autostart beim Anstecken) sofort wieder beenden.
@@ -157,6 +164,55 @@ automation:
                 ({{ now().strftime('%d.%m. %H:%M') }}). Die Ladung bleibt gesperrt,
                 bis alle Phasen 10 min unter
                 {{ state_attr('sensor.global_parameter', 'main_fuse_release_a') }} A liegen.
+
+  # ============================================================
+  # SICHERUNGSSCHUTZ: Ladestrom sofort drosseln (2026-11-21)
+  # Liegt der an der Wallbox eingestellte Strom ueber der Grenze aus
+  # sensor.ev_fuse_limit_current, wird er sofort darauf gesetzt (unter 6 A:
+  # 0 A = Lieferung pausiert, die Sitzung bleibt bestehen).
+  # Eigene Automation, weil wallbox_track_target bis zu 45 s wartet und
+  # das manuelle Laden dort gar nicht nachgefuehrt wird.
+  # Wieder hoch geht es ueber die normalen Pfade: der Sollstrom ist auf die
+  # Grenze gedeckelt (track_target / universal_start), manual triggert auf
+  # die Grenze. Der Trigger auf globalcurrent faengt ab, wenn eine andere
+  # Automation zeitgleich mit einem aelteren Wert hochsetzt.
+  # ============================================================
+  - alias: "Wallbox: Sicherungsschutz drosseln"
+    id: ev_fuse_throttle
+    mode: queued
+    max: 3
+    triggers:
+      - trigger: state
+        entity_id: sensor.ev_fuse_limit_current
+      - trigger: state
+        entity_id: number.warp3_2ita_globalcurrent
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ is_number(states('sensor.ev_fuse_limit_current'))
+             and states('number.warp3_2ita_globalcurrent') | int(0)
+                 > states('sensor.ev_fuse_limit_current') | int(0) }}
+    variables:
+      cap: "{{ states('sensor.ev_fuse_limit_current') | int(0) }}"
+      alt: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
+      neu: "{{ cap if cap >= 6 else 0 }}"
+    actions:
+      - action: number.set_value
+        target:
+          entity_id: number.warp3_2ita_globalcurrent
+        data:
+          value: "{{ neu }}"
+      - if:
+          - condition: state
+            entity_id: binary_sensor.warp3_2ita_charging
+            state: "on"
+        then:
+          - action: logbook.log
+            data:
+              name: "Wallbox"
+              message: >-
+                Sicherungsschutz: Ladestrom {{ alt }} A -> {{ neu }} A
+                (Phasenstrom nahe {{ state_attr('sensor.global_parameter', 'fuse_soft_limit_a') }} A).
 
   - alias: "Wallbox: Killswitch Freigabe"
     id: ev_killswitch_freigabe
@@ -218,6 +274,9 @@ automation:
         entity_id: input_select.ev_vehicle_mode
       - trigger: state
         entity_id: input_number.ev_charge_by_percent
+      # Sicherungsschutz: nach einer Drosselung wieder hochfahren
+      - trigger: state
+        entity_id: sensor.ev_fuse_limit_current
       # Nachzuegler nach Reload/Neustart - siehe wallbox_universal_start.
       - trigger: time_pattern
         minutes: "/1"
@@ -266,9 +325,12 @@ automation:
           {{ states(e) | float(0) < 99.5 }}
     variables:
       # Deckel auf wallbox_max_amps: der Slider laesst bis 32 A zu.
+      # Dazu der Sicherungsschutz (2026-11-21); unter 6 A -> 0 = pausieren.
       manual_amps: >-
-        {{ [ states('input_number.ev_manual_charging_current') | int(0),
-             state_attr('sensor.global_parameter', 'wallbox_max_amps') | int(16) ] | min }}
+        {% set mx = state_attr('sensor.global_parameter', 'wallbox_max_amps') | int(16) %}
+        {% set a = [ states('input_number.ev_manual_charging_current') | int(0), mx,
+                     states('sensor.ev_fuse_limit_current') | int(mx) ] | min %}
+        {{ a if a >= 6 else 0 }}
       current_amps: "{{ states('number.warp3_2ita_globalcurrent') | int(0) }}"
       is_charging: "{{ is_state('binary_sensor.warp3_2ita_charging', 'on') }}"
     actions:
@@ -281,9 +343,10 @@ automation:
               entity_id: number.warp3_2ita_globalcurrent
             data:
               value: "{{ manual_amps }}"
-      # Start the wallbox if it is not already charging.
+      # Start the wallbox if it is not already charging
+      # (nicht, solange der Sicherungsschutz auf 0 A drosselt).
       - if:
-          - "{{ not is_charging }}"
+          - "{{ not is_charging and manual_amps >= 6 }}"
         then:
           - delay:
               milliseconds: 500
